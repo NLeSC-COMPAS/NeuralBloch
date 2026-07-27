@@ -1,0 +1,18 @@
+# Number of input parameters to the surrogate model
+# Input: [T1, T2, B1]
+input_dim: 3
+
+# Latent representation size for each output quantity
+NB_signal: 16
+NB_dT1: 32
+NB_dT2: 32
+
+# Number of neurons in each hidden layer of the fully connected networks.
+hidden_size_signal: 64
+hidden_size_dT1: 128
+hidden_size_dT2: 128
+
+# Number of fully connected layers in each sub-network.
+num_layers_signal: 4
+num_layers_dT1: 6
+num_layers_dT2: 6

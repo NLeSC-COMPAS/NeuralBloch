@@ -1,0 +1,14 @@
+[project]
+name = "surrogate-model"
+version = "0.1.0"
+description = "Neural network surrogate model for Bloch simulations in MR-STAT"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "h5py>=3.16.0",
+    "juliacall>=0.9.35",
+    "numpy>=2.5.1",
+    "pyyaml>=6.0.3",
+    "tensorboard>=2.21.0",
+    "torch>=2.13.0",
+]

@@ -1,0 +1,14 @@
+# Number of samples for dataset from which validation and test set will be generated
+N_SAMPLES: 40000 
+
+# Sequence related settings
+TR_S: 0.00558
+TE_S: 0.002745
+TI_S: 0.01084
+TW_S: 0.000
+MAX_STATE: 64
+REPETITIONS: 5
+INVERSION_PREPULSE: true
+WAIT_SPOILING: true
+PY_UNDERSAMPLING_FACTOR: 1
+ΔK_SPOIL_RAD_PER_M: 0.0

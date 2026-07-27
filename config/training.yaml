@@ -1,0 +1,17 @@
+# Number of training epochs
+N_EPOCHS: 5000
+
+# Number of samples used in each optimization step.
+TRAIN_BATCH_SIZE: 200
+
+# Learning rate scheduler used during training
+LR_SCHEDULER: "cosine"  # "plateau" or "cosine"
+
+# Number of newly generated training samples per epoch.
+# Data is generated online using the Julia Bloch simulation.
+ONLINE_BATCH_SIZE: 250
+
+# Frequency of online data regeneration.
+# A new training dataset is generated every REGEN_EVERY epochs.
+# A total of ONLINE_BATCH_SIZE*REGEN_EVERY samples are generated every REGEN_EVERY epochs
+REGEN_EVERY: 100
