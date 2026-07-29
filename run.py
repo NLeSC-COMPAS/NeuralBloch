@@ -5,7 +5,7 @@ from src.utils import set_seed
 def main():
     # Parse command-line arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument("task", choices=["generate", "train", "test_accuracy", "test_inference"])
+    parser.add_argument("task", choices=["generate", "train", "test_accuracy", "test_accuracy_onnx", "test_inference"])
     parser.add_argument("--config-dir", default="config")
     args = parser.parse_args()
 
@@ -32,6 +32,11 @@ def main():
     elif args.task == "test_accuracy":
         from scripts.test_accuracy import test_accuracy
         test_accuracy(config)
+
+    # Evaluate prediction accuracy on the test dataset using the exported ONNX model
+    elif args.task == "test_accuracy_onnx":
+        from scripts.test_accuracy_onnx import test_accuracy_onnx
+        test_accuracy_onnx(config)
 
     # Benchmark surrogate inference time
     elif args.task == "test_inference":

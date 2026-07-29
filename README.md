@@ -47,6 +47,7 @@ Contains scripts called by `run.py`.
 
 - **train.py** – trains the surrogate model
 - **test_accuracy.py** – evaluates prediction accuracy on the test dataset
+- **test_accuracy_onnx.py** – evaluates prediction accuracy on the test dataset with ONNX Runtime
 - **test_inference.py** – benchmarks surrogate inference speed
 
 ---
@@ -73,6 +74,7 @@ Available tasks:
 - `generate` – generate validation and test datasets using Bloch simulations
 - `train` – train the surrogate model
 - `test_accuracy` – evaluate prediction accuracy
+- `test_accuracy_onnx` – evaluate prediction accuracy with ONNX Runtime
 - `test_inference` – benchmark inference speed
 
 ## Usage
@@ -111,6 +113,30 @@ uv run run.py test_inference
 
 Measures surrogate inference performance under different execution settings (FP32, FP16, `torch.compile`, etc.).
 
+### 5. Export the trained model to ONNX
+
+```bash
+uv run dump2onnx.py
+```
+
+This reads the checkpoint from `outputs/pt_file.pt` by default and writes `outputs/model.onnx`.
+
+### 6. Evaluate prediction accuracy with ONNX Runtime
+
+```bash
+uv run run.py test_accuracy_onnx
+```
+
+Evaluates the exported ONNX model on the test dataset using ONNX Runtime.
+
+### 7. Evaluate the ONNX model from Julia
+
+```bash
+uv run julia test_accur.jl
+```
+
+This runs the ONNX model in `outputs/model.onnx` against the test dataset and prints the same NRMSE summary as the Python ONNX evaluation path.
+
 ## Configuration
 
 All settings are stored in the `config/` directory. Hyperparameters can be modified without changing the source code.
@@ -125,6 +151,7 @@ Julia is used for Bloch simulations through JuliaCall. The required Julia packag
 - **HDF5.jl** 
 - **ComputationalResources.jl**
 - **DelimitedFiles.jl**
+- **ONNXRunTime.jl**
 
 ## Reference
 
