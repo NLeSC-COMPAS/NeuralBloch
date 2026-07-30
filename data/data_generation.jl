@@ -35,13 +35,22 @@ end
 
 function generate_data(config; for_training)
 
+    T1_lower = config["data"]["T1_lower"]
+    T1_upper = config["data"]["T1_upper"]
+
+    T2_lower = config["data"]["T2_lower"]
+    T2_upper = config["data"]["T2_upper"]
+
+    B1_lower = config["data"]["B1_lower"]
+    B1_upper = config["data"]["B1_upper"]
+
 
     # Generate tissue parameter samples
     if for_training
         batchsize = config["training"]["ONLINE_BATCH_SIZE"]*config["training"]["REGEN_EVERY"]
-        T₁ = exp.(rand(batchsize) .* (log(7.0)-log(0.1)) .+ log(0.1))
-        T₂ = exp.(rand(batchsize) .* (log(3.0)-log(0.001)) .+ log(0.001))
-        B₁ = ones(Float32,batchsize)
+        T₁ = exp.(rand(batchsize) .* (log(T1_upper)-log(T1_lower)) .+ log(T1_lower))
+        T₂ = exp.(rand(batchsize) .* (log(T2_upper)-log(T2_lower)) .+ log(T2_lower))
+        B₁ = rand(batchsize).*(B1_upper-B1_lower) .+ B1_lower
     else
 
          # 3D parameter grid: N_SAMPLES ≈ batchsize³, so use the cubic root for points per dimension.
@@ -49,9 +58,9 @@ function generate_data(config; for_training)
         batchsize = Int64(round(cbrt(N_SAMPLES)))
 
         # Generate structured grid for evaluation datasets.
-        T₁_vec = collect(logrange(0.1, 5.0, batchsize))
-        T₂_vec = collect(logrange(0.01, 2.0, batchsize))
-        B₁_vec = collect(range(0.8, 1.2, batchsize))
+        T₁_vec = collect(logrange(T1_lower, T1_upper, batchsize))
+        T₂_vec = collect(logrange(T2_lower, T2_upper, batchsize))
+        B₁_vec = collect(range(B1_lower, B1_upper, batchsize))
 
         # Create Cartesian product of all parameter combinations.
         all_T₁ = [t1 for t1 in T₁_vec for t2 in T₂_vec for b1 in B₁_vec]
@@ -88,7 +97,7 @@ function generate_data(config; for_training)
         config["data"]["INVERSION_PREPULSE"],
         config["data"]["WAIT_SPOILING"],
         config["data"]["PY_UNDERSAMPLING_FACTOR"],
-        config["data"]["ΔK_SPOIL_RAD_PER_M"]
+        config["data"]["DELTA_K_SPOIL_RAD_PER_M"]
     )
 
     # Move data to GPU
