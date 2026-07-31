@@ -11,26 +11,19 @@ Python dependencies are managed with [uv](https://docs.astral.sh/uv/) and specif
 uv sync
 ```
 
-This installs the runtime dependencies together with the `dev` group (Ruff and prek), which uv includes by default. Use `uv sync --no-dev` to skip the development tools.
+This installs the runtime dependencies together with the `dev` group. Use `uv sync --no-dev` to skip the development tools.
 
 ## Julia dependencies
 
 Julia is used for Bloch simulations through [JuliaCall](https://juliapy.github.io/PythonCall.jl/stable/juliacall/). Julia itself and the required packages are installed automatically on first use, based on `juliapkg.json`.
 
-`data/data_generation.jl` requires:
-
-- **BlochSimulators.jl**
-- **HDF5.jl**
-- **ComputationalResources.jl**
-- **DelimitedFiles.jl**
-
 ## Code style
 
-Formatting and linting are handled by [Ruff](https://docs.astral.sh/ruff/), configured under `[tool.ruff]` in `pyproject.toml`.
+Linting and formatting are handled by [Ruff](https://docs.astral.sh/ruff/), configured under `[tool.ruff]` in `pyproject.toml`.
 
 ```bash
-uv run ruff format .   # format
 uv run ruff check .    # lint
+uv run ruff format .   # format
 ```
 
 Two conventions are worth knowing before adding rules:
@@ -40,11 +33,12 @@ Two conventions are worth knowing before adding rules:
 
 ## Git hooks
 
-Git hooks are managed with [prek](https://prek.j178.dev/), a drop-in alternative to pre-commit that reads the same `.pre-commit-config.yaml`. Install the hooks once per clone:
+Git hooks are managed with [prek](https://prek.j178.dev/), an alternative to pre-commit that reads the same `.pre-commit-config.yaml`. Install the hooks once per clone:
 
 ```bash
 uv run prek install          # install the git hooks (one-off)
-uv run prek run --all-files  # run the hooks over the whole repository
+uv run prek run              # run the hooks on staged files
+uv run prek run --all-files  # run the hooks on all files
 ```
 
 Once installed, Ruff runs automatically on every commit.
