@@ -9,7 +9,15 @@ from src.utils import split_real_imag
 
 
 def generate_val_loader(config):
+    """Build the validation DataLoader from the stored HDF5 dataset.
 
+    Args:
+        config: Full configuration dictionary.
+
+    Returns:
+        A tuple of the validation ``DataLoader`` and ``NTR``, the number of
+        readout time points in the signal.
+    """
     device = get_device(config)
 
     params, signal, dT1, dT2, _, NTR = load_data_from_h5_file(
@@ -31,7 +39,17 @@ def generate_val_loader(config):
 
 
 def generate_train_loader(config):
+    """Generate a fresh batch of training data with Julia Bloch simulations.
 
+    Training data is produced online: each call runs a new set of simulations
+    rather than reading from a stored dataset.
+
+    Args:
+        config: Full configuration dictionary.
+
+    Returns:
+        A ``DataLoader`` over the freshly simulated batch.
+    """
     device = get_device(config)
 
     # Generate a fresh batch of Bloch simulations in Julia
@@ -80,6 +98,20 @@ def load_data_from_h5_file(filename):
 
 
 def make_loader(params, sig_split, dT1_split, dT2_split, batchsize, device, shuffle):
+    """Wrap tissue parameters and signal targets in a PyTorch ``DataLoader``.
+
+    Args:
+        params: Tissue parameters (T1, T2, B1), shape ``(N, 3)``.
+        sig_split: Signal targets split into real and imaginary channels.
+        dT1_split: Split derivatives with respect to T1.
+        dT2_split: Split derivatives with respect to T2.
+        batchsize: Number of samples per batch.
+        device: Device the data will be consumed on.
+        shuffle: Whether to reshuffle the data every epoch.
+
+    Returns:
+        A ``DataLoader`` over the four stacked tensors.
+    """
     dataset = TensorDataset(
         torch.tensor(params),
         torch.tensor(sig_split),

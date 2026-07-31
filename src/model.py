@@ -2,14 +2,13 @@ import torch.nn as nn
 
 
 class SubNetwork(nn.Module):
-    """Fully connected neural network used to predict the
-    low-rank representation of one output quantity.
+    """Fully connected network predicting a low-rank representation.
+
+    Maps tissue parameters (T1, T2, B1) to the compressed representation of
+    one output quantity.
 
     Architecture:
         Linear -> ReLU repeated -> Linear
-
-    The network maps tissue parameters (T1, T2, B1)
-    to a compressed representation.
     """
 
     def __init__(

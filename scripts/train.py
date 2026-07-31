@@ -5,7 +5,11 @@ from src.trainer import Trainer
 
 
 def train(config):
+    """Build the model and run the training loop.
 
+    Args:
+        config: Full configuration dictionary.
+    """
     # Create validation DataLoader and determine the number of time points
     val_loader, NTR = generate_val_loader(config)
 

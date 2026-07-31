@@ -7,6 +7,11 @@ from src.utils import split_real_imag
 
 
 def test_accuracy(config):
+    """Evaluate the trained model on the test dataset and print NRMSE scores.
+
+    Args:
+        config: Full configuration dictionary.
+    """
     device = get_device(config)
     model, _ = load_model(config, device)
     params, signal, dT1, dT2, N, _ = load_data_from_h5_file(
@@ -46,6 +51,15 @@ def test_accuracy(config):
 
 
 def nrmse(pred, true):
+    """Compute the per-sample normalized RMSE as a percentage.
+
+    Args:
+        pred: Predicted values, shape ``(N, M)``.
+        true: Ground-truth values with the same shape as ``pred``.
+
+    Returns:
+        An array of per-sample NRMSE values in percent.
+    """
     rmse = np.sqrt(np.mean((pred - true) ** 2, axis=1))
     scale = np.sqrt(np.mean(true**2, axis=1)) + 1e-12
     return 100.0 * rmse / scale

@@ -7,6 +7,12 @@ from src.utils import get_device
 
 
 class Trainer:
+    """Training loop for the surrogate model.
+
+    Handles optimization, learning rate scheduling, validation, checkpointing,
+    and TensorBoard logging.
+    """
+
     def __init__(self, model, val_loader, config):
 
         # Set device and move model to GPU/CPU

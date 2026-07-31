@@ -15,6 +15,17 @@ def benchmark(
     label,
     dtype=torch.float32,
 ):
+    """Time repeated forward passes and print mean and minimum runtime.
+
+    Args:
+        model: Model to benchmark.
+        x_single: Single input row, repeated to fill each batch.
+        n_runs: Number of timed repetitions.
+        infer_batch_size: Number of samples per forward pass.
+        batch_size: Total number of samples per run.
+        label: Name printed alongside the timing results.
+        dtype: Floating-point precision used for the inputs.
+    """
     device = next(model.parameters()).device
 
     # Pre-allocate batches
@@ -61,7 +72,11 @@ def benchmark(
 
 
 def test_inference(config):
+    """Benchmark surrogate inference speed under several execution settings.
 
+    Args:
+        config: Full configuration dictionary.
+    """
     n_runs = config["testing"]["N_RUNS"]
     infer_batch_size = config["testing"]["INFER_BATCH_SIZE"]
     batch_size = config["testing"]["BATCH_SIZE"]

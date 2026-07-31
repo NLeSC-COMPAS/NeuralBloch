@@ -4,6 +4,7 @@ from src.utils import set_seed
 
 
 def main():
+    """The entry point."""
     # Parse command-line arguments
     parser = argparse.ArgumentParser()
     parser.add_argument(
