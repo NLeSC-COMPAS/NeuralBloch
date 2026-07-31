@@ -6,6 +6,9 @@
         "HDF5": {
             "uuid": "f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"
         },
+        "DelimitedFiles": {
+            "uuid": "8bb1440f-4735-579b-a4ab-409b98df4dab"
+        },
         "ComputationalResources": {
             "uuid": "ed09eef8-17a6-5b46-8889-db040fac31e3"
         }
