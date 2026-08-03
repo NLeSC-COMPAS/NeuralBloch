@@ -111,7 +111,7 @@ function generate_data(config; for_training)
     @time signal_gpu = simulate_magnetization(
         CUDALibs(),
         sequence_gpu,
-        parameters_gpu      
+        parameters_gpu
     )
 
     @info "Starting derivative simulation"
@@ -165,4 +165,3 @@ function save_dataset(config)
 
     @info "Dataset saved to $filename"
 end
-
