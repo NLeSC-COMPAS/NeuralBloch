@@ -33,16 +33,17 @@ Two conventions are worth knowing before adding rules:
 
 ## Git hooks
 
-Git hooks are managed with [prek](https://prek.j178.dev/), an alternative to pre-commit that reads the same `.pre-commit-config.yaml`. Install the hooks once per clone:
+Git hooks are managed with [prek](https://prek.j178.dev/). The hooks are defined in `prek.toml`. Install them once per clone:
 
 ```bash
 uv run prek install          # install the git hooks (one-off)
 uv run prek run              # run the hooks on staged files
 uv run prek run --all-files  # run the hooks on all files
+uv run prek list             # show the configured hooks
 ```
 
-Once installed, Ruff runs automatically on every commit.
+Once installed, the hooks run automatically on every commit.
 
 ## Continuous integration
 
-`.github/workflows/lint.yml` runs the same hooks on every push to `main` and on every pull request, via the [`j178/prek-action`](https://github.com/j178/prek-action) action. Because CI and local commits share `.pre-commit-config.yaml`, the two cannot drift.
+`.github/workflows/lint.yml` runs the same hooks on every push to `main` and on every pull request, via the [`j178/prek-action`](https://github.com/j178/prek-action) action. Because CI and local commits share `prek.toml`, the two cannot drift.
