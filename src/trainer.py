@@ -1,8 +1,12 @@
+from typing import Any
 import torch
 import torch.optim as optim
+from torch.optim.lr_scheduler import LRScheduler
+from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from data.data_loading import generate_train_loader
 from src.loss import Loss
+from src.model import FCModel
 from src.utils import get_device
 
 
@@ -13,7 +17,12 @@ class Trainer:
     and TensorBoard logging.
     """
 
-    def __init__(self, model, val_loader, config):
+    def __init__(
+        self,
+        model: FCModel,
+        val_loader: DataLoader[tuple[torch.Tensor, ...]],
+        config: dict[str, Any],
+    ) -> None:
 
         # Set device and move model to GPU/CPU
         self.device = get_device(config)
@@ -25,6 +34,8 @@ class Trainer:
         self.optimizer = optim.Adam(self.model.parameters(), lr=1e-3)
 
         # Learning rate scheduler
+        self.scheduler: LRScheduler
+
         if config["training"]["LR_SCHEDULER"] == "plateau":
             self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
                 self.optimizer, patience=100, factor=0.5, min_lr=1e-5
@@ -32,6 +43,11 @@ class Trainer:
         elif config["training"]["LR_SCHEDULER"] == "cosine":
             self.scheduler = optim.lr_scheduler.CosineAnnealingLR(
                 self.optimizer, T_max=config["training"]["N_EPOCHS"]
+            )
+        else:
+            raise ValueError(
+                "training.LR_SCHEDULER must be 'plateau' or 'cosine', got "
+                f"{config['training']['LR_SCHEDULER']!r}"
             )
 
         # Loss function
@@ -43,7 +59,7 @@ class Trainer:
         # TensorBoard logger
         self.writer = SummaryWriter(log_dir=config["experiment"]["LOG_FILE_PATH"])
 
-    def train(self):
+    def train(self) -> None:
         """Main training loop.
 
         Periodically regenerates training data, trains the model,
@@ -60,13 +76,13 @@ class Trainer:
                 train_loader = generate_train_loader(self.config)
 
             # Training and validation
-            train_loss, loss_signal, loss_dT1, loss_dT2 = self.train_epoch(train_loader)
+            train_loss, loss_signal, loss_dT1, loss_dT2 = self.train_epoch(train_loader)  # ty: ignore
             val_loss = self.validate()
 
             # Update learning rate
-            if self.config["training"]["LR_SCHEDULER"] == "plateau":
+            if isinstance(self.scheduler, optim.lr_scheduler.ReduceLROnPlateau):
                 self.scheduler.step(val_loss)
-            elif self.config["training"]["LR_SCHEDULER"] == "cosine":
+            else:
                 self.scheduler.step()
 
             # Save best model checkpoint
@@ -108,7 +124,10 @@ class Trainer:
 
         self.writer.flush()
 
-    def train_epoch(self, train_loader):
+    def train_epoch(
+        self,
+        train_loader: DataLoader[tuple[torch.Tensor, ...]],
+    ) -> tuple[float, torch.Tensor, torch.Tensor, torch.Tensor]:
         """Perform one epoch of training.
 
         Returns:
@@ -140,9 +159,9 @@ class Trainer:
 
         train_loss /= len(train_loader)
 
-        return train_loss, loss_signal, loss_dT1, loss_dT2
+        return train_loss, loss_signal, loss_dT1, loss_dT2  # ty: ignore
 
-    def validate(self):
+    def validate(self) -> float:
         """Evaluate the model on the validation dataset."""
         self.model.eval()
 

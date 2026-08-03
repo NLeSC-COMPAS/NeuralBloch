@@ -1,20 +1,23 @@
 import copy
 import time
+from typing import Any
+from typing import cast
 import numpy as np
 import torch
+import torch.nn as nn
 from src.utils import get_device
 from src.utils import load_model
 
 
 def benchmark(
-    model,
-    x_single,
-    n_runs,
-    infer_batch_size,
-    batch_size,
-    label,
-    dtype=torch.float32,
-):
+    model: nn.Module,
+    x_single: torch.Tensor,
+    n_runs: int,
+    infer_batch_size: int,
+    batch_size: int,
+    label: str,
+    dtype: torch.dtype = torch.float32,
+) -> None:
     """Time repeated forward passes and print mean and minimum runtime.
 
     Args:
@@ -71,7 +74,7 @@ def benchmark(
     print(f"  Min  : {np.min(times):.2f} ms")
 
 
-def test_inference(config):
+def test_inference(config: dict[str, Any]) -> None:
     """Benchmark surrogate inference speed under several execution settings.
 
     Args:
@@ -133,7 +136,9 @@ def test_inference(config):
     # --------------------------------------------------
     print("\n=== torch.compile ===")
 
-    model_compiled = torch.compile(copy.deepcopy(model))
+    # `torch.compile` returns an `OptimizedModule`, but it is typed as a plain
+    # callable, so the cast restores the `Module` interface `benchmark` needs.
+    model_compiled = cast(nn.Module, torch.compile(copy.deepcopy(model)))
 
     benchmark(
         model_compiled,
@@ -150,7 +155,7 @@ def test_inference(config):
     # --------------------------------------------------
     print("\n=== torch.compile + float16 ===")
 
-    model_compiled_fp16 = torch.compile(copy.deepcopy(model).half())
+    model_compiled_fp16 = cast(nn.Module, torch.compile(copy.deepcopy(model).half()))
 
     benchmark(
         model_compiled_fp16,

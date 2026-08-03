@@ -1,3 +1,5 @@
+from typing import Any
+import torch
 import torch.nn as nn
 
 
@@ -17,7 +19,7 @@ class SubNetwork(nn.Module):
         output_dim: int,
         hidden_size: int,
         num_layers: int,
-    ):
+    ) -> None:
         super().__init__()
 
         # First layer: input parameters -> hidden representation
@@ -32,7 +34,7 @@ class SubNetwork(nn.Module):
 
         self.net = nn.Sequential(*layers)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Compute compressed representation."""
         return self.net(x)
 
@@ -54,7 +56,7 @@ class FCModel(nn.Module):
     components.
     """
 
-    def __init__(self, NTR, config):
+    def __init__(self, NTR: int, config: dict[str, Any]) -> None:
         super().__init__()
 
         input_dim = config["input_dim"]
@@ -90,7 +92,10 @@ class FCModel(nn.Module):
             num_layers=config["num_layers_dT2"],
         )
 
-    def forward(self, x):
+    def forward(
+        self,
+        x: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Predict signal and parameter derivatives.
 
         Input:

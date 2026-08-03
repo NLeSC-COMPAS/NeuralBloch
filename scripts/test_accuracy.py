@@ -1,4 +1,6 @@
+from typing import Any
 import numpy as np
+import numpy.typing as npt
 import torch
 from data.data_loading import load_data_from_h5_file
 from src.utils import get_device
@@ -6,7 +8,7 @@ from src.utils import load_model
 from src.utils import split_real_imag
 
 
-def test_accuracy(config):
+def test_accuracy(config: dict[str, Any]) -> None:
     """Evaluate the trained model on the test dataset and print NRMSE scores.
 
     Args:
@@ -50,7 +52,10 @@ def test_accuracy(config):
     print(f"  dT2    NRMSE : {nrmse_dT2.mean():.3f}% ± {nrmse_dT2.std():.3f}%")
 
 
-def nrmse(pred, true):
+def nrmse(
+    pred: npt.NDArray[np.float32],
+    true: npt.NDArray[np.float32],
+) -> npt.NDArray[np.float32]:
     """Compute the per-sample normalized RMSE as a percentage.
 
     Args:
