@@ -6,6 +6,7 @@
 # cannot read this file. The version matches the `prek` pin in pyproject.toml.
 minimum_prek_version = "0.4.11"
 
+default_install_hook_types = ["pre-commit", "pre-push"]
 
 # Linting and formatting for the Python files, configured under `[tool.ruff]`
 # in pyproject.toml.
@@ -15,6 +16,15 @@ rev = "v0.16.1"
 hooks = [
   { id = "ruff-check", args = ["--fix"] },
   { id = "ruff-format" },
+]
+
+# Type checking, configured under `[tool.ty]` in pyproject.toml.
+[[repos]]
+repo = "local"
+hooks = [
+  { id = "ty", name = "ty", entry = "uv run ty check", language = "system", types = [
+    "python",
+  ], pass_filenames = false, require_serial = true, stages = ["pre-push"] },
 ]
 
 # Prek builtin hooks
