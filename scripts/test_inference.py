@@ -2,7 +2,8 @@ import copy
 import time
 import numpy as np
 import torch
-from src.utils import load_model, get_device
+from src.utils import get_device
+from src.utils import load_model
 
 
 def benchmark(
@@ -14,15 +15,24 @@ def benchmark(
     label,
     dtype=torch.float32,
 ):
+    """Time repeated forward passes and print mean and minimum runtime.
+
+    Args:
+        model: Model to benchmark.
+        x_single: Single input row, repeated to fill each batch.
+        n_runs: Number of timed repetitions.
+        infer_batch_size: Number of samples per forward pass.
+        batch_size: Total number of samples per run.
+        label: Name printed alongside the timing results.
+        dtype: Floating-point precision used for the inputs.
+    """
     device = next(model.parameters()).device
 
     # Pre-allocate batches
     batches = []
     for i in range(0, batch_size, infer_batch_size):
         current_bs = min(infer_batch_size, batch_size - i)
-        batches.append(
-            x_single.repeat(current_bs, 1).to(device=device, dtype=dtype)
-        )
+        batches.append(x_single.repeat(current_bs, 1).to(device=device, dtype=dtype))
 
     # Warm-up
     warmup_x = x_single.repeat(infer_batch_size, 1).to(
@@ -41,7 +51,6 @@ def benchmark(
 
     with torch.no_grad():
         for _ in range(n_runs):
-
             if device.type == "cuda":
                 torch.cuda.synchronize()
 
@@ -63,7 +72,11 @@ def benchmark(
 
 
 def test_inference(config):
+    """Benchmark surrogate inference speed under several execution settings.
 
+    Args:
+        config: Full configuration dictionary.
+    """
     n_runs = config["testing"]["N_RUNS"]
     infer_batch_size = config["testing"]["INFER_BATCH_SIZE"]
     batch_size = config["testing"]["BATCH_SIZE"]
@@ -137,9 +150,7 @@ def test_inference(config):
     # --------------------------------------------------
     print("\n=== torch.compile + float16 ===")
 
-    model_compiled_fp16 = torch.compile(
-        copy.deepcopy(model).half()
-    )
+    model_compiled_fp16 = torch.compile(copy.deepcopy(model).half())
 
     benchmark(
         model_compiled_fp16,
@@ -155,7 +166,6 @@ def test_inference(config):
     # Compare float32 vs float16 predictions
     # --------------------------------------------------
     with torch.no_grad():
-
         pred_fp32 = model(x_single.float())
 
         pred_fp16 = model_fp16(x_single.half())
@@ -168,7 +178,4 @@ def test_inference(config):
     print("\n=== Prediction comparison (float32 vs float16) ===")
     print(f"Max difference:  {diff.max():.6f}")
     print(f"Mean difference: {diff.mean():.6f}")
-    print(
-        f"Relative error: "
-        f"{(diff / (np.abs(sig_fp32) + 1e-12)).mean() * 100:.4f}%"
-    )
+    print(f"Relative error: {(diff / (np.abs(sig_fp32) + 1e-12)).mean() * 100:.4f}%")

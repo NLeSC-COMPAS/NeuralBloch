@@ -1,0 +1,15 @@
+name: Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  prek:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # Runs the hooks defined in prek.toml, so CI and local checks stay in
+      # sync. Defaults to `prek run --all-files`.
+      - uses: j178/prek-action@v2

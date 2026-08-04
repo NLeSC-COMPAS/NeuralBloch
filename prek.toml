@@ -1,0 +1,42 @@
+# Configuration file for `prek`, a git hook framework written in Rust.
+# See https://prek.j178.dev for more information.
+#:schema https://www.schemastore.org/prek.json
+
+# `prek.toml` and `repo = "builtin"` below are prek-specific; stock pre-commit
+# cannot read this file. The version matches the `prek` pin in pyproject.toml.
+minimum_prek_version = "0.4.11"
+
+
+# Linting and formatting for the Python files, configured under `[tool.ruff]`
+# in pyproject.toml.
+[[repos]]
+repo = "https://github.com/astral-sh/ruff-pre-commit"
+rev = "v0.16.1"
+hooks = [
+  { id = "ruff-check", args = ["--fix"] },
+  { id = "ruff-format" },
+]
+
+# Prek builtin hooks
+[[repos]]
+repo = "builtin"
+hooks = [
+  # Validate syntax for yaml, toml, and json files
+  { id = "check-yaml" },
+  { id = "check-toml" },
+  { id = "check-json" },
+
+  # Check and fix whitespace, line ending, and file end
+  { id = "trailing-whitespace" },
+  { id = "end-of-file-fixer" },
+  { id = "mixed-line-ending", args = ["--fix=lf"] },
+
+  # Prevent committing large files
+  { id = "check-added-large-files" },
+
+  { id = "check-merge-conflict" },
+  { id = "detect-private-key" },
+
+  { id = "check-case-conflict" },
+  { id = "check-executables-have-shebangs" },
+]

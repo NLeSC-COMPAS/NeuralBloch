@@ -1,6 +1,6 @@
 # Neural Network Surrogate Model for Bloch Simulations in MR-STAT
 
-This repository contains the code for training and evaluating a neural network surrogate model for MR-STAT signal simulation. The surrogate predicts the MR signal and its derivatives with respect to tissue parameters. 
+This repository contains the code for training and evaluating a neural network surrogate model for MR-STAT signal simulation. The surrogate predicts the MR signal and its derivatives with respect to tissue parameters.
 
 The surrogate model is implemented in PyTorch, while Bloch simulations for data generation are performed in Julia using BlochSimulators.jl. Communication between Python and Julia is handled through JuliaCall.
 
@@ -115,19 +115,11 @@ Measures surrogate inference performance under different execution settings (FP3
 
 All settings are stored in the `config/` directory. Hyperparameters can be modified without changing the source code.
 
-## Dependencies
+## Development
 
-Python dependencies are managed using `uv` and specified in `pyproject.toml`.
-
-Julia is used for Bloch simulations through JuliaCall. The required Julia packages are:
-
-- **BlochSimulators.jl** 
-- **HDF5.jl** 
-- **ComputationalResources.jl**
-- **DelimitedFiles.jl**
+Development guidelines are documented in [README.dev.md](README.dev.md), inlucding dev environment setup, dependency management, code style, git hooks, etc.
 
 ## Reference
 
-Architecture based on:  
+Architecture based on:
 Liu, H., van der Heide, O., Mandija, S., van den Berg, C. A. T., & Sbrizzi, A. (2022). Acceleration Strategies for MR-STAT: Achieving High-Resolution Reconstructions on a Desktop PC Within 3 Minutes. IEEE transactions on medical imaging, 41(10), 2681-2692. https://doi.org/10.1109/TMI.2022.3168436
-

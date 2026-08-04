@@ -3,6 +3,15 @@ import yaml
 
 
 def load_config(config_dir):
+    """Load and merge all YAML configuration files.
+
+    Args:
+        config_dir: Directory containing the YAML configuration files.
+
+    Returns:
+        A dictionary mapping each config name (``data``, ``experiment``,
+        ``model``, ``training``, ``testing``) to its parsed contents.
+    """
     config_dir = Path(config_dir)
 
     config = {}

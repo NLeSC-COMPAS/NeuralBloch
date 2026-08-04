@@ -1,12 +1,22 @@
 import numpy as np
 import torch
-from src.utils import load_model, split_real_imag, get_device
 from data.data_loading import load_data_from_h5_file
+from src.utils import get_device
+from src.utils import load_model
+from src.utils import split_real_imag
+
 
 def test_accuracy(config):
+    """Evaluate the trained model on the test dataset and print NRMSE scores.
+
+    Args:
+        config: Full configuration dictionary.
+    """
     device = get_device(config)
     model, _ = load_model(config, device)
-    params, signal, dT1, dT2, N, _ = load_data_from_h5_file(config["experiment"]["DATASET_FOR_TESTING_PATH"])
+    params, signal, dT1, dT2, N, _ = load_data_from_h5_file(
+        config["experiment"]["DATASET_FOR_TESTING_PATH"]
+    )
 
     x = torch.tensor(params, dtype=torch.float32, device=device)
 
@@ -16,21 +26,21 @@ def test_accuracy(config):
 
     with torch.no_grad():
         for i in range(0, N, infer_batch_size):
-            x_batch = x[i:i+infer_batch_size]
+            x_batch = x[i : i + infer_batch_size]
             ps, pd1, pd2 = model(x_batch)
             p_sig_list.append(ps.cpu())
             p_dT1_list.append(pd1.cpu())
             p_dT2_list.append(pd2.cpu())
 
-    p_sig  = torch.cat(p_sig_list).numpy()
-    p_dT1  = torch.cat(p_dT1_list).numpy()
-    p_dT2  = torch.cat(p_dT2_list).numpy()
+    p_sig = torch.cat(p_sig_list).numpy()
+    p_dT1 = torch.cat(p_dT1_list).numpy()
+    p_dT2 = torch.cat(p_dT2_list).numpy()
 
     sig_true = split_real_imag(signal)
     dT1_true = split_real_imag(dT1)
     dT2_true = split_real_imag(dT2)
 
-    nrmse_sig = nrmse(p_sig,  sig_true)
+    nrmse_sig = nrmse(p_sig, sig_true)
     nrmse_dT1 = nrmse(p_dT1, dT1_true)
     nrmse_dT2 = nrmse(p_dT2, dT2_true)
 
@@ -41,6 +51,15 @@ def test_accuracy(config):
 
 
 def nrmse(pred, true):
-    rmse  = np.sqrt(np.mean((pred - true)**2, axis=1))
-    scale = np.sqrt(np.mean(true**2,           axis=1)) + 1e-12
+    """Compute the per-sample normalized RMSE as a percentage.
+
+    Args:
+        pred: Predicted values, shape ``(N, M)``.
+        true: Ground-truth values with the same shape as ``pred``.
+
+    Returns:
+        An array of per-sample NRMSE values in percent.
+    """
+    rmse = np.sqrt(np.mean((pred - true) ** 2, axis=1))
+    scale = np.sqrt(np.mean(true**2, axis=1)) + 1e-12
     return 100.0 * rmse / scale

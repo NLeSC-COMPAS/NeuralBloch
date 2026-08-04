@@ -12,3 +12,70 @@ dependencies = [
     "tensorboard>=2.21.0",
     "torch>=2.13.0",
 ]
+
+[dependency-groups]
+dev = [
+    "prek>=0.4.11",
+    "ruff>=0.16.1",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "D", # pydocstyle
+    "E", # pycodestyle (error)
+    "F", # Pyflakes
+    "I", # isort
+    "W", # pycodestyle (warning)
+    "N", # pep8-naming
+]
+
+ignore = [
+    "E501", # Line too long
+    "D100", # Missing module docstring
+    "D104", # Missing public package docstring
+    "D105", # Missing docstring in magic method
+    "D107", # Missing `__init__` docstring
+    # MR-STAT notation (T1, T2, B1, dT1, dT2, NTR) and the juliacall `Main as jl`
+    # alias are conventional in this domain and match data_generation.jl
+    "N803", # Argument name should be lowercase
+    "N806", # Variable in function should be lowercase
+    "N813", # Camelcase imported as lowercase
+    # The following list excludes rules irrelevant to the Google style
+    "D203",
+    "D204",
+    "D213",
+    "D215",
+    "D400",
+    "D401",
+    "D404",
+    "D406",
+    "D407",
+    "D408",
+    "D409",
+    "D413",
+]
+
+# Allow autofix for all enabled rules (when `--fix`) is provided.
+fixable = ["A", "B", "C", "D", "E", "F", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+# Ignore docstrings in all test files
+"tests/**/*.py" = ["D"]
+
+[tool.ruff.lint.isort]
+force-single-line = true
+lines-after-imports = 2
+no-lines-before = [
+    "future",
+    "standard-library",
+    "third-party",
+    "first-party",
+    "local-folder",
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
