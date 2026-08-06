@@ -1,10 +1,11 @@
+from typing import Any
 from juliacall import Main as jl
 from data.data_loading import generate_val_loader
 from src.model import FCModel
 from src.trainer import Trainer
 
 
-def train(config):
+def train(config: dict[str, Any]) -> None:
     """Build the model and run the training loop.
 
     Args:

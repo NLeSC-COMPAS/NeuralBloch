@@ -17,6 +17,7 @@ dependencies = [
 dev = [
     "prek>=0.4.11",
     "ruff>=0.16.1",
+    "ty>=0.0.66",
 ]
 
 [tool.ruff]
@@ -62,6 +63,11 @@ ignore = [
 # Allow autofix for all enabled rules (when `--fix`) is provided.
 fixable = ["A", "B", "C", "D", "E", "F", "I"]
 
+# https://docs.astral.sh/ty/coming-from-mypy-or-pyright/#recommended-configuration
+# To catch that there are no types or the types are badly written
+extend-select = ["ANN", "PYI"]
+preview = true
+
 [tool.ruff.lint.per-file-ignores]
 # Ignore docstrings in all test files
 "tests/**/*.py" = ["D"]
@@ -79,3 +85,19 @@ no-lines-before = [
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
+
+## Ty to catch that the types are wrong
+[tool.ty.environment]
+python-version = "3.12"
+
+[tool.ty.src]
+include = ["run.py", "src", "data", "scripts"]
+
+[tool.ty.rules]
+missing-type-argument = "error"
+possibly-unresolved-reference = "warn"
+
+[tool.ty.analysis]
+# `juliacall.Main` is a live handle on the Julia runtime, populated at import
+# time, so there is no static definition for it to resolve.
+replace-imports-with-any = ["juliacall"]

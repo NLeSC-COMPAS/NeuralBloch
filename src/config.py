@@ -1,8 +1,9 @@
 from pathlib import Path
+from typing import Any
 import yaml
 
 
-def load_config(config_dir):
+def load_config(config_dir: str | Path) -> dict[str, Any]:
     """Load and merge all YAML configuration files.
 
     Args:
@@ -14,7 +15,7 @@ def load_config(config_dir):
     """
     config_dir = Path(config_dir)
 
-    config = {}
+    config: dict[str, Any] = {}
 
     for name in ["data", "experiment", "model", "training", "testing"]:
         with open(config_dir / f"{name}.yaml") as f:

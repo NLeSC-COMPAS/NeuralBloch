@@ -31,18 +31,42 @@ Two conventions are worth knowing before adding rules:
 - **MR-STAT notation is exempt from `pep8-naming`.** `N803`, `N806`, and `N813` are ignored so that domain names (`T1`, `T2`, `B1`, `dT1`, `dT2`, `NTR`) and the `from juliacall import Main as jl` alias keep the spelling used in the literature and in `data_generation.jl`. Class and function naming (`N801`, `N802`) is still enforced.
 - **Some docstring rules are deferred, not disabled.** `D100`, `D104`, `D105`, and `D107` are ignored; docstrings on public functions, classes, and methods (`D101`, `D102`, `D103`) are required. Drop entries from the `ignore` list as the remaining docstrings get written.
 
+## Type checking
+
+Type checking is handled by [ty](https://docs.astral.sh/ty/), configured under `[tool.ty]` in `pyproject.toml`. The files it checks are listed there (`tool.ty.src`), so no arguments are needed:
+
+```bash
+uv run ty check
+```
+
 ## Git hooks
 
 Git hooks are managed with [prek](https://prek.j178.dev/). The hooks are defined in `prek.toml`. Install them once per clone:
 
 ```bash
 uv run prek install          # install the git hooks (one-off)
-uv run prek run              # run the hooks on staged files
-uv run prek run --all-files  # run the hooks on all files
-uv run prek list             # show the configured hooks
+uv run prek uninstall        # uninstall the git hooks (one-off)
 ```
 
-Once installed, the hooks run automatically on every commit.
+Once installed, the hooks run automatically on every commit — except ty, which runs on `git push` instead.
+
+
+> [!IMPORTANT]
+> You must run `uv run prek install` to ensure the git hooks work automatically as expected.
+
+
+You can also run the hooks manually:
+
+```
+uv run prek run              # run the hooks on staged files (only pre-commit stage)
+uv run prek run --all-files  # run the hooks on all files
+```
+
+To run ty together with the other hooks manually, ask for the stage explicitly:
+
+```bash
+uv run prek run --all-files --stage pre-push
+```
 
 ## Continuous integration
 

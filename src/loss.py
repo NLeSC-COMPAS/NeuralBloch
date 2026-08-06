@@ -27,13 +27,13 @@ class Loss(nn.Module):
 
     def forward(
         self,
-        pred_signal,
-        pred_dT1,
-        pred_dT2,
-        gt_signal,
-        gt_dT1,
-        gt_dT2,
-    ) -> torch.Tensor:
+        pred_signal: torch.Tensor,
+        pred_dT1: torch.Tensor,
+        pred_dT2: torch.Tensor,
+        gt_signal: torch.Tensor,
+        gt_dT1: torch.Tensor,
+        gt_dT2: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """Compute the equal-weight loss over the signal and its derivatives.
 
         Args:

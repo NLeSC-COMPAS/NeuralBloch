@@ -3,7 +3,7 @@ from src.config import load_config
 from src.utils import set_seed
 
 
-def main():
+def main() -> None:
     """The entry point."""
     # Parse command-line arguments
     parser = argparse.ArgumentParser()

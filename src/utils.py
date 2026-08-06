@@ -1,14 +1,23 @@
 import random
+from typing import TYPE_CHECKING
+from typing import Any
 import numpy as np
+import numpy.typing as npt
 import torch
 
 
-def split_real_imag(arr):
+if TYPE_CHECKING:
+    from src.model import FCModel
+
+
+def split_real_imag(
+    arr: npt.NDArray[np.complexfloating],
+) -> npt.NDArray[np.float32]:
     """Convert complex-valued arrays into real-valued arrays."""
     return np.concatenate([arr.real, arr.imag], axis=1).astype(np.float32)
 
 
-def set_seed(seed):
+def set_seed(seed: int) -> None:
     """Set random seeds for reproducible experiments."""
     random.seed(seed)
     np.random.seed(seed)
@@ -20,19 +29,22 @@ def set_seed(seed):
         torch.cuda.manual_seed_all(seed)
 
 
-def get_device(config):
+def get_device(config: dict[str, Any]) -> str:
     """Select computation device."""
-    device = config["experiment"]["DEVICE"]
+    device: str = config["experiment"]["DEVICE"]
     return device if torch.cuda.is_available() else "cpu"
 
 
-def load_model(config, device):
+def load_model(
+    config: dict[str, Any],
+    device: str,
+) -> tuple["FCModel", dict[str, Any]]:
     """Load a trained surrogate model from a checkpoint.
 
     The model architecture is created from the configuration file,
     after which the saved weights are loaded.
     """
-    checkpoint = torch.load(
+    checkpoint: dict[str, Any] = torch.load(
         config["experiment"]["PT_FILE_PATH"],
         map_location=device,
     )

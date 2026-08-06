@@ -1,9 +1,14 @@
+from typing import Any
 import h5py
 import numpy as np
 
 
-def split_dataset(config):
-    """Split an unsplit dataset into validation and test datasets."""
+def split_dataset(config: dict[str, Any]) -> None:
+    """Split an unsplit dataset into validation and test datasets.
+
+    Args:
+        config: The ``experiment`` section of the configuration dictionary.
+    """
     with h5py.File(config["DATASET_UNSPLIT_PATH"], "r") as f:
         N = f["T1"].shape[0]
 
