@@ -12,6 +12,9 @@ wheels/
 # Mac files
 **/.DS_Store
 
+# Claude
+.claude
+
 # Datasets and outputs
 data/datasets/
 outputs
