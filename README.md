@@ -1,4 +1,6 @@
-# Neural Network Surrogate Model for Bloch Simulations in MR-STAT
+# NeuralBloch
+
+Neural network surrogate model for Bloch simulations in MR-STAT.
 
 This repository contains the code for training and evaluating a neural network surrogate model for MR-STAT signal simulation. The surrogate predicts the MR signal and its derivatives with respect to tissue parameters.
 

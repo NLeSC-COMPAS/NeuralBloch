@@ -1,5 +1,5 @@
 [project]
-name = "surrogate-model"
+name = "neuralbloch"
 version = "0.1.0"
 description = "Neural network surrogate model for Bloch simulations in MR-STAT"
 readme = "README.md"
