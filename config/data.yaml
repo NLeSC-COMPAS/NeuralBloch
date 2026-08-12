@@ -1,7 +1,7 @@
 # Number of samples for dataset from which validation and test set will be generated
 N_SAMPLES: 40000
 
-# Sequence related settings
+# FISP3D Sequence related settings
 TR_S: 0.00558
 TE_S: 0.002745
 TI_S: 0.01084
@@ -15,10 +15,10 @@ DELTA_K_SPOIL_RAD_PER_M: 0.0
 
 # Lower bounds and upper bounds of generated T1, T2, B1 samples
 T1_lower: 0.1
-T1_upper: 5.0
+T1_upper: 6.0
 
 T2_lower: 0.01
 T2_upper: 2.0
 
-B1_lower: 0.8
-B1_upper: 1.2
+B1_lower: 0.5
+B1_upper: 1.5
