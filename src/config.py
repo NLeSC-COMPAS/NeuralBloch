@@ -11,13 +11,14 @@ def load_config(config_dir: str | Path) -> dict[str, Any]:
 
     Returns:
         A dictionary mapping each config name (``data``, ``experiment``,
-        ``model``, ``training``, ``testing``) to its parsed contents.
+        ``model``, ``training``, ``testing``, ``export``) to its parsed
+        contents.
     """
     config_dir = Path(config_dir)
 
     config: dict[str, Any] = {}
 
-    for name in ["data", "experiment", "model", "training", "testing"]:
+    for name in ["data", "experiment", "model", "training", "testing", "export"]:
         with open(config_dir / f"{name}.yaml") as f:
             config[name] = yaml.safe_load(f)
 

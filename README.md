@@ -17,6 +17,7 @@ Contains all configuration files.
 - **model.yaml** – model architecture settings (number of layers, hidden sizes, and output dimensions)
 - **training.yaml** – optimizer and training settings (number of epochs, batch sizes, and learning rate scheduler)
 - **testing.yaml** – evaluation and inference benchmark settings (batch sizes and number or runs)
+- **export.yaml** – model export settings (output paths, precision, and TensorRT batch size profile)
 
 ---
 
@@ -40,6 +41,7 @@ Contains automatically generated output files.
 
 - TensorBoard log files
 - Saved model checkpoints (`.pt`)
+- Exported ONNX models (`.onnx`) and TensorRT engines (`.engine`)
 
 ---
 
@@ -50,6 +52,8 @@ Contains scripts called by `run.py`.
 - **train.py** – trains the surrogate model
 - **test_accuracy.py** – evaluates prediction accuracy on the test dataset
 - **test_inference.py** – benchmarks surrogate inference speed
+- **export_onnx.py** – exports the trained model to ONNX
+- **build_engine.py** – builds a TensorRT engine from the exported ONNX model
 
 ---
 
@@ -76,6 +80,8 @@ Available tasks:
 - `train` – train the surrogate model
 - `test_accuracy` – evaluate prediction accuracy
 - `test_inference` – benchmark inference speed
+- `export_onnx` – export the trained model to ONNX
+- `build_engine` – build a TensorRT engine from the exported ONNX model
 
 ## Usage
 
@@ -112,6 +118,22 @@ uv run run.py test_inference
 ```
 
 Measures surrogate inference performance under different execution settings (FP32, FP16, `torch.compile`, etc.).
+
+### 5. Export the trained model to ONNX
+
+```bash
+uv run run.py export_onnx
+```
+
+Reads the trained checkpoint (`experiment.PT_FILE_PATH`), exports it to an ONNX model with a dynamic batch dimension, and verifies the export against PyTorch using ONNX Runtime. With `export.FP16` enabled, the model runs internally in FP16 while its inputs and outputs stay FP32.
+
+### 6. Build a TensorRT engine
+
+```bash
+uv run run.py build_engine
+```
+
+Compiles the exported ONNX model into a serialized TensorRT engine with a dynamic batch size profile and verifies the engine against PyTorch. TensorRT networks are strongly typed, so the engine precision is inherited from the ONNX model. Requires a CUDA GPU; the engine is specific to the GPU architecture and TensorRT version it was built with.
 
 ## Configuration
 

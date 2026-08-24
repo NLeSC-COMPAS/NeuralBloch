@@ -35,6 +35,33 @@ def get_device(config: dict[str, Any]) -> str:
     return device if torch.cuda.is_available() else "cpu"
 
 
+def sample_parameters(config: dict[str, Any], n_samples: int) -> torch.Tensor:
+    """Sample tissue parameters uniformly over the training ranges.
+
+    T1 and T2 are sampled log-uniformly and kept in log-space, and B1 is
+    sampled uniformly, matching the model input format ``[log(T1), log(T2), B1]``
+    used during training.
+
+    Args:
+        config: Full configuration dictionary.
+        n_samples: Number of parameter samples to draw.
+
+    Returns:
+        A float32 tensor of shape ``(n_samples, 3)``.
+    """
+    data = config["data"]
+
+    log_T1 = torch.empty(n_samples).uniform_(
+        np.log(data["T1_lower"]), np.log(data["T1_upper"])
+    )
+    log_T2 = torch.empty(n_samples).uniform_(
+        np.log(data["T2_lower"]), np.log(data["T2_upper"])
+    )
+    B1 = torch.empty(n_samples).uniform_(data["B1_lower"], data["B1_upper"])
+
+    return torch.stack([log_T1, log_T2, B1], dim=1)
+
+
 def load_model(
     config: dict[str, Any],
     device: str,

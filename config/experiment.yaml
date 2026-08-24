@@ -7,5 +7,5 @@ DATASET_FOR_VALIDATION_PATH: "data/datasets/dataset_for_validation.h5"
 DATASET_FOR_TESTING_PATH: "data/datasets/dataset_for_testing.h5"
 
 # Training output will be saved on these locations
-PT_FILE_PATH: "outputs/pt_file.pt"
+PT_FILE_PATH: "outputs/model.pt"
 LOG_FILE_PATH: "outputs/log_file"
