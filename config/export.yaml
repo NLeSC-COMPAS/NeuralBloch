@@ -10,15 +10,15 @@ OPSET_VERSION: 18
 # networks are strongly typed), so this yields an FP16 engine that trades a
 # small accuracy cost for inference speed.
 # Re-run both `export_onnx` and `build_engine` after changing this setting.
-FP16: true
+FP16: false
 
 # Dynamic batch size profile of the TensorRT engine.
 # The engine accepts any batch size in [MIN_BATCH_SIZE, MAX_BATCH_SIZE]
 # and its kernels are tuned for OPT_BATCH_SIZE
 # (set to testing.INFER_BATCH_SIZE, the batch size used during inference).
-MIN_BATCH_SIZE: 1
-OPT_BATCH_SIZE: 30000
-MAX_BATCH_SIZE: 60000
+MIN_BATCH_SIZE: 10000
+OPT_BATCH_SIZE: 14400
+MAX_BATCH_SIZE: 40000
 
 # Number of samples used to verify exported models against PyTorch
-N_VERIFY_SAMPLES: 30000
+N_VERIFY_SAMPLES: 14400
