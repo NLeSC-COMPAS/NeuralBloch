@@ -55,14 +55,16 @@ class FCModel(nn.Module):
     converts T1 and T2 to logarithmic coordinates before evaluating the
     sub-networks.
 
-    The output dimension is 2*NTR because complex-valued signals are
-    represented using separate real and imaginary components.
+    Complex-valued outputs have shape ``(batch, NTR, 2)``, with real and
+    imaginary values paired along the final axis.
     """
 
     def __init__(self, NTR: int, config: dict[str, Any]) -> None:
         super().__init__()
 
         input_dim = config["input_dim"]
+
+        self.NTR = NTR
 
         # Learned low-rank decoding matrices
         self.U_signal = nn.Linear(config["NB_signal"], 2 * NTR, bias=False)
@@ -106,9 +108,9 @@ class FCModel(nn.Module):
                 be finite and strictly positive.
 
         Returns:
-            m       : predicted signal
-            dm_dT1  : derivative with respect to T1
-            dm_dT2  : derivative with respect to T2
+            m: Predicted signal with shape ``(batch, NTR, 2)``.
+            dm_dT1: T1 derivative with shape ``(batch, NTR, 2)``.
+            dm_dT2: T2 derivative with shape ``(batch, NTR, 2)``.
         """
         # Use logarithmic T1 and T2 coordinates internally while keeping the
         # public model input in physical units.
@@ -120,8 +122,8 @@ class FCModel(nn.Module):
         dT2 = self.subnet_dT2(x)
 
         # Decode low-rank representations to full signal length
-        m = self.U_signal(signal)
-        dm_dT1 = self.U_dT1(dT1)
-        dm_dT2 = self.U_dT2(dT2)
+        m = self.U_signal(signal).unflatten(-1, (self.NTR, 2))
+        dm_dT1 = self.U_dT1(dT1).unflatten(-1, (self.NTR, 2))
+        dm_dT2 = self.U_dT2(dT2).unflatten(-1, (self.NTR, 2))
 
         return m, dm_dT1, dm_dT2

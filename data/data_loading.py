@@ -6,8 +6,8 @@ import torch
 from juliacall import Main as jl
 from torch.utils.data import DataLoader
 from torch.utils.data import TensorDataset
+from src.utils import complex_to_real_imag
 from src.utils import get_device
-from src.utils import split_real_imag
 
 
 def generate_val_loader(
@@ -28,10 +28,10 @@ def generate_val_loader(
         config["experiment"]["DATASET_FOR_VALIDATION_PATH"]
     )
 
-    # Split complex-valued data into real and imaginary channels
-    sig_split = split_real_imag(signal)
-    dT1_split = split_real_imag(dT1)
-    dT2_split = split_real_imag(dT2)
+    # Stack complex-valued data into paired real and imaginary channels
+    sig_split = complex_to_real_imag(signal)
+    dT1_split = complex_to_real_imag(dT1)
+    dT2_split = complex_to_real_imag(dT2)
 
     batchsize = config["training"]["TRAIN_BATCH_SIZE"]
 
@@ -71,10 +71,10 @@ def generate_train_loader(
 
     params = np.stack([T1, T2, B1], axis=1)
 
-    # Split complex-valued data into real and imaginary channels
-    sig_split = split_real_imag(signal)
-    dT1_split = split_real_imag(dT1)
-    dT2_split = split_real_imag(dT2)
+    # Stack complex-valued data into paired real and imaginary channels
+    sig_split = complex_to_real_imag(signal)
+    dT1_split = complex_to_real_imag(dT1)
+    dT2_split = complex_to_real_imag(dT2)
 
     batch_size = config["training"]["TRAIN_BATCH_SIZE"]
 
@@ -130,9 +130,9 @@ def make_loader(
 
     Args:
         params: Tissue parameters (T1, T2, B1), shape ``(N, 3)``.
-        sig_split: Signal targets split into real and imaginary channels.
-        dT1_split: Split derivatives with respect to T1.
-        dT2_split: Split derivatives with respect to T2.
+        sig_split: Signal targets with paired real and imaginary channels.
+        dT1_split: Paired derivatives with respect to T1.
+        dT2_split: Paired derivatives with respect to T2.
         batchsize: Number of samples per batch.
         device: Device the data will be consumed on.
         shuffle: Whether to reshuffle the data every epoch.

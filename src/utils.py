@@ -10,11 +10,14 @@ if TYPE_CHECKING:
     from src.model import FCModel
 
 
-def split_real_imag(
+def complex_to_real_imag(
     arr: npt.NDArray[np.complexfloating],
 ) -> npt.NDArray[np.float32]:
-    """Convert complex-valued arrays into real-valued arrays."""
-    return np.concatenate([arr.real, arr.imag], axis=1).astype(np.float32)
+    """Stack a complex array into paired real and imaginary components.
+
+    The returned array has one additional final axis ordered as ``[real, imag]``.
+    """
+    return np.stack((arr.real, arr.imag), axis=-1).astype(np.float32)
 
 
 def set_seed(seed: int) -> None:

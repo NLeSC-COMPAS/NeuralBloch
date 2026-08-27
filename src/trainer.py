@@ -92,7 +92,7 @@ class Trainer:
                     {
                         "model_state": self.model.state_dict(),
                         "epoch": epoch,
-                        "NTR": self.model.U_signal.out_features // 2,
+                        "NTR": self.model.NTR,
                     },
                     pt_file_path,
                 )
