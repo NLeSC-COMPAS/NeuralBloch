@@ -17,13 +17,14 @@ def nmae_loss(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
     Returns:
         The batch-averaged normalized MAE as a scalar tensor.
     """
-    mae_error = (pred - target).abs().mean(dim=1)  # (B,)
-    mae_target = target.abs().mean(dim=1).clamp(min=1e-8)  # (B,)
+    reduce_dims = tuple(range(1, pred.ndim))
+    mae_error = (pred - target).abs().mean(dim=reduce_dims)
+    mae_target = target.abs().mean(dim=reduce_dims).clamp(min=1e-8)
     return (mae_error / mae_target).mean()
 
 
 class Loss(nn.Module):
-    """Equal-weight L2 loss on signal and all three derivatives."""
+    """Equal-weight normalized MAE on signal and both derivatives."""
 
     def forward(
         self,
