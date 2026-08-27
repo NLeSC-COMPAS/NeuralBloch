@@ -39,6 +39,19 @@ class SubNetwork(nn.Module):
         return self.net(x)
 
 
+class InputTransform(nn.Module):
+    """Map physical tissue parameters to the network's internal coordinates.
+
+    Converts the public model input ``[T1, T2, B1]`` to the
+    ``[log(T1), log(T2), B1]`` coordinates the sub-networks operate in.
+    The transform has no parameters, so it adds nothing to checkpoints.
+    """
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Convert ``[T1, T2, B1]`` to ``[log(T1), log(T2), B1]``."""
+        return torch.cat((torch.log(x[..., :2]), x[..., 2:]), dim=-1)
+
+
 class FCModel(nn.Module):
     """Fully connected surrogate model.
 
@@ -65,6 +78,9 @@ class FCModel(nn.Module):
         input_dim = config["input_dim"]
 
         self.NTR = NTR
+
+        # Physical [T1, T2, B1] -> internal [log(T1), log(T2), B1] coordinates
+        self.input_transform = InputTransform()
 
         # Learned low-rank decoders with paired real-imaginary outputs
         self.U_signal = nn.Sequential(
@@ -123,7 +139,7 @@ class FCModel(nn.Module):
         """
         # Use logarithmic T1 and T2 coordinates internally while keeping the
         # public model input in physical units.
-        x = torch.cat((torch.log(x[..., :2]), x[..., 2:]), dim=-1)
+        x = self.input_transform(x)
 
         # Compute low-rank representations
         signal = self.subnet_signal(x)
@@ -136,3 +152,19 @@ class FCModel(nn.Module):
         dm_dT2 = self.U_dT2(dT2)
 
         return m, dm_dT1, dm_dT2
+
+    def forward_signal(self, x: torch.Tensor) -> torch.Tensor:
+        """Predict the signal without evaluating the derivative sub-networks.
+
+        The cheaper path for callers that only need the signal: it shares
+        ``input_transform`` and the signal head with ``forward``, so its
+        result is identical to ``forward(x)[0]``.
+
+        Input:
+            x: Physical tissue parameters ``[T1, T2, B1]``. T1 and T2 must
+                be finite and strictly positive.
+
+        Returns:
+            Predicted signal with shape ``(batch, NTR, 2)``.
+        """
+        return self.U_signal(self.subnet_signal(self.input_transform(x)))

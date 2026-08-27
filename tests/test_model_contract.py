@@ -73,6 +73,26 @@ class ModelContractTest(unittest.TestCase):
             complex_output = torch.view_as_complex(output.contiguous())
             self.assertEqual(complex_output.shape, (2, 5))
 
+    def test_forward_signal_matches_full_forward(self) -> None:
+        model = FCModel(5, MODEL_CONFIG).eval()
+        x = torch.tensor([[0.8, 0.07, 1.0], [1.2, 0.1, 0.9]])
+
+        with torch.no_grad():
+            signal_only = model.forward_signal(x)
+            full = model(x)
+
+        self.assertEqual(signal_only.shape, (2, 5, 2))
+        # Bitwise: forward_signal shares input_transform and the signal head
+        # with forward, so the two paths may never diverge.
+        self.assertTrue(torch.equal(signal_only, full[0]))
+
+    def test_input_transform_adds_no_checkpoint_state(self) -> None:
+        model = FCModel(5, MODEL_CONFIG)
+        self.assertEqual(len(list(model.input_transform.parameters())), 0)
+        self.assertFalse(
+            any(key.startswith("input_transform") for key in model.state_dict())
+        )
+
     def test_model_output_contract_supports_multiple_batch_sizes(self) -> None:
         model = FCModel(5, MODEL_CONFIG).eval()
 
