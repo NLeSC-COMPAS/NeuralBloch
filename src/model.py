@@ -66,12 +66,21 @@ class FCModel(nn.Module):
 
         self.NTR = NTR
 
-        # Learned low-rank decoding matrices
-        self.U_signal = nn.Linear(config["NB_signal"], 2 * NTR, bias=False)
+        # Learned low-rank decoders with paired real-imaginary outputs
+        self.U_signal = nn.Sequential(
+            nn.Linear(config["NB_signal"], 2 * NTR, bias=False),
+            nn.Unflatten(-1, (NTR, 2)),
+        )
 
-        self.U_dT1 = nn.Linear(config["NB_dT1"], 2 * NTR, bias=False)
+        self.U_dT1 = nn.Sequential(
+            nn.Linear(config["NB_dT1"], 2 * NTR, bias=False),
+            nn.Unflatten(-1, (NTR, 2)),
+        )
 
-        self.U_dT2 = nn.Linear(config["NB_dT2"], 2 * NTR, bias=False)
+        self.U_dT2 = nn.Sequential(
+            nn.Linear(config["NB_dT2"], 2 * NTR, bias=False),
+            nn.Unflatten(-1, (NTR, 2)),
+        )
 
         # Sub-network for the signal
         self.subnet_signal = SubNetwork(
@@ -122,8 +131,8 @@ class FCModel(nn.Module):
         dT2 = self.subnet_dT2(x)
 
         # Decode low-rank representations to full signal length
-        m = self.U_signal(signal).unflatten(-1, (self.NTR, 2))
-        dm_dT1 = self.U_dT1(dT1).unflatten(-1, (self.NTR, 2))
-        dm_dT2 = self.U_dT2(dT2).unflatten(-1, (self.NTR, 2))
+        m = self.U_signal(signal)
+        dm_dT1 = self.U_dT1(dT1)
+        dm_dT2 = self.U_dT2(dT2)
 
         return m, dm_dT1, dm_dT2

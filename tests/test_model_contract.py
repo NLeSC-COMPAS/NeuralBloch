@@ -64,6 +64,10 @@ class ModelContractTest(unittest.TestCase):
         torch.testing.assert_close(captured_inputs[0], expected_input)
 
         self.assertEqual(model.NTR, 5)
+        for decoder in (model.U_signal, model.U_dT1, model.U_dT2):
+            self.assertIsInstance(decoder, torch.nn.Sequential)
+            self.assertIsInstance(decoder[-1], torch.nn.Unflatten)
+
         for output in outputs:
             self.assertEqual(output.shape, (2, 5, 2))
             complex_output = torch.view_as_complex(output.contiguous())
@@ -113,8 +117,8 @@ class ModelContractTest(unittest.TestCase):
                 file.create_dataset("deriv_T1", data=signal)
                 file.create_dataset("deriv_T2", data=signal)
 
-            params, loaded_signal, dT1, dT2, n_samples, NTR = (
-                load_data_from_h5_file(str(path))
+            params, loaded_signal, dT1, dT2, n_samples, NTR = load_data_from_h5_file(
+                str(path)
             )
 
         np.testing.assert_array_equal(params, np.stack((T1, T2, B1), axis=1))
@@ -200,9 +204,7 @@ class MetricReductionTest(unittest.TestCase):
 
         target_np = np.zeros((2, 3, 2), dtype=np.float32)
         self.assertTrue(np.all(nrmse(target_np, target_np) == 0.0))
-        self.assertTrue(
-            np.all(np.isfinite(nrmse(np.ones_like(target_np), target_np)))
-        )
+        self.assertTrue(np.all(np.isfinite(nrmse(np.ones_like(target_np), target_np))))
 
 
 if __name__ == "__main__":
