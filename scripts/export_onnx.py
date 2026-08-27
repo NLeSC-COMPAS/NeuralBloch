@@ -80,7 +80,7 @@ def export_onnx(config: dict[str, Any]) -> None:
 
 
 def verify_onnx(
-    model: torch.nn.Module,
+    model: FCModel,
     onnx_path: Path,
     config: dict[str, Any],
 ) -> None:
@@ -92,7 +92,7 @@ def verify_onnx(
         config: Full configuration dictionary.
 
     Raises:
-        RuntimeError: If the ONNX predictions deviate from PyTorch.
+        RuntimeError: If an output has the wrong shape or deviates from PyTorch.
     """
     n_samples = config["export"]["N_VERIFY_SAMPLES"]
 
@@ -113,12 +113,24 @@ def verify_onnx(
 
     print(f"\n=== ONNX Runtime vs PyTorch float32 ({n_samples} samples) ===")
 
+    expected_shape = (n_samples, model.NTR, 2)
+
     for name, ref, pred in zip(
         ["Signal", "dT1", "dT2"], reference, predictions, strict=True
     ):
-        ref = ref.numpy()
-        pred = np.asarray(pred, dtype=np.float32)
+        if tuple(ref.shape) != expected_shape:
+            raise RuntimeError(
+                f"PyTorch {name} output has shape {tuple(ref.shape)}, "
+                f"expected {expected_shape}"
+            )
 
+        pred = np.asarray(pred, dtype=np.float32)
+        if pred.shape != expected_shape:
+            raise RuntimeError(
+                f"ONNX {name} output has shape {pred.shape}, expected {expected_shape}"
+            )
+
+        ref = ref.numpy()
         max_diff = np.abs(pred - ref).max()
         error = nrmse(pred, ref).mean()
 

@@ -136,10 +136,24 @@ def verify_engine(
 
     print(f"\n=== TensorRT vs PyTorch float32 ({n_samples} samples) ===")
 
-    for name, ref in zip(["signal", "dT1", "dT2"], reference, strict=True):
-        ref = ref.cpu().numpy()
-        pred = outputs[name].cpu().numpy()
+    expected_shape = (n_samples, model.NTR, 2)
 
+    for name, ref in zip(["signal", "dT1", "dT2"], reference, strict=True):
+        if tuple(ref.shape) != expected_shape:
+            raise RuntimeError(
+                f"PyTorch {name} output has shape {tuple(ref.shape)}, "
+                f"expected {expected_shape}"
+            )
+
+        pred_tensor = outputs[name]
+        if tuple(pred_tensor.shape) != expected_shape:
+            raise RuntimeError(
+                f"TensorRT {name} output has shape {tuple(pred_tensor.shape)}, "
+                f"expected {expected_shape}"
+            )
+
+        ref = ref.cpu().numpy()
+        pred = pred_tensor.cpu().numpy()
         max_diff = np.abs(pred - ref).max()
         error = nrmse(pred, ref).mean()
 
