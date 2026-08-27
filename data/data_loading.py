@@ -62,8 +62,8 @@ def generate_train_loader(
     batch = jl.generate_data(config, for_training=True)
 
     # Convert Julia arrays to NumPy
-    T1 = np.log(np.array(batch.T1, dtype=np.float32))
-    T2 = np.log(np.array(batch.T2, dtype=np.float32))
+    T1 = np.array(batch.T1, dtype=np.float32)
+    T2 = np.array(batch.T2, dtype=np.float32)
     B1 = np.array(batch.B1, dtype=np.float32)
     signal = np.array(batch.signal, dtype=np.complex64).T
     dT1 = np.array(batch.dM_dT1, dtype=np.complex64).T
@@ -102,8 +102,8 @@ def load_data_from_h5_file(
     what the stored dataset is expected to contain; it is not verified.
     """
     with h5py.File(filename, "r") as f:
-        T1 = np.log(f["T1"][:])
-        T2 = np.log(f["T2"][:])
+        T1 = f["T1"][:]
+        T2 = f["T2"][:]
         B1 = f["B1"][:]
         signal = f["signal"][:]
         dT1 = f["deriv_T1"][:]

@@ -51,9 +51,12 @@ class FCModel(nn.Module):
     which is decoded to the full signal length using a
     learned linear projection matrix U.
 
-    The output dimension is 2*NTR because complex-valued
-    signals are represented using separate real and imaginary
-    components.
+    Callers provide physical tissue parameters ``[T1, T2, B1]``. The model
+    converts T1 and T2 to logarithmic coordinates before evaluating the
+    sub-networks.
+
+    The output dimension is 2*NTR because complex-valued signals are
+    represented using separate real and imaginary components.
     """
 
     def __init__(self, NTR: int, config: dict[str, Any]) -> None:
@@ -99,13 +102,18 @@ class FCModel(nn.Module):
         """Predict signal and parameter derivatives.
 
         Input:
-            x: tissue parameters [T1, T2, B1]
+            x: Physical tissue parameters ``[T1, T2, B1]``. T1 and T2 must
+                be finite and strictly positive.
 
         Returns:
             m       : predicted signal
             dm_dT1  : derivative with respect to T1
             dm_dT2  : derivative with respect to T2
         """
+        # Use logarithmic T1 and T2 coordinates internally while keeping the
+        # public model input in physical units.
+        x = torch.cat((torch.log(x[..., :2]), x[..., 2:]), dim=-1)
+
         # Compute low-rank representations
         signal = self.subnet_signal(x)
         dT1 = self.subnet_dT1(x)

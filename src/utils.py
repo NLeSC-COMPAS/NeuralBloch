@@ -38,9 +38,8 @@ def get_device(config: dict[str, Any]) -> str:
 def sample_parameters(config: dict[str, Any], n_samples: int) -> torch.Tensor:
     """Sample tissue parameters uniformly over the training ranges.
 
-    T1 and T2 are sampled log-uniformly and kept in log-space, and B1 is
-    sampled uniformly, matching the model input format ``[log(T1), log(T2), B1]``
-    used during training.
+    T1 and T2 are sampled log-uniformly and returned in physical units. B1 is
+    sampled uniformly, matching the public model input format ``[T1, T2, B1]``.
 
     Args:
         config: Full configuration dictionary.
@@ -59,7 +58,7 @@ def sample_parameters(config: dict[str, Any], n_samples: int) -> torch.Tensor:
     )
     B1 = torch.empty(n_samples).uniform_(data["B1_lower"], data["B1_upper"])
 
-    return torch.stack([log_T1, log_T2, B1], dim=1)
+    return torch.stack([log_T1.exp(), log_T2.exp(), B1], dim=1)
 
 
 def load_model(
