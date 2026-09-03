@@ -3,6 +3,19 @@ import torch
 import torch.nn as nn
 
 
+def make_activation(name: str) -> nn.Module:
+    """Create a hidden-layer activation by name."""
+    if name == "relu":
+        return nn.ReLU()
+    if name == "silu":
+        return nn.SiLU()
+    if name == "gelu":
+        return nn.GELU()
+    raise ValueError(
+        f"model.activation must be 'relu', 'silu', or 'gelu', got {name!r}"
+    )
+
+
 class SubNetwork(nn.Module):
     """Fully connected network predicting a low-rank representation.
 
@@ -10,7 +23,7 @@ class SubNetwork(nn.Module):
     one output quantity.
 
     Architecture:
-        Linear -> ReLU repeated -> Linear
+        Linear -> configured activation repeated -> Linear
     """
 
     def __init__(
@@ -19,15 +32,18 @@ class SubNetwork(nn.Module):
         output_dim: int,
         hidden_size: int,
         num_layers: int,
+        activation: str,
     ) -> None:
         super().__init__()
 
         # First layer: input parameters -> hidden representation
-        layers = [nn.Linear(input_dim, hidden_size), nn.ReLU()]
+        layers = [nn.Linear(input_dim, hidden_size), make_activation(activation)]
 
         # Hidden layers
         for _ in range(num_layers - 2):
-            layers.extend([nn.Linear(hidden_size, hidden_size), nn.ReLU()])
+            layers.extend(
+                [nn.Linear(hidden_size, hidden_size), make_activation(activation)]
+            )
 
         # Final layer: hidden representation -> compressed signal
         layers.append(nn.Linear(hidden_size, output_dim))
@@ -76,6 +92,7 @@ class FCModel(nn.Module):
         super().__init__()
 
         input_dim = config["input_dim"]
+        activation = config.get("activation", "relu")
 
         self.NTR = NTR
 
@@ -104,6 +121,7 @@ class FCModel(nn.Module):
             output_dim=config["NB_signal"],
             hidden_size=config["hidden_size_signal"],
             num_layers=config["num_layers_signal"],
+            activation=activation,
         )
 
         # Sub-network for the T1 derivative
@@ -112,6 +130,7 @@ class FCModel(nn.Module):
             output_dim=config["NB_dT1"],
             hidden_size=config["hidden_size_dT1"],
             num_layers=config["num_layers_dT1"],
+            activation=activation,
         )
 
         # Sub-network for the T2 derivative
@@ -120,6 +139,7 @@ class FCModel(nn.Module):
             output_dim=config["NB_dT2"],
             hidden_size=config["hidden_size_dT2"],
             num_layers=config["num_layers_dT2"],
+            activation=activation,
         )
 
     def forward(
