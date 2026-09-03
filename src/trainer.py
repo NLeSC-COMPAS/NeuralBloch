@@ -79,7 +79,7 @@ class Trainer:
             )
 
         # Loss function
-        self.criterion = Loss()
+        self.criterion = Loss(config["training"]["LOSS_FUNCTION"])
 
         # Validation data remains fixed during training
         self.val_loader = val_loader
