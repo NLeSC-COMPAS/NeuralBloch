@@ -36,12 +36,13 @@ class Trainer:
         # Optimizer
         compile_train_step = config["training"].get("COMPILE_TRAIN_STEP", False)
         compile_train_step = compile_train_step and self.device.startswith("cuda")
+        initial_learning_rate = float(config["training"].get("LEARNING_RATE", 1e-3))
         if compile_train_step:
             # A device-resident learning rate prevents torch.compile from
             # specializing and recompiling the Adam step after every scheduler
             # update. ``capturable`` is required for CUDA graph capture.
             learning_rate: float | torch.Tensor = torch.tensor(
-                1e-3,
+                initial_learning_rate,
                 device=self.device,
             )
             self.optimizer = optim.Adam(
@@ -50,7 +51,10 @@ class Trainer:
                 capturable=True,
             )
         else:
-            self.optimizer = optim.Adam(self.model.parameters(), lr=1e-3)
+            self.optimizer = optim.Adam(
+                self.model.parameters(),
+                lr=initial_learning_rate,
+            )
 
         # Learning rate scheduler
         self.scheduler: LRScheduler

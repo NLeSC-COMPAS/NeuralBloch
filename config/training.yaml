@@ -4,6 +4,9 @@ N_EPOCHS: 5000
 # Number of samples used in each optimization step.
 TRAIN_BATCH_SIZE: 1000
 
+# Initial optimizer learning rate.
+LEARNING_RATE: 0.001
+
 # Validation does not affect gradients, so use larger batches and run it less
 # frequently. The first and final epochs are always validated.
 VALIDATION_BATCH_SIZE: 5000
