@@ -1,6 +1,6 @@
 import argparse
+from juliacall import Main as jl
 from src.config import load_config
-from src.utils import set_seed
 
 
 def main() -> None:
@@ -23,13 +23,14 @@ def main() -> None:
 
     # Load configuration files and set random seed
     config = load_config(args.config_dir)
-    set_seed(config["experiment"]["SEED"])
+    # Online samples are drawn by Julia, so Python's RNG seed alone does not
+    # make training runs reproducible.
+    julia_seed = int(config["experiment"]["SEED"])
+    jl.seval(f"begin using Random; Random.seed!({julia_seed}); true end")
 
     # Generate a new dataset using Julia and split it into
     # training and validation sets
     if args.task == "generate":
-        from juliacall import Main as jl
-
         jl.include("data/data_generation.jl")
         jl.save_dataset(config)
 
@@ -37,8 +38,18 @@ def main() -> None:
 
         split_dataset(config["experiment"])
 
+        return
+
+    if args.task == "train":
+        jl.include("data/data_generation.jl")
+        jl.seval("begin using BlochSimulators; CUDALibs(); true end")
+
+    from src.utils import set_seed
+
+    set_seed(config["experiment"]["SEED"])
+
     # Train the surrogate model
-    elif args.task == "train":
+    if args.task == "train":
         from scripts.train import train
 
         train(config)

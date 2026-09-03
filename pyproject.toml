@@ -14,8 +14,16 @@ dependencies = [
     "pyyaml>=6.0.3",
     "tensorboard>=2.21.0",
     "tensorrt>=11.2.1.2",
-    "torch>=2.13.0",
+    "torch==2.13.0",
 ]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu126" }
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
 
 [dependency-groups]
 dev = [
