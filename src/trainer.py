@@ -169,6 +169,8 @@ class Trainer:
                         "model_state": self.model.state_dict(),
                         "epoch": epoch,
                         "NTR": self.model.NTR,
+                        "model_config": dict(self.config["model"]),
+                        "data_config": dict(self.config["data"]),
                     },
                     pt_file_path,
                 )
