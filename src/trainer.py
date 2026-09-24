@@ -136,9 +136,7 @@ class Trainer:
             started = time.perf_counter()
             if train_loader is None:
                 raise RuntimeError("Training data was not generated")
-            train_loss, loss_signal, loss_dT1, loss_dT2 = self.train_epoch(
-                train_loader
-            )
+            train_loss, loss_signal, loss_dT1, loss_dT2 = self.train_epoch(train_loader)
             train_time = time.perf_counter() - started
 
             # Validation is intentionally much less frequent than optimization.
