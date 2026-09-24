@@ -59,11 +59,12 @@ Contains automatically generated output files.
 
 ### `scripts/`
 
-Contains scripts called by `run.py`.
+Contains scripts called by `run.py` and standalone post-training commands.
 
 - **train.py** – trains the surrogate model
 - **test_accuracy.py** – evaluates prediction accuracy on the test dataset
 - **test_inference.py** – benchmarks surrogate inference speed
+- **orthogonalize_basis.py** – optionally orders a trained shared basis and saves smaller-rank checkpoints
 - **export_onnx.py** – exports the trained model to ONNX
 - **build_engine.py** – builds a TensorRT engine from the exported ONNX model
 
@@ -74,6 +75,7 @@ Contains scripts called by `run.py`.
 Contains the core implementation.
 
 - **model.py** – neural network architecture
+- **basis.py** – post-training shared-basis ordering and rank truncation
 - **trainer.py** – training loop, validation, checkpointing, and logging
 - **loss.py** – loss function definitions
 - **utils.py** – helper functions (device selection, model loading, random seeds, etc.)
@@ -114,6 +116,24 @@ uv run run.py train
 ```
 
 Model checkpoints and TensorBoard logs are written to `outputs/`.
+
+For a forward-mode model, basis ordering is an optional step after training.
+The trained decoder can lose its initial orthogonality and order. This command
+saves an equivalent full-rank checkpoint and separate smaller-rank checkpoints;
+the original checkpoint is untouched:
+
+```bash
+uv run python -m scripts.orthogonalize_basis \
+  --checkpoint outputs/model.pt \
+  --fit-dataset data/datasets/dataset_for_validation.h5 \
+  --output outputs/model_ordered.pt \
+  --truncate 16 24 32
+```
+
+The full-rank rewrite preserves predictions up to floating-point error. Smaller
+ranks approximate the trained model; compare their reconstruction speed and
+accuracy before choosing a rank. Set `experiment.PT_FILE_PATH` to the selected
+rank checkpoint when exporting the surrogate for reconstruction.
 
 ### 3. Evaluate prediction accuracy
 
