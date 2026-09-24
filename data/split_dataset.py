@@ -12,8 +12,9 @@ def split_dataset(config: dict[str, Any]) -> None:
     with h5py.File(config["DATASET_UNSPLIT_PATH"], "r") as f:
         N = f["T1"].shape[0]
 
-        # Randomly select samples for validation and testing
-        idx = np.random.permutation(N)
+        # Randomly select samples for validation and testing reproducibly.
+        rng = np.random.default_rng(config["SEED"])
+        idx = rng.permutation(N)
 
         n_test = max(1, int(N * 0.15))
 
