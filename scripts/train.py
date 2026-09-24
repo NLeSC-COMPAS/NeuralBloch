@@ -15,7 +15,7 @@ def train(config: dict[str, Any]) -> None:
     val_loader, NTR = generate_val_loader(config)
 
     # Initialize the model
-    model = FCModel(NTR, config["model"])
+    model = FCModel(NTR, config["model"], config["data"])
 
     # Print the number of trainable parameters
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)

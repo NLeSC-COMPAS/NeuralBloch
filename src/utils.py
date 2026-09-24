@@ -82,7 +82,9 @@ def load_model(
 
     NTR = checkpoint["NTR"]
 
-    model = FCModel(NTR, config["model"])
+    model_config = checkpoint.get("model_config", config["model"])
+    data_config = checkpoint.get("data_config", config["data"])
+    model = FCModel(NTR, model_config, data_config)
     model.load_state_dict(checkpoint["model_state"])
     model.to(device)
     model.eval()
