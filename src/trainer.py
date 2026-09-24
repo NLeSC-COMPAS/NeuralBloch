@@ -103,7 +103,10 @@ class Trainer:
         # TensorBoard logger
         self.writer = SummaryWriter(log_dir=config["experiment"]["LOG_FILE_PATH"])
 
-    def train(self) -> None:
+    def train(
+        self,
+        initial_train_loader: TensorBatchLoader | None = None,
+    ) -> None:
         """Main training loop.
 
         Periodically regenerates training data, trains the model,
@@ -116,12 +119,15 @@ class Trainer:
         n_epochs = self.config["training"]["N_EPOCHS"]
         validate_every = self.config["training"].get("VALIDATE_EVERY", 1)
         training_started = time.perf_counter()
-        train_loader: TensorBatchLoader | None = None
+        train_loader = initial_train_loader
 
         for epoch in range(1, n_epochs + 1):
             generation_time = 0.0
             # Generate new Bloch simulation data periodically
-            if epoch == 1 or (epoch - 1) % self.config["training"]["REGEN_EVERY"] == 0:
+            needs_regeneration = (epoch == 1 and train_loader is None) or (
+                epoch > 1 and (epoch - 1) % self.config["training"]["REGEN_EVERY"] == 0
+            )
+            if needs_regeneration:
                 print(f"Generating training data for epoch {epoch} ...", flush=True)
                 started = time.perf_counter()
                 train_loader = generate_train_loader(self.config)
