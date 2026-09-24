@@ -48,6 +48,14 @@ function generate_data(config; for_training)
         )
     end
 
+    # Online training alternates CUDA.jl simulations with PyTorch on the same
+    # GPU. Reclaim arrays from the previous Julia call before allocating the
+    # next batch so CUDA.jl's pool cannot grow across thousands of epochs.
+    if for_training
+        GC.gc(false)
+        BlochSimulators.CUDA.reclaim()
+    end
+
     T1_lower = config["data"]["T1_lower"]
     T1_upper = config["data"]["T1_upper"]
 
