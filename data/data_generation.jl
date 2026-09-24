@@ -94,8 +94,8 @@ function generate_data(config; for_training)
 
     # Load RF train definition.
     rf_train, _, _ = build_rf_train(
-        "data/rf_data/rf_angle_list.txt",
-        "data/rf_data/rf_phase_list.txt"
+        config["data"]["RF_ANGLE_FILE"],
+        config["data"]["RF_PHASE_FILE"]
         )
 
     # Define the FISP sequence using parameters from config.

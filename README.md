@@ -29,7 +29,7 @@ Contains all data-related code.
 - **data_loading.py** – loading datasets and creating PyTorch `DataLoader`s
 - **split_dataset.py** – splitting a pre-generated HDF5 dataset into fixed validation and test sets
 - **datasets/** – location where generated HDF5 datasets will be stored
-- **rf_data/** – RF pulse sequence data used during data generation
+- **rf_data/** – RF pulse sequence data used during data generation (which files are used is set by `data.RF_ANGLE_FILE` / `data.RF_PHASE_FILE`)
 
 Training data is generated online during training using Julia Bloch simulations. Validation and test datasets are generated separately and stored as fixed HDF5 files.
 
