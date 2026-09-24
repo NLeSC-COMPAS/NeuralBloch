@@ -188,3 +188,24 @@ class FCModel(nn.Module):
             Predicted signal with shape ``(batch, NTR, 2)``.
         """
         return self.U_signal(self.subnet_signal(self.input_transform(x)))
+
+    def forward_coefficients(self, x: torch.Tensor) -> torch.Tensor:
+        """Predict signal coefficients, stopping before the signal decoder.
+
+        This is ``forward_signal`` without the final projection through
+        ``U_signal``. A low-rank reconstruction applies that basis itself, in
+        image space, so it wants the coefficients rather than the decoded
+        signal: ``forward_coefficients(x) @ U_signal[0].weight.T``, unflattened
+        to ``(batch, NTR, 2)``, reproduces ``forward_signal(x)`` exactly.
+
+        In ``forward`` mode, this basis is shared by the signal and both
+        derivatives. In ``separate`` mode, it is the signal basis only.
+
+        Input:
+            x: Physical tissue parameters ``[T1, T2, B1]``. T1 and T2 must
+                be finite and strictly positive.
+
+        Returns:
+            Coefficients with shape ``(batch, NB_signal)``.
+        """
+        return self.subnet_signal(self.input_transform(x))

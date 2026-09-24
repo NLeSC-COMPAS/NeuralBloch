@@ -86,6 +86,21 @@ class ModelContractTest(unittest.TestCase):
         # with forward, so the two paths may never diverge.
         self.assertTrue(torch.equal(signal_only, full[0]))
 
+    def test_forward_coefficients_reproduce_signal_in_separate_mode(self) -> None:
+        # Separate derivative heads have their own bases, but the signal still
+        # factors into coefficients and its signal decoder.
+        model = FCModel(5, {**MODEL_CONFIG, "derivative_mode": "separate"}).eval()
+        x = torch.tensor([[0.8, 0.07, 1.0], [1.2, 0.1, 0.9]])
+
+        with torch.no_grad():
+            coefficients = model.forward_coefficients(x)
+            signal = model.forward_signal(x)
+
+        reconstructed = (coefficients @ model.U_signal[0].weight.T).unflatten(
+            -1, (model.NTR, 2)
+        )
+        torch.testing.assert_close(reconstructed, signal)
+
     def test_input_transform_adds_no_checkpoint_state(self) -> None:
         model = FCModel(5, MODEL_CONFIG)
         self.assertEqual(len(list(model.input_transform.parameters())), 0)
