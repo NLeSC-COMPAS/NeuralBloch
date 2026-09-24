@@ -1,6 +1,9 @@
 # Number of samples for dataset from which validation and test set will be generated
 N_SAMPLES: 40000
 
+# Derivative generation: "forward_sensitivity" (default) or "finite_difference".
+DERIVATIVE_METHOD: "forward_sensitivity"
+
 # Sequence related settings
 TR_S: 0.00558
 TE_S: 0.002745

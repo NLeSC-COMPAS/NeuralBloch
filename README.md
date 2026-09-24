@@ -33,6 +33,12 @@ Contains all data-related code.
 
 Training data is generated online during training using Julia Bloch simulations. Validation and test datasets are generated separately and stored as fixed HDF5 files.
 
+Dataset derivatives use `simulate_derivatives_forward_sensitivity` by default. Set
+`data.DERIVATIVE_METHOD` to `finite_difference` to use the previous method.
+Forward sensitivity requires BlochSimulators v0.10 or newer. It is now as fast
+as finite differences, needs no step-size choice, and gives derivatives exact
+up to floating-point error rather than a finite-difference approximation.
+
 ---
 
 ### `outputs/`

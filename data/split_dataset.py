@@ -31,6 +31,10 @@ def split_dataset(config: dict[str, Any]) -> None:
         # Create separate validation and test datasets
         with h5py.File(config["DATASET_FOR_VALIDATION_PATH"], "w") as f_va:
             with h5py.File(config["DATASET_FOR_TESTING_PATH"], "w") as f_te:
+                for key, value in f.attrs.items():
+                    f_va.attrs[key] = value
+                    f_te.attrs[key] = value
+
                 for key in keys:
                     data = f[key][:]
                     # Handle parameter arrays (1D) and signal arrays (2D)
