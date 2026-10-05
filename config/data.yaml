@@ -1,7 +1,13 @@
 # Number of samples for dataset from which validation and test set will be generated
 N_SAMPLES: 40000
 
+# Derivative generation: "forward_sensitivity" (default) or "finite_difference".
+DERIVATIVE_METHOD: "forward_sensitivity"
+
 # FISP3D Sequence related settings
+# RF train: flip angles and phases, one value per TR, both in degrees.
+RF_ANGLE_FILE: "data/rf_data/rf_angle_list.txt"
+RF_PHASE_FILE: "data/rf_data/rf_phase_list.txt"
 TR_S: 0.00558
 TE_S: 0.002745
 TI_S: 0.01084

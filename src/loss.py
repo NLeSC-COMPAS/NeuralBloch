@@ -17,13 +17,69 @@ def nmae_loss(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
     Returns:
         The batch-averaged normalized MAE as a scalar tensor.
     """
-    mae_error = (pred - target).abs().mean(dim=1)  # (B,)
-    mae_target = target.abs().mean(dim=1).clamp(min=1e-8)  # (B,)
+    reduce_dims = tuple(range(1, pred.ndim))
+    mae_error = (pred - target).abs().mean(dim=reduce_dims)
+    mae_target = target.abs().mean(dim=reduce_dims).clamp(min=1e-8)
     return (mae_error / mae_target).mean()
 
 
+def relative_l2_loss(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+    """Compute the relative L2 error averaged over samples.
+
+    Args:
+        pred: Predicted values, shape ``(B, ...)``.
+        target: Ground-truth values with the same shape as ``pred``.
+
+    Returns:
+        The batch-averaged relative L2 error as a scalar tensor.
+    """
+    reduce_dims = tuple(range(1, pred.ndim))
+    error = torch.linalg.vector_norm(pred - target, dim=reduce_dims)
+    target_norm = torch.linalg.vector_norm(target, dim=reduce_dims).clamp(min=1e-8)
+    return (error / target_norm).mean()
+
+
+def relative_l2_squared_loss(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+) -> torch.Tensor:
+    """Compute mean squared relative L2 error over samples."""
+    reduce_dims = tuple(range(1, pred.ndim))
+    error_energy = (pred - target).square().sum(dim=reduce_dims)
+    target_energy = target.square().sum(dim=reduce_dims).clamp(min=1e-8)
+    return (error_energy / target_energy).mean()
+
+
+def hybrid_relative_loss(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+    """Blend relative L1 and L2 errors with equal weight."""
+    return 0.5 * (nmae_loss(pred, target) + relative_l2_loss(pred, target))
+
+
 class Loss(nn.Module):
-    """Equal-weight L2 loss on signal and all three derivatives."""
+    """Equal-weight loss on the signal and both derivatives."""
+
+    def __init__(self, loss_function: str = "nmae") -> None:
+        """Initialize the loss selected by name.
+
+        Args:
+            loss_function: Name of the normalized loss function.
+        """
+        super().__init__()
+
+        if loss_function == "nmae":
+            self.loss_function = nmae_loss
+        elif loss_function == "relative_l2":
+            self.loss_function = relative_l2_loss
+        elif loss_function == "relative_l2_squared":
+            self.loss_function = relative_l2_squared_loss
+        elif loss_function == "hybrid_relative":
+            self.loss_function = hybrid_relative_loss
+        else:
+            raise ValueError(
+                "loss_function must be 'nmae', 'relative_l2', "
+                "'relative_l2_squared', or 'hybrid_relative', got "
+                f"{loss_function!r}"
+            )
 
     def forward(
         self,
@@ -48,9 +104,8 @@ class Loss(nn.Module):
             A tuple of the mean total loss followed by the signal, T1, and T2
             loss terms.
         """
-        loss = nmae_loss
-        loss_signal = loss(pred_signal, gt_signal)
-        loss_dT1 = loss(pred_dT1, gt_dT1)
-        loss_dT2 = loss(pred_dT2, gt_dT2)
+        loss_signal = self.loss_function(pred_signal, gt_signal)
+        loss_dT1 = self.loss_function(pred_dT1, gt_dT1)
+        loss_dT2 = self.loss_function(pred_dT2, gt_dT2)
         total = (loss_signal + loss_dT1 + loss_dT2) / 3.0
         return total, loss_signal, loss_dT1, loss_dT2

@@ -89,8 +89,8 @@ def test_inference(config: dict[str, Any]) -> None:
     model, _ = load_model(config, device)
     model.eval()
 
-    T1 = np.log(0.8)
-    T2 = np.log(0.07)
+    T1 = 0.8
+    T2 = 0.07
     B1 = 1.0
 
     x_single = torch.tensor(

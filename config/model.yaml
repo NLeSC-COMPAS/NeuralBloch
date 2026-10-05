@@ -2,6 +2,9 @@
 # Input: [T1, T2, B1]
 input_dim: 3
 
+# Hidden-layer activation: "relu", "silu", or "gelu".
+activation: "relu"
+
 # Latent representation size for each output quantity
 NB_signal: 16
 NB_dT1: 32

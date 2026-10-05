@@ -1,7 +1,8 @@
 {
     "packages": {
         "BlochSimulators": {
-            "uuid": "2c9a3a5d-4a8d-4ca7-a6c9-04a38836deab"
+            "uuid": "2c9a3a5d-4a8d-4ca7-a6c9-04a38836deab",
+            "version": "0.10"
         },
         "HDF5": {
             "uuid": "f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"

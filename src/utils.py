@@ -10,11 +10,14 @@ if TYPE_CHECKING:
     from src.model import FCModel
 
 
-def split_real_imag(
+def complex_to_real_imag(
     arr: npt.NDArray[np.complexfloating],
 ) -> npt.NDArray[np.float32]:
-    """Convert complex-valued arrays into real-valued arrays."""
-    return np.concatenate([arr.real, arr.imag], axis=1).astype(np.float32)
+    """Stack a complex array into paired real and imaginary components.
+
+    The returned array has one additional final axis ordered as ``[real, imag]``.
+    """
+    return np.stack((arr.real, arr.imag), axis=-1).astype(np.float32)
 
 
 def set_seed(seed: int) -> None:
@@ -35,6 +38,32 @@ def get_device(config: dict[str, Any]) -> str:
     return device if torch.cuda.is_available() else "cpu"
 
 
+def sample_parameters(config: dict[str, Any], n_samples: int) -> torch.Tensor:
+    """Sample tissue parameters uniformly over the training ranges.
+
+    T1 and T2 are sampled log-uniformly and returned in physical units. B1 is
+    sampled uniformly, matching the public model input format ``[T1, T2, B1]``.
+
+    Args:
+        config: Full configuration dictionary.
+        n_samples: Number of parameter samples to draw.
+
+    Returns:
+        A float32 tensor of shape ``(n_samples, 3)``.
+    """
+    data = config["data"]
+
+    log_T1 = torch.empty(n_samples).uniform_(
+        np.log(data["T1_lower"]), np.log(data["T1_upper"])
+    )
+    log_T2 = torch.empty(n_samples).uniform_(
+        np.log(data["T2_lower"]), np.log(data["T2_upper"])
+    )
+    B1 = torch.empty(n_samples).uniform_(data["B1_lower"], data["B1_upper"])
+
+    return torch.stack([log_T1.exp(), log_T2.exp(), B1], dim=1)
+
+
 def load_model(
     config: dict[str, Any],
     device: str,
@@ -53,7 +82,9 @@ def load_model(
 
     NTR = checkpoint["NTR"]
 
-    model = FCModel(NTR, config["model"])
+    model_config = checkpoint.get("model_config", config["model"])
+    data_config = checkpoint.get("data_config", config["data"])
+    model = FCModel(NTR, model_config, data_config)
     model.load_state_dict(checkpoint["model_state"])
     model.to(device)
     model.eval()

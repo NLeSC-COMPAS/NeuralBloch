@@ -3,9 +3,9 @@ import numpy as np
 import numpy.typing as npt
 import torch
 from data.data_loading import load_data_from_h5_file
+from src.utils import complex_to_real_imag
 from src.utils import get_device
 from src.utils import load_model
-from src.utils import split_real_imag
 
 
 def test_accuracy(config: dict[str, Any]) -> None:
@@ -38,9 +38,9 @@ def test_accuracy(config: dict[str, Any]) -> None:
     p_dT1 = torch.cat(p_dT1_list).numpy()
     p_dT2 = torch.cat(p_dT2_list).numpy()
 
-    sig_true = split_real_imag(signal)
-    dT1_true = split_real_imag(dT1)
-    dT2_true = split_real_imag(dT2)
+    sig_true = complex_to_real_imag(signal)
+    dT1_true = complex_to_real_imag(dT1)
+    dT2_true = complex_to_real_imag(dT2)
 
     nrmse_sig = nrmse(p_sig, sig_true)
     nrmse_dT1 = nrmse(p_dT1, dT1_true)
@@ -59,12 +59,13 @@ def nrmse(
     """Compute the per-sample normalized RMSE as a percentage.
 
     Args:
-        pred: Predicted values, shape ``(N, M)``.
+        pred: Predicted values, shape ``(N, ...)``.
         true: Ground-truth values with the same shape as ``pred``.
 
     Returns:
         An array of per-sample NRMSE values in percent.
     """
-    rmse = np.sqrt(np.mean((pred - true) ** 2, axis=1))
-    scale = np.sqrt(np.mean(true**2, axis=1)) + 1e-12
+    reduce_axes = tuple(range(1, pred.ndim))
+    rmse = np.sqrt(np.mean((pred - true) ** 2, axis=reduce_axes))
+    scale = np.sqrt(np.mean(true**2, axis=reduce_axes)) + 1e-12
     return 100.0 * rmse / scale

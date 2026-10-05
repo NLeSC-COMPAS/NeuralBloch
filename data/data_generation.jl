@@ -35,6 +35,27 @@ end
 
 function generate_data(config; for_training)
 
+    derivative_method = get(config["data"], "DERIVATIVE_METHOD", "forward_sensitivity")
+    derivative_method in ("forward_sensitivity", "finite_difference") || error(
+        "data.DERIVATIVE_METHOD must be 'forward_sensitivity' or 'finite_difference'; " *
+        "found $derivative_method"
+    )
+    if derivative_method == "forward_sensitivity"
+        blochsimulators_version = pkgversion(BlochSimulators)
+        blochsimulators_version >= v"0.10.0" || error(
+            "Forward-sensitivity dataset generation requires BlochSimulators >= 0.10.0; " *
+            "found $blochsimulators_version"
+        )
+    end
+
+    # Online training alternates CUDA.jl simulations with PyTorch on the same
+    # GPU. Reclaim arrays from the previous Julia call before allocating the
+    # next batch so CUDA.jl's pool cannot grow across thousands of epochs.
+    if for_training
+        GC.gc(false)
+        BlochSimulators.CUDA.reclaim()
+    end
+
     T1_lower = config["data"]["T1_lower"]
     T1_upper = config["data"]["T1_upper"]
 
@@ -81,8 +102,8 @@ function generate_data(config; for_training)
 
     # Load RF train definition.
     rf_train, _, _ = build_rf_train(
-        "data/rf_data/rf_angle_list.txt",
-        "data/rf_data/rf_phase_list.txt"
+        config["data"]["RF_ANGLE_FILE"],
+        config["data"]["RF_PHASE_FILE"]
         )
 
     # Define the FISP sequence using parameters from config.
@@ -104,24 +125,32 @@ function generate_data(config; for_training)
     sequence_gpu = gpu(f32(sequence))
     parameters_gpu = gpu(f32(parameters))
 
-    # Simulate signals and derivatives on GPU
+    # Simulate signals and T₁/T₂ derivatives on GPU. Forward sensitivity
+    # propagates exact derivatives (up to floating-point error) without a
+    # finite-difference step size and returns the signal in the same pass.
+    if derivative_method == "forward_sensitivity"
+        @info "Starting magnetization and forward-sensitivity simulation"
+        @time signal_gpu, derivatives_gpu = simulate_derivatives_forward_sensitivity(
+            (:T₁, :T₂),
+            sequence_gpu,
+            parameters_gpu
+        )
+    else
+        @info "Starting magnetization simulation"
+        @time signal_gpu = simulate_magnetization(
+            CUDALibs(),
+            sequence_gpu,
+            parameters_gpu
+        )
 
-    @info "Starting magnetization simulation"
-
-    @time signal_gpu = simulate_magnetization(
-        CUDALibs(),
-        sequence_gpu,
-        parameters_gpu
-    )
-
-    @info "Starting derivative simulation"
-
-    @time derivatives_gpu = simulate_derivatives_finite_difference(
-        (:T₁, :T₂, :B₁),
-        signal_gpu,
-        sequence_gpu,
-        parameters_gpu
-    )
+        @info "Starting finite-difference derivative simulation"
+        @time derivatives_gpu = simulate_derivatives_finite_difference(
+            (:T₁, :T₂, :B₁),
+            signal_gpu,
+            sequence_gpu,
+            parameters_gpu
+        )
+    end
 
     # Move results back to CPU
     signal = Array(signal_gpu)
@@ -153,6 +182,10 @@ function save_dataset(config)
 
     # Store all quantities required for training/testing.
     h5open(filename, "w") do f
+        attributes(f)["blochsimulators_version"] = string(pkgversion(BlochSimulators))
+        attributes(f)["derivative_method"] = get(config["data"], "DERIVATIVE_METHOD", "forward_sensitivity")
+        attributes(f)["derivative_parameters"] = "T1,T2"
+
         write(f, "T1", data.T1)
         write(f, "T2", data.T2)
         write(f, "B1", data.B1)
