@@ -4,7 +4,7 @@ N_SAMPLES: 40000
 # Derivative generation: "forward_sensitivity" (default) or "finite_difference".
 DERIVATIVE_METHOD: "forward_sensitivity"
 
-# Sequence related settings
+# FISP3D Sequence related settings
 # RF train: flip angles and phases, one value per TR, both in degrees.
 RF_ANGLE_FILE: "data/rf_data/rf_angle_list.txt"
 RF_PHASE_FILE: "data/rf_data/rf_phase_list.txt"
@@ -21,10 +21,10 @@ DELTA_K_SPOIL_RAD_PER_M: 0.0
 
 # Lower bounds and upper bounds of generated T1, T2, B1 samples
 T1_lower: 0.1
-T1_upper: 5.0
+T1_upper: 6.0
 
 T2_lower: 0.01
 T2_upper: 2.0
 
-B1_lower: 0.8
-B1_upper: 1.2
+B1_lower: 0.5
+B1_upper: 1.5
