@@ -3,13 +3,13 @@ import unittest
 from pathlib import Path
 import onnx
 import torch
+from scripts.export_onnx import TARGETS
+from scripts.export_onnx import TargetModel
 from scripts.export_onnx import export_target
+from scripts.export_onnx import output_shape
+from scripts.export_onnx import rank
 from scripts.export_onnx import target_paths
 from src.model import FCModel
-from src.targets import TARGETS
-from src.targets import TargetModel
-from src.targets import output_shape
-from src.targets import rank
 
 
 NTR = 5

@@ -2,13 +2,13 @@ from pathlib import Path
 from typing import Any
 import tensorrt as trt
 import torch
+from scripts.export_onnx import TARGETS
+from scripts.export_onnx import TargetModel
 from scripts.export_onnx import check_outputs
 from scripts.export_onnx import target_paths
 from scripts.export_onnx import training_domain
 from scripts.export_onnx import verification_tolerance
 from src.model import FCModel
-from src.targets import TARGETS
-from src.targets import TargetModel
 from src.utils import load_model
 from src.utils import sample_parameters
 

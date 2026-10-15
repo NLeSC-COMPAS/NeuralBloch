@@ -1,5 +1,5 @@
 # Exported models will be saved on these locations: one ONNX model and one
-# TensorRT engine per target (src/targets.py), each a method of the model:
+# TensorRT engine per target (TARGETS in scripts/export_onnx.py), each a method of the model:
 #   signal_and_derivatives  forward: the signal and its T1/T2 derivatives
 #   signal                  forward_signal: the signal alone
 #   coefficients            forward_coefficients: the signal's basis coefficients

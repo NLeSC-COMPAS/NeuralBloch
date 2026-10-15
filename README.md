@@ -78,8 +78,6 @@ Contains the core implementation.
 
 - **model.py** – neural network architecture
 - **basis.py** – post-training shared-basis ordering and rank truncation
-- **targets.py** – the exported targets: which model method each ONNX model and TensorRT engine runs
-- **bundle.py** – the model bundle for NeuralBloch.jl and its card
 - **trainer.py** – training loop, validation, checkpointing, and logging
 - **loss.py** – loss function definitions
 - **utils.py** – helper functions (device selection, model loading, random seeds, etc.)
