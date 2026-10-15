@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 import numpy as np
 import numpy.typing as npt
+import onnx
 import onnxruntime as ort
 import torch
 import torch.nn as nn
@@ -57,10 +58,6 @@ class TargetModel(nn.Module):
 
     def __init__(self, model: FCModel, target: str, fp16: bool = False) -> None:
         super().__init__()
-        if target not in TARGETS:
-            raise ValueError(
-                f"Unknown target {target!r}; the targets are {', '.join(TARGETS)}"
-            )
         self.method = TARGETS[target].method
         self.fp16 = fp16
         self.model = copy.deepcopy(model).half() if fp16 else model
@@ -89,23 +86,11 @@ def rank(model: FCModel) -> int:
     return decoder.in_features
 
 
-def output_shape(model: FCModel, output: str, n: int) -> tuple[int, ...]:
-    """The shape of output ``output`` for a batch of ``n`` samples.
-
-    The signal and its derivatives are ``(n, NTR, 2)``, with real and
-    imaginary parts paired on the last axis; the coefficients are
-    ``(n, rank)``.
-    """
-    if output == "coefficients":
-        return (n, rank(model))
-    return (n, model.NTR, 2)
-
-
 def export_onnx(config: dict[str, Any]) -> None:
     """Export the trained surrogate model to ONNX, one model per target.
 
-    The trained checkpoint is loaded, and each target (``TARGETS``)
-    is exported to the ONNX model that ``export.TARGETS`` names for it, with a
+    The trained checkpoint is loaded, and each target (``TARGETS``) is
+    exported to the ONNX model that ``export.TARGETS`` names for it, with a
     dynamic batch dimension, and verified against the PyTorch model using
     ONNX Runtime.
 
@@ -119,25 +104,26 @@ def export_onnx(config: dict[str, Any]) -> None:
     model, checkpoint = load_model(config, "cpu")
 
     fp16 = export_config["FP16"]
-    precision = "FP16" if fp16 else "FP32"
 
-    # Example input used to trace the model (any batch size > 1 works)
-    example = sample_parameters(training_domain(config, checkpoint), 2)
+    x = sample_parameters(
+        training_domain(config, checkpoint), export_config["N_VERIFY_SAMPLES"]
+    )
 
     for target, (onnx_path, _) in paths.items():
+        # Any batch size > 1 traces the model
         export_target(
             model,
             target,
             onnx_path,
-            example=example,
+            example=x[:2],
             opset=export_config["OPSET_VERSION"],
             fp16=fp16,
         )
         print(
             f"\nExported target {target} of the model from epoch "
-            f"{checkpoint['epoch']} to {onnx_path} ({precision})"
+            f"{checkpoint['epoch']} to {onnx_path} ({'FP16' if fp16 else 'FP32'})"
         )
-        verify_onnx(model, target, onnx_path, config, checkpoint)
+        verify_onnx(model, target, onnx_path, x)
 
 
 def target_paths(export_config: dict[str, Any]) -> dict[str, tuple[Path, Path]]:
@@ -165,6 +151,22 @@ def target_paths(export_config: dict[str, Any]) -> dict[str, tuple[Path, Path]]:
         )
         for target in TARGETS
     }
+
+
+def require_exported(paths: dict[str, tuple[Path, Path]]) -> None:
+    """Refuse to go on before ``export_onnx`` has written every ONNX model.
+
+    Args:
+        paths: The targets' paths (``target_paths``).
+
+    Raises:
+        FileNotFoundError: If a target's ONNX model is missing.
+    """
+    for onnx_path, _ in paths.values():
+        if not onnx_path.exists():
+            raise FileNotFoundError(
+                f"{onnx_path} not found. Run `uv run run.py export_onnx` first."
+            )
 
 
 def training_domain(
@@ -226,12 +228,29 @@ def export_target(
     )
 
 
+def onnx_precision(paths: list[Path]) -> str:
+    """``"FP16"`` or ``"FP32"``: the precision the ONNX models' weights have.
+
+    Raises:
+        ValueError: If the models do not all have the same precision.
+    """
+    precisions = set()
+    for path in paths:
+        graph = onnx.load(str(path)).graph
+        half = any(w.data_type == onnx.TensorProto.FLOAT16 for w in graph.initializer)
+        precisions.add("FP16" if half else "FP32")
+    if len(precisions) != 1:
+        raise ValueError(
+            "The ONNX models mix FP16 and FP32; export them again together"
+        )
+    return precisions.pop()
+
+
 def verify_onnx(
     model: FCModel,
     target: str,
     onnx_path: Path,
-    config: dict[str, Any],
-    checkpoint: dict[str, Any],
+    x: torch.Tensor,
 ) -> None:
     """Compare ONNX Runtime predictions of one target against PyTorch.
 
@@ -239,19 +258,12 @@ def verify_onnx(
         model: The trained PyTorch model (on CPU).
         target: The target the ONNX model was exported for.
         onnx_path: Path to the exported ONNX model.
-        config: Full configuration dictionary.
-        checkpoint: The checkpoint the model was loaded from.
+        x: Physical parameters ``[T1, T2, B1]`` to predict for.
 
     Raises:
-        RuntimeError: If an output has the wrong shape or deviates from PyTorch.
+        RuntimeError: If an output has another shape than PyTorch's or
+            deviates from it.
     """
-    n_samples = config["export"]["N_VERIFY_SAMPLES"]
-
-    x = sample_parameters(training_domain(config, checkpoint), n_samples)
-
-    with torch.no_grad():
-        reference = TargetModel(model, target)(x)
-
     session = ort.InferenceSession(
         str(onnx_path),
         providers=["CPUExecutionProvider"],
@@ -266,63 +278,51 @@ def verify_onnx(
         f"ONNX Runtime vs PyTorch float32, target {target}",
         model,
         target,
-        reference,
+        x,
         predictions,
-        tolerance=verification_tolerance(config),
+        onnx_precision([onnx_path]),
     )
-
-
-def verification_tolerance(config: dict[str, Any]) -> float:
-    """The largest mean NRMSE, in percent, an exported model may have."""
-    # FP16 models trade a small amount of accuracy for speed
-    return 1.0 if config["export"]["FP16"] else 0.1
 
 
 def check_outputs(
     title: str,
     model: FCModel,
     target: str,
-    reference: Sequence[torch.Tensor],
-    predictions: Sequence[torch.Tensor | npt.NDArray[np.float32]],
-    tolerance: float,
+    x: torch.Tensor,
+    predictions: Sequence[npt.NDArray[np.float32]],
+    precision: str,
 ) -> None:
-    """Check exported predictions of one target against PyTorch's.
+    """Check an exported model's predictions of one target against PyTorch's.
 
-    Every output must have its expected shape, and its mean NRMSE against
-    the PyTorch reference must be at most ``tolerance`` percent.
+    Every output must have the shape of PyTorch's, and a mean NRMSE against it
+    of at most 0.1 %, or 1 % for an FP16 model, which trades a small amount of
+    accuracy for speed.
 
     Args:
         title: What is compared, for the printed report.
-        model: The PyTorch model the reference comes from.
-        target: The target both were computed for.
-        reference: The PyTorch outputs, in the target's output order.
-        predictions: The exported model's outputs, in the same order.
-        tolerance: The largest mean NRMSE allowed, in percent.
+        model: The PyTorch model, on the device of ``x``.
+        target: The target the predictions are of.
+        x: The physical parameters they were predicted for.
+        predictions: The exported model's outputs, in the target's order.
+        precision: ``"FP32"`` or ``"FP16"``, the exported model's precision.
 
     Raises:
-        RuntimeError: If an output has the wrong shape or deviates from PyTorch.
+        RuntimeError: If an output has another shape than PyTorch's or
+            deviates from it.
     """
-    n_samples = len(reference[0])
+    tolerance = 1.0 if precision == "FP16" else 0.1
 
-    print(f"\n=== {title} ({n_samples} samples) ===")
+    with torch.no_grad():
+        reference = [output.cpu().numpy() for output in TargetModel(model, target)(x)]
 
-    for name, ref_value, pred_value in zip(
+    print(f"\n=== {title} ({len(x)} samples) ===")
+
+    for name, ref, pred in zip(
         TARGETS[target].outputs, reference, predictions, strict=True
     ):
-        expected_shape = output_shape(model, name, n_samples)
-
-        ref = to_numpy(ref_value)
-        if ref.shape != expected_shape:
+        if pred.shape != ref.shape:
             raise RuntimeError(
-                f"PyTorch {name} output has shape {ref.shape}, "
-                f"expected {expected_shape}"
-            )
-
-        pred = to_numpy(pred_value)
-        if pred.shape != expected_shape:
-            raise RuntimeError(
-                f"Exported {name} output has shape {pred.shape}, "
-                f"expected {expected_shape}"
+                f"Exported {name} output has shape {pred.shape}, PyTorch's {ref.shape}"
             )
 
         max_diff = np.abs(pred - ref).max()
@@ -335,12 +335,3 @@ def check_outputs(
                 f"Exported predictions for {name} deviate from PyTorch "
                 f"(NRMSE {error:.5f}% > {tolerance}%)"
             )
-
-
-def to_numpy(
-    value: torch.Tensor | npt.NDArray[np.float32],
-) -> npt.NDArray[np.float32]:
-    """A Float32 NumPy array on the CPU, from a tensor on any device or an array."""
-    if isinstance(value, torch.Tensor):
-        return value.detach().cpu().numpy().astype(np.float32, copy=False)
-    return np.asarray(value, dtype=np.float32)

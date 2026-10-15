@@ -10,12 +10,16 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-import onnx
 import torch
+from scripts.export_onnx import TARGETS
+from scripts.export_onnx import onnx_precision
 from scripts.export_onnx import rank
+from scripts.export_onnx import require_exported
 from scripts.export_onnx import target_paths
+from scripts.export_onnx import training_domain
 from scripts.export_onnx import verify_onnx
 from src.utils import load_model
+from src.utils import sample_parameters
 
 
 # The model bundle NeuralBloch.jl reads: the ONNX model of every target, the
@@ -37,10 +41,11 @@ ONNX_FILES = {
     "coefficients": "model_coefficients.onnx",
 }
 
-# The bundle's RF tables, from the data configuration's files of these names.
+# The bundle's RF tables, by card key: (file in the bundle, the data
+# configuration's key for the source file, what the table holds).
 RF_FILES = {
-    "rf_angle": ("rf_data/rf_angle_list.txt", "RF_ANGLE_FILE"),
-    "rf_phase": ("rf_data/rf_phase_list.txt", "RF_PHASE_FILE"),
+    "rf_angle": ("rf_data/rf_angle_list.txt", "RF_ANGLE_FILE", "flip angles, degrees"),
+    "rf_phase": ("rf_data/rf_phase_list.txt", "RF_PHASE_FILE", "phases, degrees"),
 }
 
 # DERIVATIVE_METHOD as data/data_generation.jl names it -> the card's name,
@@ -180,10 +185,9 @@ def check_version(version: object) -> int:
     Raises:
         ValueError: If it is not.
     """
-    if not isinstance(version, int) or isinstance(version, bool) or version < 1:
-        raise ValueError(
-            f"export.MODEL_VERSION must be a positive integer, not {version!r}"
-        )
+    version = integer(version, "export.MODEL_VERSION")
+    if version < 1:
+        raise ValueError(f"export.MODEL_VERSION must be positive, not {version}")
     return version
 
 
@@ -217,11 +221,8 @@ def config_sha256(
 
 def file_sha256(path: str | Path) -> str:
     """The sha256 of a file's contents, in hexadecimal."""
-    digest = hashlib.sha256()
     with open(path, "rb") as f:
-        for block in iter(lambda: f.read(1 << 20), b""):
-            digest.update(block)
-    return digest.hexdigest()
+        return hashlib.file_digest(f, "sha256").hexdigest()
 
 
 def rf_table_length(path: str | Path) -> int:
@@ -352,13 +353,8 @@ def card_text(inputs: CardInputs) -> str:
     field("ntr", inputs.ntr, "readouts per voxel: the checkpoint's NTR")
     field("rank", inputs.rank, "basis coefficients per voxel: U_signal's rank")
 
-    outputs = {
-        "signal_and_derivatives": "FCModel.forward: signal, dT1, dT2",
-        "signal": "FCModel.forward_signal: signal",
-        "coefficients": "FCModel.forward_coefficients: coefficients",
-    }
-    for target, comment in outputs.items():
-        table(f"model.{target}", comment)
+    for target, spec in TARGETS.items():
+        table(f"model.{target}", f"FCModel.{spec.method}: {', '.join(spec.outputs)}")
         field("onnx", ONNX_FILES[target])
         field("sha256", inputs.onnx_sha256[target])
 
@@ -385,8 +381,8 @@ def card_text(inputs: CardInputs) -> str:
             convert(data[data_key], data_key),
             ", ".join(filter(None, (data_key, unit))),
         )
-    field("rf_angle", RF_FILES["rf_angle"][0], "RF_ANGLE_FILE: flip angles, degrees")
-    field("rf_phase", RF_FILES["rf_phase"][0], "RF_PHASE_FILE: phases, degrees")
+    for key, (name, data_key, holds) in RF_FILES.items():
+        field(key, name, f"{data_key}: {holds}")
 
     table("provenance")
     field("upstream", inputs.upstream, "the NeuralBloch commit that exported it")
@@ -405,13 +401,17 @@ def write_bundle(
 ) -> None:
     """Write a bundle: ``card`` as card.toml and ``files`` copied into it.
 
-    The bundle is assembled in a new directory next to ``bundle_dir`` and
-    then takes its place, so ``bundle_dir`` never holds a mix of two bundles.
+    The bundle is assembled in a new directory next to ``bundle_dir``,
+    checked (``check_bundle``), and then takes its place, so ``bundle_dir``
+    never holds a mix of two bundles, nor one that fails the check.
 
     Args:
         bundle_dir: The bundle's directory; an existing one is replaced.
         card: The text of card.toml.
         files: The bundle's other files: path in the bundle -> source.
+
+    Raises:
+        ValueError: If the assembled bundle fails ``check_bundle``.
     """
     bundle_dir = Path(bundle_dir)
     bundle_dir.parent.mkdir(parents=True, exist_ok=True)
@@ -425,6 +425,7 @@ def write_bundle(
             shutil.copyfile(source, target)
         (new / CARD).write_text(card)
         new.chmod(0o755)
+        check_bundle(new)
         if bundle_dir.exists():
             shutil.rmtree(old, ignore_errors=True)
             bundle_dir.rename(old)
@@ -458,7 +459,7 @@ def check_bundle(bundle_dir: str | Path) -> dict[str, Any]:
         card = tomllib.load(f)
     if card.get("format") != FORMAT:
         raise ValueError(f"{bundle_dir / CARD} has format {card.get('format')!r}")
-    for target in ONNX_FILES:
+    for target in TARGETS:
         entry = card["model"][target]
         path = bundle_dir / entry["onnx"]
         if not path.is_file():
@@ -499,14 +500,16 @@ def export_bundle(config: dict[str, Any]) -> None:
     require_configs(checkpoint, checkpoint_path)
 
     model, _ = load_model(config, "cpu")
+    model_rank = rank(model)
     family = export_config["MODEL_FAMILY"]
     version = check_version(export_config["MODEL_VERSION"])
-    check_family(family, rank(model))
+    check_family(family, model_rank)
 
     upstream = f"NeuralBloch@{clean_commit()}"
 
     data_config = checkpoint["data_config"]
-    for key, (_, data_key) in RF_FILES.items():
+    method = derivative_method(data_config)
+    for key, (_, data_key, _) in RF_FILES.items():
         values = rf_table_length(data_config[data_key])
         if values != model.NTR:
             raise ValueError(
@@ -516,26 +519,24 @@ def export_bundle(config: dict[str, Any]) -> None:
 
     # The ONNX models must be this checkpoint's: each is checked against it
     paths = target_paths(export_config)
-    for target, (onnx_path, _) in paths.items():
-        if not onnx_path.exists():
-            raise FileNotFoundError(
-                f"{onnx_path} not found. Run `uv run run.py export_onnx` first."
-            )
-        verify_onnx(model, target, onnx_path, config, checkpoint)
-    precision = onnx_precision([onnx_path for onnx_path, _ in paths.values()])
+    require_exported(paths)
+    onnx_paths = {target: onnx_path for target, (onnx_path, _) in paths.items()}
+    precision = onnx_precision(list(onnx_paths.values()))
+    x = sample_parameters(
+        training_domain(config, checkpoint), export_config["N_VERIFY_SAMPLES"]
+    )
+    for target, onnx_path in onnx_paths.items():
+        verify_onnx(model, target, onnx_path, x)
 
-    blochsimulators, steps = blochsimulators_facts(derivative_method(data_config))
+    blochsimulators, steps = blochsimulators_facts(method)
 
     card = card_text(
         CardInputs(
             family=family,
             version=version,
             ntr=model.NTR,
-            rank=rank(model),
-            onnx_sha256={
-                target: file_sha256(onnx_path)
-                for target, (onnx_path, _) in paths.items()
-            },
+            rank=model_rank,
+            onnx_sha256={t: file_sha256(path) for t, path in onnx_paths.items()},
             data_config=data_config,
             finite_difference_steps=steps,
             upstream=upstream,
@@ -547,19 +548,17 @@ def export_bundle(config: dict[str, Any]) -> None:
     )
 
     files: dict[str, str | Path] = {
-        ONNX_FILES[target]: onnx_path for target, (onnx_path, _) in paths.items()
+        ONNX_FILES[target]: path for target, path in onnx_paths.items()
     }
-    files |= {name: data_config[data_key] for name, data_key in RF_FILES.values()}
+    files |= {name: data_config[data_key] for name, data_key, _ in RF_FILES.values()}
 
     bundle_dir = Path(export_config["BUNDLE_DIR"])
     write_bundle(bundle_dir, card, files)
-    check_bundle(bundle_dir)
 
     print(
         f"\nWrote the model bundle {family}-v{version} to {bundle_dir}: "
-        f"NTR {model.NTR}, rank {rank(model)}, {derivative_method(data_config)} "
-        f"derivatives, {precision}, from {checkpoint_path} (epoch "
-        f"{checkpoint['epoch']}) and {upstream}"
+        f"NTR {model.NTR}, rank {model_rank}, {method} derivatives, {precision}, "
+        f"from {checkpoint_path} (epoch {checkpoint['epoch']}) and {upstream}"
     )
 
 
@@ -588,29 +587,14 @@ def git(*args: str) -> str:
     ).stdout.strip()
 
 
-def onnx_precision(paths: list[Path]) -> str:
-    """``"FP16"`` or ``"FP32"``: the precision the ONNX models' weights have.
-
-    Raises:
-        ValueError: If the models do not all have the same precision.
-    """
-    precisions = set()
-    for path in paths:
-        graph = onnx.load(str(path)).graph
-        half = any(w.data_type == onnx.TensorProto.FLOAT16 for w in graph.initializer)
-        precisions.add("FP16" if half else "FP32")
-    if len(precisions) != 1:
-        raise ValueError(
-            "The ONNX models mix FP16 and FP32; export them again together"
-        )
-    return precisions.pop()
-
-
 def blochsimulators_facts(method: str) -> tuple[str, tuple[float, float] | None]:
     """BlochSimulators' version, and its T1 and T2 steps for forward differences.
 
     The training data are simulated in this repository's Julia environment
-    (juliapkg.json), so it is the one asked.
+    (juliapkg.json), so it is the one asked. The version is read from the
+    package's Project.toml, without loading the package, which would also
+    initialize CUDA next to PyTorch's; the steps, when needed, from the
+    package itself.
 
     Args:
         method: The card's derivative method.
@@ -621,10 +605,16 @@ def blochsimulators_facts(method: str) -> tuple[str, tuple[float, float] | None]
     """
     from juliacall import Main as jl
 
-    jl.seval("using BlochSimulators")
-    version = str(jl.seval("string(pkgversion(BlochSimulators))"))
+    jl.seval("import TOML")
+    version = str(
+        jl.seval(
+            "TOML.parsefile(joinpath(dirname(dirname(Base.locate_package("
+            'Base.identify_package("BlochSimulators")))), "Project.toml"))["version"]'
+        )
+    )
     steps = None
     if method == "forward difference":
+        jl.seval("using BlochSimulators")
         steps = (
             float(jl.seval("BlochSimulators.DEFAULT_ΔT₁")),
             float(jl.seval("BlochSimulators.DEFAULT_ΔT₂")),

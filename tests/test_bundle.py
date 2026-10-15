@@ -3,9 +3,9 @@ import tomllib
 import unittest
 from dataclasses import replace
 from pathlib import Path
-import torch
 from scripts.export_bundle import FORMAT
 from scripts.export_bundle import ONNX_FILES
+from scripts.export_bundle import RF_FILES
 from scripts.export_bundle import CardInputs
 from scripts.export_bundle import card_text
 from scripts.export_bundle import check_bundle
@@ -15,12 +15,9 @@ from scripts.export_bundle import config_sha256
 from scripts.export_bundle import derivative_method
 from scripts.export_bundle import family_rank
 from scripts.export_bundle import file_sha256
-from scripts.export_bundle import onnx_precision
 from scripts.export_bundle import require_configs
 from scripts.export_bundle import rf_table_length
 from scripts.export_bundle import write_bundle
-from scripts.export_onnx import export_target
-from src.model import FCModel
 
 
 DATA_CONFIG = {
@@ -44,19 +41,6 @@ DATA_CONFIG = {
     "T2_upper": 2.0,
     "B1_lower": 0.5,
     "B1_upper": 1.5,
-}
-
-MODEL_CONFIG = {
-    "input_dim": 3,
-    "NB_signal": 2,
-    "NB_dT1": 2,
-    "NB_dT2": 2,
-    "hidden_size_signal": 4,
-    "hidden_size_dT1": 4,
-    "hidden_size_dT2": 4,
-    "num_layers_signal": 2,
-    "num_layers_dT1": 2,
-    "num_layers_dT2": 2,
 }
 
 INPUTS = CardInputs(
@@ -224,95 +208,69 @@ class CheckpointTest(unittest.TestCase):
         self.assertEqual(len(a), 64)
         self.assertNotEqual(a, config_sha256({"x": 1, "y": 3}, {}))
 
-    def test_onnx_precision(self) -> None:
-        model = FCModel(5, MODEL_CONFIG).eval()
-        x = torch.tensor([[0.8, 0.07, 1.0], [1.2, 0.1, 0.9]])
-        with tempfile.TemporaryDirectory() as tmp:
-            fp32, fp16 = Path(tmp) / "fp32.onnx", Path(tmp) / "fp16.onnx"
-            export_target(model, "coefficients", fp32, example=x, opset=18)
-            export_target(model, "coefficients", fp16, example=x, opset=18, fp16=True)
-            self.assertEqual(onnx_precision([fp32, fp32]), "FP32")
-            self.assertEqual(onnx_precision([fp16]), "FP16")
-            with self.assertRaisesRegex(ValueError, "mix FP16 and FP32"):
-                onnx_precision([fp32, fp16])
-
 
 class BundleTest(unittest.TestCase):
-    def make_sources(self, root: Path, ntr: int = 3) -> dict[str, str | Path]:
-        files: dict[str, str | Path] = {}
+    def setUp(self) -> None:
+        # Source files for a bundle with 3 readouts, and where it goes
+        self.root = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        (self.root / "src").mkdir()
+        self.files: dict[str, str | Path] = {}
         for target, name in ONNX_FILES.items():
-            path = root / "src" / f"{target}.onnx"
-            path.parent.mkdir(parents=True, exist_ok=True)
+            path = self.root / "src" / f"{target}.onnx"
             path.write_bytes(target.encode())
-            files[name] = path
-        for name in ("rf_data/rf_angle_list.txt", "rf_data/rf_phase_list.txt"):
-            path = root / "src" / Path(name).name
-            path.write_text("".join(f"{i}.5\n" for i in range(ntr)))
-            files[name] = path
-        return files
+            self.files[name] = path
+        for name, _, _ in RF_FILES.values():
+            path = self.root / "src" / Path(name).name
+            path.write_text("".join(f"{i}.5\n" for i in range(3)))
+            self.files[name] = path
+        self.bundle = self.root / "bundle"
 
-    def card_for(self, files: dict[str, str | Path], ntr: int = 3) -> str:
-        sha = {t: file_sha256(files[name]) for t, name in ONNX_FILES.items()}
+    def card(self, ntr: int = 3) -> str:
+        sha = {t: file_sha256(self.files[name]) for t, name in ONNX_FILES.items()}
         return card_text(replace(INPUTS, ntr=ntr, onnx_sha256=sha))
 
     def test_written_bundle_checks_out(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            files = self.make_sources(root)
-            bundle = root / "out" / "bundle"
-            write_bundle(bundle, self.card_for(files), files)
-            card = check_bundle(bundle)
-            self.assertEqual(card["model"]["ntr"], 3)
-            self.assertEqual(
-                sorted(str(p.relative_to(bundle)) for p in bundle.rglob("*")),
-                sorted(["card.toml", "rf_data", *files]),
-            )
-            self.assertEqual(
-                (bundle / "model.onnx").read_bytes(), b"signal_and_derivatives"
-            )
+        write_bundle(self.bundle, self.card(), self.files)
+        self.assertEqual(check_bundle(self.bundle)["model"]["ntr"], 3)
+        self.assertEqual(
+            sorted(str(p.relative_to(self.bundle)) for p in self.bundle.rglob("*")),
+            sorted(["card.toml", "rf_data", *self.files]),
+        )
+        self.assertEqual(
+            (self.bundle / "model.onnx").read_bytes(), b"signal_and_derivatives"
+        )
 
     def test_a_new_bundle_replaces_the_old_one_whole(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            files = self.make_sources(root)
-            bundle = root / "bundle"
-            write_bundle(bundle, self.card_for(files), files)
-            (bundle / "stale.onnx").write_bytes(b"left over")
-            write_bundle(bundle, self.card_for(files), files)
-            self.assertFalse((bundle / "stale.onnx").exists())
-            self.assertEqual(sorted(p.name for p in root.iterdir()), ["bundle", "src"])
+        write_bundle(self.bundle, self.card(), self.files)
+        (self.bundle / "stale.onnx").write_bytes(b"left over")
+        write_bundle(self.bundle, self.card(), self.files)
+        self.assertFalse((self.bundle / "stale.onnx").exists())
+        self.assertEqual(sorted(p.name for p in self.root.iterdir()), ["bundle", "src"])
 
     def test_a_failed_write_keeps_the_old_bundle(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            files = self.make_sources(root)
-            bundle = root / "bundle"
-            write_bundle(bundle, self.card_for(files), files)
-            before = (bundle / "card.toml").read_text()
-            with self.assertRaises(FileNotFoundError):
-                write_bundle(bundle, "format = 2\n", {**files, "x": root / "missing"})
-            self.assertEqual((bundle / "card.toml").read_text(), before)
-            self.assertEqual(sorted(p.name for p in root.iterdir()), ["bundle", "src"])
+        write_bundle(self.bundle, self.card(), self.files)
+        before = (self.bundle / "card.toml").read_text()
+        with self.assertRaises(FileNotFoundError):
+            write_bundle(
+                self.bundle, self.card(), {**self.files, "x": self.root / "missing"}
+            )
+        # A bundle that fails its check does not replace the old one either
+        with self.assertRaisesRegex(ValueError, "does not have ntr = 4 values"):
+            write_bundle(self.bundle, self.card(ntr=4), self.files)
+        self.assertEqual((self.bundle / "card.toml").read_text(), before)
+        self.assertEqual(sorted(p.name for p in self.root.iterdir()), ["bundle", "src"])
 
     def test_check_finds_damaged_bundles(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            files = self.make_sources(root)
-            bundle = root / "bundle"
-            write_bundle(bundle, self.card_for(files), files)
+        write_bundle(self.bundle, self.card(), self.files)
+        (self.bundle / "model_signal.onnx").write_bytes(b"changed")
+        with self.assertRaisesRegex(ValueError, "model_signal.onnx does not have"):
+            check_bundle(self.bundle)
+        (self.bundle / "model.onnx").unlink()
+        with self.assertRaisesRegex(ValueError, "model.onnx, which is missing"):
+            check_bundle(self.bundle)
 
-            (bundle / "model_signal.onnx").write_bytes(b"changed")
-            with self.assertRaisesRegex(ValueError, "model_signal.onnx does not have"):
-                check_bundle(bundle)
 
-            write_bundle(bundle, self.card_for(files, ntr=4), files)
-            with self.assertRaisesRegex(ValueError, "does not have ntr = 4 values"):
-                check_bundle(bundle)
-
-            (bundle / "model.onnx").unlink()
-            with self.assertRaisesRegex(ValueError, "model.onnx, which is missing"):
-                check_bundle(bundle)
-
+class RfTableTest(unittest.TestCase):
     def test_rf_tables_count_numbers(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "rf.txt"

@@ -3,11 +3,11 @@ from typing import Any
 import tensorrt as trt
 import torch
 from scripts.export_onnx import TARGETS
-from scripts.export_onnx import TargetModel
 from scripts.export_onnx import check_outputs
+from scripts.export_onnx import onnx_precision
+from scripts.export_onnx import require_exported
 from scripts.export_onnx import target_paths
 from scripts.export_onnx import training_domain
-from scripts.export_onnx import verification_tolerance
 from src.model import FCModel
 from src.utils import load_model
 from src.utils import sample_parameters
@@ -34,14 +34,13 @@ def build_engine(config: dict[str, Any]) -> None:
 
     export_config = config["export"]
     paths = target_paths(export_config)
-
-    for onnx_path, _ in paths.values():
-        if not onnx_path.exists():
-            raise FileNotFoundError(
-                f"{onnx_path} not found. Run `uv run run.py export_onnx` first."
-            )
+    require_exported(paths)
 
     logger = trt.Logger(trt.Logger.WARNING)
+
+    # One timing cache for every build: the smaller targets' networks are
+    # parts of the largest one, so their layers need not be timed again
+    timing_cache = trt.Builder(logger).create_builder_config().create_timing_cache(b"")
 
     # PyTorch float32 reference, and parameters from its training domain
     model, checkpoint = load_model(config, "cuda")
@@ -49,23 +48,23 @@ def build_engine(config: dict[str, Any]) -> None:
         training_domain(config, checkpoint), export_config["N_VERIFY_SAMPLES"]
     ).to("cuda")
 
-    precision = "FP16" if export_config["FP16"] else "FP32"
-
     for target, (onnx_path, engine_path) in paths.items():
-        build_target_engine(
-            onnx_path, engine_path, export_config, config["model"]["input_dim"], logger
-        )
+        build_target_engine(onnx_path, engine_path, export_config, logger, timing_cache)
+
+        # TensorRT networks are strongly typed: the engine has its ONNX
+        # model's precision
+        precision = onnx_precision([onnx_path])
         print(f"\nBuilt TensorRT engine ({precision}) for {target} at {engine_path}")
 
-        verify_engine(model, target, engine_path, x, logger, config)
+        verify_engine(model, target, engine_path, x, logger, precision)
 
 
 def build_target_engine(
     onnx_path: Path,
     engine_path: Path,
     export_config: dict[str, Any],
-    input_dim: int,
     logger: trt.Logger,
+    timing_cache: trt.ITimingCache,
 ) -> None:
     """Build the TensorRT engine of one ONNX model and write it to a file.
 
@@ -73,8 +72,8 @@ def build_target_engine(
         onnx_path: Path to the ONNX model.
         engine_path: Where to write the serialized engine.
         export_config: The ``export`` configuration (batch size profile).
-        input_dim: The number of input parameters per sample.
         logger: TensorRT logger.
+        timing_cache: Layer timings shared between builds.
 
     Raises:
         RuntimeError: If the ONNX model cannot be parsed or the build fails.
@@ -89,15 +88,18 @@ def build_target_engine(
         raise RuntimeError(f"Failed to parse {onnx_path}:\n{errors}")
 
     builder_config = builder.create_builder_config()
+    builder_config.set_timing_cache(timing_cache, ignore_mismatch=False)
 
     # Dynamic batch size profile: the engine accepts any batch size between
     # MIN_BATCH_SIZE and MAX_BATCH_SIZE, with kernels tuned for OPT_BATCH_SIZE
+    x = network.get_input(0)
+    sample = tuple(x.shape)[1:]
     profile = builder.create_optimization_profile()
     profile.set_shape(
-        "x",
-        (export_config["MIN_BATCH_SIZE"], input_dim),
-        (export_config["OPT_BATCH_SIZE"], input_dim),
-        (export_config["MAX_BATCH_SIZE"], input_dim),
+        x.name,
+        (export_config["MIN_BATCH_SIZE"], *sample),
+        (export_config["OPT_BATCH_SIZE"], *sample),
+        (export_config["MAX_BATCH_SIZE"], *sample),
     )
     builder_config.add_optimization_profile(profile)
 
@@ -117,7 +119,7 @@ def verify_engine(
     engine_path: Path,
     x: torch.Tensor,
     logger: trt.Logger,
-    config: dict[str, Any],
+    precision: str,
 ) -> None:
     """Compare one target's TensorRT engine against the PyTorch model.
 
@@ -131,15 +133,12 @@ def verify_engine(
         engine_path: Path to the serialized TensorRT engine.
         x: Physical parameters ``[T1, T2, B1]`` on the GPU.
         logger: TensorRT logger.
-        config: Full configuration dictionary.
+        precision: ``"FP32"`` or ``"FP16"``, the engine's precision.
 
     Raises:
         RuntimeError: If the engine's tensors are not the target's, or its
             predictions deviate from PyTorch.
     """
-    with torch.no_grad():
-        reference = TargetModel(model, target)(x)
-
     # Load the serialized engine
     runtime = trt.Runtime(logger)
     engine = runtime.deserialize_cuda_engine(engine_path.read_bytes())
@@ -177,7 +176,7 @@ def verify_engine(
         f"TensorRT vs PyTorch float32, target {target}",
         model,
         target,
-        reference,
-        [buffers[name] for name in TARGETS[target].outputs],
-        tolerance=verification_tolerance(config),
+        x,
+        [buffers[name].cpu().numpy() for name in TARGETS[target].outputs],
+        precision,
     )
