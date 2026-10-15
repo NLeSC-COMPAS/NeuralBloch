@@ -184,7 +184,7 @@ Compiles each exported ONNX model into a serialized TensorRT engine with a dynam
 uv run run.py export_bundle
 ```
 
-Writes the model bundle that [NeuralBloch.jl](https://github.com/NLeSC-COMPAS/NeuralBloch.jl) reads to `export.BUNDLE_DIR`: the three ONNX models of step 5, the RF tables of the training sequence, and a generated `card.toml` (format 2). The card states the model's family and version (`export.MODEL_FAMILY`, `export.MODEL_VERSION`), its readouts and basis rank, each ONNX model's sha256, the training domain, how the training derivatives were computed, the sequence, and where the model came from: the NeuralBloch commit, the checkpoint's epoch, a hash of its configuration, the BlochSimulators version and the precision. Every field comes from the checkpoint or the export; each carries a comment naming its source.
+Writes the model bundle that [NeuralBloch.jl](https://github.com/NLeSC-COMPAS/NeuralBloch.jl) reads to `export.BUNDLE_DIR`: the three ONNX models of step 5, the RF tables of the training sequence, and a generated `card.toml` (format 3). The card states the model's family and version (`export.MODEL_FAMILY`, `export.MODEL_VERSION`), its readouts and basis rank, each ONNX model's sha256, the training domain, how the training derivatives were computed, the sequence, and where the model came from: the NeuralBloch commit, the checkpoint's epoch, a hash of its configuration, the BlochSimulators version and the precision. Every field comes from the checkpoint or the export; each carries a comment naming its source.
 
 So that the card describes the checkpoint truthfully, the task refuses:
 
@@ -193,7 +193,12 @@ So that the card describes the checkpoint truthfully, the task refuses:
 - ONNX models that do not reproduce the checkpoint (each is verified against it again);
 - uncommitted changes in this repository, since the card names its commit.
 
-A family is one contract for callers: the sequence, its number of readouts and the basis rank, named `<sequence><ntr>-rank<rank>` (for example `fisp600-rank16`). Its version counts retrains and re-exports, each a drop-in replacement for the one before.
+A family is one contract for callers: the sequence, its number of readouts and the basis rank, named `<sequence><ntr>-rank<rank>` (for example `fisp600-rank16`). Its version is a [semantic version](https://semver.org), written in quotes in `export.yaml`: `MAJOR.MINOR.PATCH`, optionally with a pre-release such as `-beta.1`, and without build metadata (`+…`), because the version is part of the release tag. Each version of a family is a drop-in replacement for the one before:
+
+- PATCH: the same weights, exported or packaged again;
+- MINOR: new weights or a wider training domain;
+- MAJOR: stays 0 until the family is stable, and 1.0.0 marks its first stable model;
+- a pre-release (`-beta.1`, `-rc.1`) marks a candidate.
 
 ## Configuration
 

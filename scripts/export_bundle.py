@@ -30,7 +30,7 @@ from src.utils import sample_parameters
 
 # The card format NeuralBloch.jl reads. Change it with every change of the
 # card's fields, together with NeuralBloch.jl's src/model.jl.
-FORMAT = 2
+FORMAT = 3
 
 CARD = "card.toml"
 
@@ -74,6 +74,18 @@ DOMAIN_FIELDS = (
 FAMILY_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 RANK_WORD = re.compile(r"^rank([1-9][0-9]*)$")
 
+# A family's version is a semantic version (semver.org): MAJOR.MINOR.PATCH,
+# optionally with a pre-release such as -beta.1. PATCH counts re-exports of
+# the same weights, MINOR new weights or a wider domain, and MAJOR stays 0
+# until the family is stable. Build metadata (+...) is not allowed: the
+# version is part of the release tag and the download URL. Written with
+# [0-9], since \d also matches other Unicode digits.
+PRERELEASE_PART = r"(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)"
+SEMVER = re.compile(
+    r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
+    rf"(?:-{PRERELEASE_PART}(?:\.{PRERELEASE_PART})*)?"
+)
+
 
 @dataclass(frozen=True)
 class CardInputs:
@@ -81,7 +93,8 @@ class CardInputs:
 
     Attributes:
         family: The model family, ``<sequence><ntr>-rank<rank>[-qualifier]``.
-        version: The family's version: retrains and re-exports count up.
+        version: The family's semantic version (``SEMVER``), e.g.
+            ``0.1.0-beta.1``.
         ntr: Readouts per voxel.
         rank: Signal basis coefficients per voxel.
         onnx_sha256: The sha256 of each target's ONNX model.
@@ -97,7 +110,7 @@ class CardInputs:
     """
 
     family: str
-    version: int
+    version: str
     ntr: int
     rank: int
     onnx_sha256: Mapping[str, str]
@@ -179,15 +192,23 @@ def check_family(family: str, model_rank: int) -> None:
         )
 
 
-def check_version(version: object) -> int:
-    """The family version, which must be a positive integer.
+def check_version(version: object) -> str:
+    """The family version, which must be a semantic version (``SEMVER``).
 
     Raises:
         ValueError: If it is not.
     """
-    version = integer(version, "export.MODEL_VERSION")
-    if version < 1:
-        raise ValueError(f"export.MODEL_VERSION must be positive, not {version}")
+    if not isinstance(version, str):
+        raise ValueError(
+            "export.MODEL_VERSION must be a semantic version in quotes, such as "
+            f'"0.1.0-beta.1", not {version!r}'
+        )
+    if not SEMVER.fullmatch(version):
+        raise ValueError(
+            f"export.MODEL_VERSION {version!r} must be a semantic version "
+            "MAJOR.MINOR.PATCH, optionally with a pre-release such as -beta.1, "
+            "and without build metadata"
+        )
     return version
 
 
@@ -349,7 +370,7 @@ def card_text(inputs: CardInputs) -> str:
 
     table("model")
     field("family", inputs.family, "export.MODEL_FAMILY: <sequence><ntr>-rank<rank>")
-    field("version", inputs.version, "export.MODEL_VERSION: counts retrains")
+    field("version", inputs.version, "export.MODEL_VERSION: semantic version")
     field("ntr", inputs.ntr, "readouts per voxel: the checkpoint's NTR")
     field("rank", inputs.rank, "basis coefficients per voxel: U_signal's rank")
 

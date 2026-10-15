@@ -45,7 +45,7 @@ DATA_CONFIG = {
 
 INPUTS = CardInputs(
     family="fisp600-rank16",
-    version=1,
+    version="0.1.0-beta.1",
     ntr=600,
     rank=16,
     onnx_sha256={target: f"{i}" * 64 for i, target in enumerate(ONNX_FILES)},
@@ -62,11 +62,13 @@ INPUTS = CardInputs(
 class CardTest(unittest.TestCase):
     def test_card_states_every_field(self) -> None:
         card = tomllib.loads(card_text(INPUTS))
+        # Format 3: the version is a string, a semantic version
         self.assertEqual(card["format"], FORMAT)
+        self.assertEqual(FORMAT, 3)
         model = card["model"]
         self.assertEqual(
             (model["family"], model["version"], model["ntr"], model["rank"]),
-            ("fisp600-rank16", 1, 600, 16),
+            ("fisp600-rank16", "0.1.0-beta.1", 600, 16),
         )
         for i, (target, onnx) in enumerate(ONNX_FILES.items()):
             self.assertEqual(model[target], {"onnx": onnx, "sha256": f"{i}" * 64})
@@ -186,11 +188,30 @@ class FamilyTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "states rank 16.*has rank 12"):
             check_family("fisp600-rank16", 12)
 
-    def test_version_is_a_positive_integer(self) -> None:
-        self.assertEqual(check_version(2), 2)
-        for version in (0, -1, 1.0, "1", True):
-            with self.subTest(version=version), self.assertRaises(ValueError):
-                check_version(version)
+    def test_version_is_a_semantic_version(self) -> None:
+        for version in ("0.1.0-beta.1", "1.0.0", "0.1.0-rc.1", "2.10.3-beta.x-y.1"):
+            with self.subTest(version=version):
+                self.assertEqual(check_version(version), version)
+        refused = (
+            "1",
+            "0.1",
+            "v0.1.0",
+            "01.0.0",
+            "0.1.0-beta.01",  # a numeric identifier with a leading zero
+            "0.1.0-",
+            "0.1.0+build.1",  # build metadata would end up in the tag
+            "0.1.0\n",
+            "０.1.0",  # a fullwidth digit, which \d would accept
+        )
+        for version in refused:
+            with self.subTest(version=version):
+                with self.assertRaisesRegex(ValueError, "must be a semantic version"):
+                    check_version(version)
+        # YAML reads an unquoted 1 or 1.0 as a number
+        for version in (1, 1.0, True):
+            with self.subTest(version=version):
+                with self.assertRaisesRegex(ValueError, "in quotes"):
+                    check_version(version)
 
 
 class CheckpointTest(unittest.TestCase):
