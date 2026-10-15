@@ -17,7 +17,7 @@ Contains all configuration files.
 - **model.yaml** – model architecture settings (number of layers, hidden sizes, and output dimensions)
 - **training.yaml** – optimizer and training settings (number of epochs, batch sizes, and learning rate scheduler)
 - **testing.yaml** – evaluation and inference benchmark settings (batch sizes and number or runs)
-- **export.yaml** – model export settings (output paths, precision, and TensorRT batch size profile)
+- **export.yaml** – model export settings (output paths per target, precision, and TensorRT batch size profile)
 
 ---
 
@@ -53,7 +53,7 @@ Contains automatically generated output files.
 
 - TensorBoard log files
 - Saved model checkpoints (`.pt`)
-- Exported ONNX models (`.onnx`) and TensorRT engines (`.engine`)
+- Exported ONNX models (`.onnx`) and TensorRT engines (`.engine`), one of each per target
 
 ---
 
@@ -76,6 +76,7 @@ Contains the core implementation.
 
 - **model.py** – neural network architecture
 - **basis.py** – post-training shared-basis ordering and rank truncation
+- **targets.py** – the exported targets: which model method each ONNX model and TensorRT engine runs
 - **trainer.py** – training loop, validation, checkpointing, and logging
 - **loss.py** – loss function definitions
 - **utils.py** – helper functions (device selection, model loading, random seeds, etc.)
@@ -94,8 +95,8 @@ Available tasks:
 - `train` – train the surrogate model
 - `test_accuracy` – evaluate prediction accuracy
 - `test_inference` – benchmark inference speed
-- `export_onnx` – export the trained model to ONNX
-- `build_engine` – build a TensorRT engine from the exported ONNX model
+- `export_onnx` – export the trained model to ONNX, one model per target
+- `build_engine` – build a TensorRT engine from each exported ONNX model
 
 ## Usage
 
@@ -157,15 +158,23 @@ Measures surrogate inference performance under different execution settings (FP3
 uv run run.py export_onnx
 ```
 
-Reads the trained checkpoint (`experiment.PT_FILE_PATH`), exports it to an ONNX model with a dynamic batch dimension, and verifies the export against PyTorch using ONNX Runtime. With `export.FP16` enabled, the model runs internally in FP16 while its inputs and outputs stay FP32.
+Reads the trained checkpoint (`experiment.PT_FILE_PATH`) and exports one ONNX model per target, each with a dynamic batch dimension, to the paths in `export.TARGETS`:
 
-### 6. Build a TensorRT engine
+| Target | Model method | Outputs |
+|---|---|---|
+| `signal_and_derivatives` | `forward` | `signal`, `dT1`, `dT2`, each `(batch, NTR, 2)` |
+| `signal` | `forward_signal` | `signal`, `(batch, NTR, 2)` |
+| `coefficients` | `forward_coefficients` | `coefficients`, `(batch, rank)`: the signal's basis coefficients |
+
+All three take the input `x`, `(batch, 3)` physical parameters `[T1, T2, B1]`. A TensorRT engine computes every output of its model on each call, so a separate model per target lets a caller skip the work it does not need. Each export is verified against the PyTorch model using ONNX Runtime, on parameters sampled from the checkpoint's training domain. With `export.FP16` enabled, the models run internally in FP16 while their inputs and outputs stay FP32.
+
+### 6. Build the TensorRT engines
 
 ```bash
 uv run run.py build_engine
 ```
 
-Compiles the exported ONNX model into a serialized TensorRT engine with a dynamic batch size profile and verifies the engine against PyTorch. TensorRT networks are strongly typed, so the engine precision is inherited from the ONNX model. Requires a CUDA GPU; the engine is specific to the GPU architecture and TensorRT version it was built with.
+Compiles each exported ONNX model into a serialized TensorRT engine with a dynamic batch size profile, checks that the engine has exactly its target's inputs and outputs, and verifies it against PyTorch. TensorRT networks are strongly typed, so the engine precision is inherited from the ONNX model. Requires a CUDA GPU; the engines are specific to the GPU architecture and TensorRT version they were built with.
 
 ## Configuration
 

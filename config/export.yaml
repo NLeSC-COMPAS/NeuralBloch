@@ -1,6 +1,22 @@
-# Exported models will be saved on these locations
-ONNX_FILE_PATH: "outputs/model.onnx"
-ENGINE_FILE_PATH: "outputs/model.engine"
+# Exported models will be saved on these locations: one ONNX model and one
+# TensorRT engine per target (src/targets.py), each a method of the model:
+#   signal_and_derivatives  forward: the signal and its T1/T2 derivatives
+#   signal                  forward_signal: the signal alone
+#   coefficients            forward_coefficients: the signal's basis coefficients
+# An engine computes every output of its model on each call, so a separate
+# model per target lets a caller skip the work it does not need.
+# signal_and_derivatives keeps the original file names, which MRSTAT.jl's
+# bootstrap.sh copies.
+TARGETS:
+  signal_and_derivatives:
+    ONNX_FILE_PATH: "outputs/model.onnx"
+    ENGINE_FILE_PATH: "outputs/model.engine"
+  signal:
+    ONNX_FILE_PATH: "outputs/model_signal.onnx"
+    ENGINE_FILE_PATH: "outputs/model_signal.engine"
+  coefficients:
+    ONNX_FILE_PATH: "outputs/model_coefficients.onnx"
+    ENGINE_FILE_PATH: "outputs/model_coefficients.engine"
 
 # ONNX opset version used for export
 OPSET_VERSION: 18
@@ -12,8 +28,8 @@ OPSET_VERSION: 18
 # Re-run both `export_onnx` and `build_engine` after changing this setting.
 FP16: false
 
-# Dynamic batch size profile of the TensorRT engine.
-# The engine accepts any batch size in [MIN_BATCH_SIZE, MAX_BATCH_SIZE]
+# Dynamic batch size profile of the TensorRT engines.
+# Each engine accepts any batch size in [MIN_BATCH_SIZE, MAX_BATCH_SIZE]
 # and its kernels are tuned for OPT_BATCH_SIZE
 # (set to testing.INFER_BATCH_SIZE, the batch size used during inference).
 MIN_BATCH_SIZE: 10000
