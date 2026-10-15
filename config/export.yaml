@@ -38,3 +38,17 @@ MAX_BATCH_SIZE: 40000
 
 # Number of samples used to verify exported models against PyTorch
 N_VERIFY_SAMPLES: 14400
+
+# The model bundle NeuralBloch.jl reads (run.py export_bundle): the ONNX models
+# above, the RF tables and a generated card.toml describing them.
+BUNDLE_DIR: "outputs/bundle"
+
+# The model's name in NeuralBloch.jl and in its release tag,
+# model-<MODEL_FAMILY>-v<MODEL_VERSION>. A family is one contract for callers:
+# the sequence, its number of readouts and the basis rank, named
+# <sequence><ntr>-rank<rank> (export_bundle checks the rank), with a qualifier
+# before the version if two families would otherwise share a name
+# (fisp600b-rank16). The version counts retrains and re-exports of the family,
+# each a drop-in replacement for the one before.
+MODEL_FAMILY: "fisp600-rank16"
+MODEL_VERSION: 1

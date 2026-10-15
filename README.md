@@ -17,7 +17,7 @@ Contains all configuration files.
 - **model.yaml** – model architecture settings (number of layers, hidden sizes, and output dimensions)
 - **training.yaml** – optimizer and training settings (number of epochs, batch sizes, and learning rate scheduler)
 - **testing.yaml** – evaluation and inference benchmark settings (batch sizes and number or runs)
-- **export.yaml** – model export settings (output paths per target, precision, and TensorRT batch size profile)
+- **export.yaml** – model export settings (output paths per target, precision, TensorRT batch size profile, and the model bundle's location, family and version)
 
 ---
 
@@ -54,6 +54,7 @@ Contains automatically generated output files.
 - TensorBoard log files
 - Saved model checkpoints (`.pt`)
 - Exported ONNX models (`.onnx`) and TensorRT engines (`.engine`), one of each per target
+- The model bundle for NeuralBloch.jl (`bundle/`)
 
 ---
 
@@ -66,7 +67,8 @@ Contains scripts called by `run.py` and standalone post-training commands.
 - **test_inference.py** – benchmarks surrogate inference speed
 - **orthogonalize_basis.py** – optionally orders a trained shared basis and saves smaller-rank checkpoints
 - **export_onnx.py** – exports the trained model to ONNX
-- **build_engine.py** – builds a TensorRT engine from the exported ONNX model
+- **build_engine.py** – builds a TensorRT engine from each exported ONNX model
+- **export_bundle.py** – writes the model bundle NeuralBloch.jl reads
 
 ---
 
@@ -77,6 +79,7 @@ Contains the core implementation.
 - **model.py** – neural network architecture
 - **basis.py** – post-training shared-basis ordering and rank truncation
 - **targets.py** – the exported targets: which model method each ONNX model and TensorRT engine runs
+- **bundle.py** – the model bundle for NeuralBloch.jl and its card
 - **trainer.py** – training loop, validation, checkpointing, and logging
 - **loss.py** – loss function definitions
 - **utils.py** – helper functions (device selection, model loading, random seeds, etc.)
@@ -97,6 +100,7 @@ Available tasks:
 - `test_inference` – benchmark inference speed
 - `export_onnx` – export the trained model to ONNX, one model per target
 - `build_engine` – build a TensorRT engine from each exported ONNX model
+- `export_bundle` – write the model bundle NeuralBloch.jl reads
 
 ## Usage
 
@@ -175,6 +179,23 @@ uv run run.py build_engine
 ```
 
 Compiles each exported ONNX model into a serialized TensorRT engine with a dynamic batch size profile, checks that the engine has exactly its target's inputs and outputs, and verifies it against PyTorch. TensorRT networks are strongly typed, so the engine precision is inherited from the ONNX model. Requires a CUDA GPU; the engines are specific to the GPU architecture and TensorRT version they were built with.
+
+### 7. Export the model bundle
+
+```bash
+uv run run.py export_bundle
+```
+
+Writes the model bundle that [NeuralBloch.jl](https://github.com/NLeSC-COMPAS/NeuralBloch.jl) reads to `export.BUNDLE_DIR`: the three ONNX models of step 5, the RF tables of the training sequence, and a generated `card.toml` (format 2). The card states the model's family and version (`export.MODEL_FAMILY`, `export.MODEL_VERSION`), its readouts and basis rank, each ONNX model's sha256, the training domain, how the training derivatives were computed, the sequence, and where the model came from: the NeuralBloch commit, the checkpoint's epoch, a hash of its configuration, the BlochSimulators version and the precision. Every field comes from the checkpoint or the export; each carries a comment naming its source.
+
+So that the card describes the checkpoint truthfully, the task refuses:
+
+- a checkpoint that does not store its training configuration (`model_config`, `data_config`);
+- a `MODEL_FAMILY` whose `rank<N>` is not the rank of the checkpoint's signal decoder;
+- ONNX models that do not reproduce the checkpoint (each is verified against it again);
+- uncommitted changes in this repository, since the card names its commit.
+
+A family is one contract for callers: the sequence, its number of readouts and the basis rank, named `<sequence><ntr>-rank<rank>` (for example `fisp600-rank16`). Its version counts retrains and re-exports, each a drop-in replacement for the one before.
 
 ## Configuration
 

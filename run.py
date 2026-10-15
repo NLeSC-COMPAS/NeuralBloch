@@ -16,6 +16,7 @@ def main() -> None:
             "test_inference",
             "export_onnx",
             "build_engine",
+            "export_bundle",
         ],
     )
     parser.add_argument("--config-dir", default="config")
@@ -77,6 +78,12 @@ def main() -> None:
         from scripts.build_engine import build_engine
 
         build_engine(config)
+
+    # Write the model bundle NeuralBloch.jl reads
+    elif args.task == "export_bundle":
+        from scripts.export_bundle import export_bundle
+
+        export_bundle(config)
 
 
 if __name__ == "__main__":
