@@ -40,7 +40,9 @@ MAX_BATCH_SIZE: 40000
 N_VERIFY_SAMPLES: 14400
 
 # The model bundle NeuralBloch.jl reads (run.py export_bundle): the ONNX models
-# above, the RF tables and a generated card.toml describing them.
+# above, the RF tables and a generated card.toml describing them. Its release
+# file, neuralbloch-model-<MODEL_FAMILY>-v<MODEL_VERSION>.tar.gz, is written
+# next to it.
 BUNDLE_DIR: "outputs/bundle"
 
 # The model's name in NeuralBloch.jl and in its release tag,

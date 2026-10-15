@@ -1,8 +1,11 @@
+import os
+import tarfile
 import tempfile
 import tomllib
 import unittest
 from dataclasses import replace
 from pathlib import Path
+from unittest import mock
 from scripts.export_bundle import FORMAT
 from scripts.export_bundle import ONNX_FILES
 from scripts.export_bundle import RF_FILES
@@ -15,9 +18,13 @@ from scripts.export_bundle import config_sha256
 from scripts.export_bundle import derivative_method
 from scripts.export_bundle import family_rank
 from scripts.export_bundle import file_sha256
+from scripts.export_bundle import release_command
+from scripts.export_bundle import release_tag
 from scripts.export_bundle import require_configs
 from scripts.export_bundle import rf_table_length
+from scripts.export_bundle import tarball_name
 from scripts.export_bundle import write_bundle
+from scripts.export_bundle import write_tarball
 
 
 DATA_CONFIG = {
@@ -289,6 +296,105 @@ class BundleTest(unittest.TestCase):
         (self.bundle / "model.onnx").unlink()
         with self.assertRaisesRegex(ValueError, "model.onnx, which is missing"):
             check_bundle(self.bundle)
+
+
+class TarballTest(unittest.TestCase):
+    def setUp(self) -> None:
+        # A small bundle, and where its release file goes
+        self.root = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        self.bundle = self.root / "bundle"
+        (self.bundle / "rf_data").mkdir(parents=True)
+        self.files = {
+            "card.toml": b"format = 3\n",
+            "model.onnx": b"\x00onnx",
+            "rf_data/rf_angle_list.txt": b"1.5\n2.5\n",
+        }
+        for name, data in self.files.items():
+            (self.bundle / name).write_bytes(data)
+        self.tarball = self.root / tarball_name("fisp600-rank16", "0.1.0-beta.1")
+
+    def test_the_bundle_sits_at_the_root(self) -> None:
+        write_tarball(self.bundle, self.tarball)
+        with tarfile.open(self.tarball) as tar:
+            self.assertEqual(
+                tar.getnames(),
+                ["card.toml", "model.onnx", "rf_data", "rf_data/rf_angle_list.txt"],
+            )
+            for name, data in self.files.items():
+                member = tar.extractfile(name)
+                assert member is not None
+                self.assertEqual(member.read(), data)
+
+    def test_the_same_files_give_the_same_bytes(self) -> None:
+        sha256 = write_tarball(self.bundle, self.tarball)
+        first = self.tarball.read_bytes()
+        self.assertEqual(sha256, file_sha256(self.tarball))
+        # Neither the files' times nor their modes reach the tarball
+        os.utime(self.bundle / "model.onnx", (0, 1e9))
+        (self.bundle / "model.onnx").chmod(0o600)
+        self.assertEqual(write_tarball(self.bundle, self.tarball), sha256)
+        self.assertEqual(self.tarball.read_bytes(), first)
+        with tarfile.open(self.tarball) as tar:
+            for member in tar.getmembers():
+                with self.subTest(member=member.name):
+                    self.assertEqual(member.mtime, 0)
+                    self.assertEqual((member.uid, member.gid), (0, 0))
+                    self.assertEqual((member.uname, member.gname), ("", ""))
+                    self.assertEqual(member.mode, 0o755 if member.isdir() else 0o644)
+        # gzip header: no file name (flag bit 3) and mtime 0
+        self.assertEqual(first[3] & 0x08, 0)
+        self.assertEqual(first[4:8], b"\0\0\0\0")
+
+    def test_a_failed_write_leaves_no_partial_tarball(self) -> None:
+        write_tarball(self.bundle, self.tarball)
+        before = self.tarball.read_bytes()
+        with mock.patch.object(tarfile.TarFile, "addfile", side_effect=OSError("full")):
+            with self.assertRaisesRegex(OSError, "full"):
+                write_tarball(self.bundle, self.tarball)
+        self.assertEqual(self.tarball.read_bytes(), before)
+        self.assertEqual(
+            sorted(p.name for p in self.root.iterdir()), ["bundle", self.tarball.name]
+        )
+        with self.assertRaisesRegex(FileNotFoundError, "not a bundle directory"):
+            write_tarball(self.root / "missing", self.root / "other.tar.gz")
+        self.assertFalse((self.root / "other.tar.gz").exists())
+
+    def test_release_names(self) -> None:
+        self.assertEqual(
+            release_tag("fisp600-rank16", "0.1.0-beta.1"),
+            "model-fisp600-rank16-v0.1.0-beta.1",
+        )
+        self.assertEqual(
+            self.tarball.name, "neuralbloch-model-fisp600-rank16-v0.1.0-beta.1.tar.gz"
+        )
+
+    def test_the_release_command(self) -> None:
+        card = tomllib.loads(card_text(INPUTS))
+        command = release_command(card, Path("outputs/model.tar.gz"), "f" * 64)
+        self.assertEqual(
+            command[:8],
+            [
+                "gh",
+                "release",
+                "create",
+                "model-fisp600-rank16-v0.1.0-beta.1",
+                "outputs/model.tar.gz",
+                "--target",
+                "a" * 40,
+                "--prerelease",
+            ],
+        )
+        self.assertEqual(
+            command[8:10], ["--title", "Model fisp600-rank16 v0.1.0-beta.1"]
+        )
+        notes = command[command.index("--notes") + 1]
+        self.assertIn("T1 0.1 to 6 s, T2 0.01 to 2 s, B1 0.5 to 1.5 (T2 < T1)", notes)
+        self.assertIn("f" * 64, notes)
+        # A release that is not a pre-release is still not marked latest
+        card["model"]["version"] = "0.1.0"
+        command = release_command(card, Path("outputs/model.tar.gz"), "f" * 64)
+        self.assertIn("--latest=false", command)
+        self.assertNotIn("--prerelease", command)
 
 
 class RfTableTest(unittest.TestCase):

@@ -1,9 +1,12 @@
+import gzip
 import hashlib
 import json
 import math
 import re
+import shlex
 import shutil
 import subprocess
+import tarfile
 import tempfile
 import tomllib
 from collections.abc import Mapping
@@ -498,13 +501,141 @@ def check_bundle(bundle_dir: str | Path) -> dict[str, Any]:
     return card
 
 
+# A family version is published as a GitHub release of this repository, with
+# the bundle's tarball as its one file. NeuralBloch.jl's dev/bind_bundle.jl
+# builds the download URL from the same two names.
+
+
+def release_tag(family: str, version: str) -> str:
+    """The release tag of a family version.
+
+    For example ``model-fisp600-rank16-v0.1.0-beta.1``.
+    """
+    return f"model-{family}-v{version}"
+
+
+def tarball_name(family: str, version: str) -> str:
+    """The file a family version's release holds.
+
+    For example ``neuralbloch-model-fisp600-rank16-v0.1.0-beta.1.tar.gz``.
+    """
+    return f"neuralbloch-{release_tag(family, version)}.tar.gz"
+
+
+def write_tarball(bundle_dir: str | Path, tarball: str | Path) -> str:
+    """Pack a bundle into a reproducible tarball, the release file.
+
+    The bundle's files sit at the tarball's root. The same files always give
+    the same bytes, so the sha256 that NeuralBloch.jl pins for the release
+    can be derived again from the bundle: members in sorted order, USTAR
+    headers with mtime 0, owner 0:0 and mode 0644 for files and 0755 for
+    directories, and a gzip header with mtime 0 and no file name. The
+    tarball is written to a temporary file next to it, which then takes its
+    place, so a failed write leaves no partial tarball.
+
+    Args:
+        bundle_dir: The bundle's directory.
+        tarball: Where to write the tarball; an existing one is replaced.
+
+    Returns:
+        The tarball's sha256, in hexadecimal.
+
+    Raises:
+        FileNotFoundError: If ``bundle_dir`` is not a directory.
+    """
+    bundle_dir, tarball = Path(bundle_dir), Path(tarball)
+    if not bundle_dir.is_dir():
+        raise FileNotFoundError(f"{bundle_dir} is not a bundle directory")
+    paths = sorted(
+        bundle_dir.rglob("*"), key=lambda path: path.relative_to(bundle_dir).as_posix()
+    )
+    tarball.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix=f".{tarball.name}-", dir=tarball.parent)
+    try:
+        with (
+            open(fd, "wb") as raw,
+            gzip.GzipFile(filename="", mode="wb", fileobj=raw, mtime=0) as compressed,
+            tarfile.open(
+                fileobj=compressed, mode="w", format=tarfile.USTAR_FORMAT
+            ) as tar,
+        ):
+            for path in paths:
+                info = tarfile.TarInfo(path.relative_to(bundle_dir).as_posix())
+                info.mtime, info.uid, info.gid = 0, 0, 0
+                info.uname, info.gname = "", ""
+                if path.is_dir():
+                    info.type, info.mode = tarfile.DIRTYPE, 0o755
+                    tar.addfile(info)
+                else:
+                    info.size, info.mode = path.stat().st_size, 0o644
+                    with open(path, "rb") as f:
+                        tar.addfile(info, f)
+        Path(temporary).replace(tarball)
+    except BaseException:
+        Path(temporary).unlink(missing_ok=True)
+        raise
+    return file_sha256(tarball)
+
+
+def release_command(card: Mapping[str, Any], tarball: Path, sha256: str) -> list[str]:
+    """The ``gh`` command that publishes a bundle's tarball as its release.
+
+    The release is tagged at the commit the card names. A version with a
+    pre-release part (``-beta.1``) becomes a GitHub pre-release, and any
+    other is not marked latest, so the latest release stays the code's.
+
+    Args:
+        card: The bundle's parsed card.
+        tarball: The tarball ``write_tarball`` wrote.
+        sha256: The tarball's sha256.
+
+    Returns:
+        The command, one argument per item.
+    """
+    model, domain = card["model"], card["domain"]
+    family, version = model["family"], model["version"]
+    provenance = card["provenance"]
+    ranges = ", ".join(
+        f"{name} {domain[name][0]:g} to {domain[name][1]:g}{unit}"
+        for name, unit in (("T1", " s"), ("T2", " s"), ("B1", ""))
+    )
+    notes = (
+        f"Model {family} {version} for NeuralBloch.jl: card.toml, an ONNX model "
+        "per target and the RF tables of its sequence. "
+        f"{card['sequence']['kind']}, {model['ntr']} readouts, rank {model['rank']}; "
+        f"trained on {ranges} ({domain['constraint']}) with "
+        f"{card['derivatives']['method']} derivatives; checkpoint epoch "
+        f"{provenance['checkpoint_epoch']}, {provenance['precision']}. "
+        f"sha256 of {tarball.name}: {sha256}"
+    )
+    # Without build metadata, a hyphen in a semantic version starts its
+    # pre-release part
+    latest = "--prerelease" if "-" in version else "--latest=false"
+    return [
+        "gh",
+        "release",
+        "create",
+        release_tag(family, version),
+        str(tarball),
+        "--target",
+        provenance["upstream"].removeprefix("NeuralBloch@"),
+        latest,
+        "--title",
+        f"Model {family} v{version}",
+        "--notes",
+        notes,
+    ]
+
+
 def export_bundle(config: dict[str, Any]) -> None:
     """Write the model bundle NeuralBloch.jl reads, from the exported targets.
 
     The bundle (``export.BUNDLE_DIR``) holds the ONNX model of every target,
     the RF tables of the training sequence and ``card.toml``, which states
     the model's family and version, its shapes, training domain, derivative
-    method, sequence and provenance (see ``card_text``).
+    method, sequence and provenance (see ``card_text``). Next to it goes the
+    bundle's release file (``write_tarball``), and the command that would
+    publish it is printed; nothing is published here.
 
     The card must describe the checkpoint truthfully, so the export refuses
     a checkpoint without its training configuration, a family name whose
@@ -576,10 +707,22 @@ def export_bundle(config: dict[str, Any]) -> None:
     bundle_dir = Path(export_config["BUNDLE_DIR"])
     write_bundle(bundle_dir, card, files)
 
+    # The release file, next to the bundle
+    tarball = bundle_dir.with_name(tarball_name(family, version))
+    sha256 = write_tarball(bundle_dir, tarball)
+
     print(
         f"\nWrote the model bundle {family}-v{version} to {bundle_dir}: "
         f"NTR {model.NTR}, rank {model_rank}, {method} derivatives, {precision}, "
         f"from {checkpoint_path} (epoch {checkpoint['epoch']}) and {upstream}"
+    )
+    print(
+        f"\nWrote its release file {tarball} ({tarball.stat().st_size:,} bytes), "
+        f"sha256 {sha256}. Nothing was published. To publish it, push "
+        f"{upstream.removeprefix('NeuralBloch@')[:7]}, bind the file in "
+        "NeuralBloch.jl (julia --project dev/bind_bundle.jl FILE) and run its "
+        "tests, then create the release:\n\n"
+        + shlex.join(release_command(check_bundle(bundle_dir), tarball, sha256))
     )
 
 

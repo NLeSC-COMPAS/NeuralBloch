@@ -54,7 +54,7 @@ Contains automatically generated output files.
 - TensorBoard log files
 - Saved model checkpoints (`.pt`)
 - Exported ONNX models (`.onnx`) and TensorRT engines (`.engine`), one of each per target
-- The model bundle for NeuralBloch.jl (`bundle/`)
+- The model bundle for NeuralBloch.jl (`bundle/`) and its release file (`neuralbloch-model-<family>-v<version>.tar.gz`)
 
 ---
 
@@ -68,7 +68,7 @@ Contains scripts called by `run.py` and standalone post-training commands.
 - **orthogonalize_basis.py** – optionally orders a trained shared basis and saves smaller-rank checkpoints
 - **export_onnx.py** – exports the trained model to ONNX
 - **build_engine.py** – builds a TensorRT engine from each exported ONNX model
-- **export_bundle.py** – writes the model bundle NeuralBloch.jl reads
+- **export_bundle.py** – writes the model bundle NeuralBloch.jl reads, and its release file
 
 ---
 
@@ -199,6 +199,16 @@ A family is one contract for callers: the sequence, its number of readouts and t
 - MINOR: new weights or a wider training domain;
 - MAJOR: stays 0 until the family is stable, and 1.0.0 marks its first stable model;
 - a pre-release (`-beta.1`, `-rc.1`) marks a candidate.
+
+### 8. Publish a model release
+
+`export_bundle` also writes the bundle's release file next to it: `outputs/neuralbloch-model-<family>-v<version>.tar.gz`, the bundle's files at the root of a reproducible tarball (the same bundle always gives the same bytes). NeuralBloch.jl downloads this file from the release `model-<family>-v<version>` of this repository, as a Julia artifact whose hashes it pins. The task prints the file's sha256 and the command that would create the release; it publishes nothing itself. To publish a model:
+
+1. Push the commit that the card names (step 7 exports from a clean, committed tree).
+2. In NeuralBloch.jl, bind the file with `julia --project dev/bind_bundle.jl /path/to/the/file.tar.gz` and run its tests and `scripts/validate.jl`.
+3. Create the release with the printed `gh release create` command, or in GitHub's web interface: tag `model-<family>-v<version>` at the card's commit, and attach the tarball as the only file. A version with a pre-release part (`-beta.1`) is published as a pre-release; any other version is not marked latest, so the latest release stays the code's.
+
+Never replace a published file: NeuralBloch.jl pins its hashes, so every commit that bound it would stop installing. A corrected model is a new version.
 
 ## Configuration
 
