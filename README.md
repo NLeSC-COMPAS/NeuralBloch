@@ -184,7 +184,9 @@ Compiles each exported ONNX model into a serialized TensorRT engine with a dynam
 uv run run.py export_bundle
 ```
 
-Writes the model bundle that [NeuralBloch.jl](https://github.com/NLeSC-COMPAS/NeuralBloch.jl) reads to `export.BUNDLE_DIR`: the three ONNX models of step 5, the RF tables of the training sequence, and a generated `card.toml` (format 3). The card states the model's family and version (`export.MODEL_FAMILY`, `export.MODEL_VERSION`), its readouts and basis rank, each ONNX model's sha256, the training domain, how the training derivatives were computed, the sequence, and where the model came from: the NeuralBloch commit, the checkpoint's epoch, a hash of its configuration, the BlochSimulators version and the precision. Every field comes from the checkpoint or the export; each carries a comment naming its source.
+Writes the model bundle that [NeuralBloch.jl](https://github.com/NLeSC-COMPAS/NeuralBloch.jl) reads to `export.BUNDLE_DIR`: the three ONNX models of step 5, the RF tables of the training sequence, and a generated `model_card.toml`. The card states the model's family and version (`export.MODEL_FAMILY`, `export.MODEL_VERSION`), its readouts and basis rank, each ONNX model's sha256, the training domain, how the training derivatives were computed, the sequence, and where the model came from: the NeuralBloch commit, the checkpoint's epoch, a hash of its configuration, the BlochSimulators version and the precision. Every field comes from the checkpoint or the export; each carries a comment naming its source.
+
+The card's first field, `schema_version` (now `"1.0"`), versions the card itself, as `MAJOR.MINOR`. MINOR rises for a new field that readers may ignore, so NeuralBloch.jl keeps reading cards of its MAJOR. MAJOR rises for any other change of the card (a field renamed, removed, retyped, made required or given another meaning, or the file renamed), together with NeuralBloch.jl, which refuses another MAJOR.
 
 So that the card describes the checkpoint truthfully, the task refuses:
 

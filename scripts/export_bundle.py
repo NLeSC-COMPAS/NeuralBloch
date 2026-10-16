@@ -26,16 +26,20 @@ from src.utils import sample_parameters
 
 
 # The model bundle NeuralBloch.jl reads: the ONNX model of every target, the
-# RF tables of the training sequence, and card.toml, which describes them.
-# The card is generated here, never written by hand: every field comes from
-# the checkpoint, from the export, or from a constant below that names its
-# source.
+# RF tables of the training sequence, and model_card.toml, which describes
+# them. The card is generated here, never written by hand: every field comes
+# from the checkpoint, from the export, or from a constant below that names
+# its source.
 
-# The card format NeuralBloch.jl reads. Change it with every change of the
-# card's fields, together with NeuralBloch.jl's src/model.jl.
-FORMAT = 3
+# The version of the card's schema, "MAJOR.MINOR", which NeuralBloch.jl's
+# src/model.jl reads. Raise MINOR for a field that readers may ignore, a new
+# optional one; NeuralBloch.jl reads any MINOR of its MAJOR. Raise MAJOR for
+# anything else (a field renamed, removed, retyped, made required or given
+# another meaning, or the card renamed), together with NeuralBloch.jl, which
+# refuses another MAJOR.
+SCHEMA_VERSION = "1.0"
 
-CARD = "card.toml"
+CARD = "model_card.toml"
 
 # The bundle's file for each target (TARGETS in scripts/export_onnx.py).
 ONNX_FILES = {
@@ -337,7 +341,7 @@ SEQUENCE_FIELDS = (
 
 
 def card_text(inputs: CardInputs) -> str:
-    """The text of card.toml, format ``FORMAT``, with each field's source.
+    """The text of model_card.toml, schema ``SCHEMA_VERSION``, with each field's source.
 
     Raises:
         ValueError: If a value has the wrong type, a domain range is empty,
@@ -369,7 +373,9 @@ def card_text(inputs: CardInputs) -> str:
         "# second.",
         "",
     ]
-    field("format", FORMAT, "the card format NeuralBloch.jl reads")
+    field(
+        "schema_version", SCHEMA_VERSION, "of this card: a newer MINOR only adds fields"
+    )
 
     table("model")
     field("family", inputs.family, "export.MODEL_FAMILY: <sequence><ntr>-rank<rank>")
@@ -423,7 +429,7 @@ def write_bundle(
     card: str,
     files: Mapping[str, str | Path],
 ) -> None:
-    """Write a bundle: ``card`` as card.toml and ``files`` copied into it.
+    """Write a bundle: ``card`` as model_card.toml and ``files`` copied into it.
 
     The bundle is assembled in a new directory next to ``bundle_dir``,
     checked (``check_bundle``), and then takes its place, so ``bundle_dir``
@@ -431,7 +437,7 @@ def write_bundle(
 
     Args:
         bundle_dir: The bundle's directory; an existing one is replaced.
-        card: The text of card.toml.
+        card: The text of model_card.toml.
         files: The bundle's other files: path in the bundle -> source.
 
     Raises:
@@ -474,15 +480,18 @@ def check_bundle(bundle_dir: str | Path) -> dict[str, Any]:
         The parsed card.
 
     Raises:
-        ValueError: If the card has another format, a file it names is
-            missing, an ONNX model's hash differs from the card's, or an RF
-            table does not have ``ntr`` values.
+        ValueError: If the card has another schema version, a file it names
+            is missing, an ONNX model's hash differs from the card's, or an
+            RF table does not have ``ntr`` values.
     """
     bundle_dir = Path(bundle_dir)
     with open(bundle_dir / CARD, "rb") as f:
         card = tomllib.load(f)
-    if card.get("format") != FORMAT:
-        raise ValueError(f"{bundle_dir / CARD} has format {card.get('format')!r}")
+    if card.get("schema_version") != SCHEMA_VERSION:
+        raise ValueError(
+            f"{bundle_dir / CARD} has schema_version "
+            f"{card.get('schema_version')!r}, not {SCHEMA_VERSION!r}"
+        )
     for target in TARGETS:
         entry = card["model"][target]
         path = bundle_dir / entry["onnx"]
@@ -600,7 +609,7 @@ def release_command(card: Mapping[str, Any], tarball: Path, sha256: str) -> list
         for name, unit in (("T1", " s"), ("T2", " s"), ("B1", ""))
     )
     notes = (
-        f"Model {family} {version} for NeuralBloch.jl: card.toml, an ONNX model "
+        f"Model {family} {version} for NeuralBloch.jl: {CARD}, an ONNX model "
         "per target and the RF tables of its sequence. "
         f"{card['sequence']['kind']}, {model['ntr']} readouts, rank {model['rank']}; "
         f"trained on {ranges} ({domain['constraint']}) with "
@@ -631,7 +640,7 @@ def export_bundle(config: dict[str, Any]) -> None:
     """Write the model bundle NeuralBloch.jl reads, from the exported targets.
 
     The bundle (``export.BUNDLE_DIR``) holds the ONNX model of every target,
-    the RF tables of the training sequence and ``card.toml``, which states
+    the RF tables of the training sequence and ``model_card.toml``, which states
     the model's family and version, its shapes, training domain, derivative
     method, sequence and provenance (see ``card_text``). Next to it goes the
     bundle's release file (``write_tarball``), and the command that would

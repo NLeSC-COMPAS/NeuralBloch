@@ -6,9 +6,10 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 from unittest import mock
-from scripts.export_bundle import FORMAT
+from scripts.export_bundle import CARD
 from scripts.export_bundle import ONNX_FILES
 from scripts.export_bundle import RF_FILES
+from scripts.export_bundle import SCHEMA_VERSION
 from scripts.export_bundle import CardInputs
 from scripts.export_bundle import card_text
 from scripts.export_bundle import check_bundle
@@ -69,9 +70,10 @@ INPUTS = CardInputs(
 class CardTest(unittest.TestCase):
     def test_card_states_every_field(self) -> None:
         card = tomllib.loads(card_text(INPUTS))
-        # Format 3: the version is a string, a semantic version
-        self.assertEqual(card["format"], FORMAT)
-        self.assertEqual(FORMAT, 3)
+        # The card's own version comes first: schema 1.0
+        self.assertEqual(next(iter(card)), "schema_version")
+        self.assertEqual(card["schema_version"], SCHEMA_VERSION)
+        self.assertEqual(SCHEMA_VERSION, "1.0")
         model = card["model"]
         self.assertEqual(
             (model["family"], model["version"], model["ntr"], model["rank"]),
@@ -262,7 +264,7 @@ class BundleTest(unittest.TestCase):
         self.assertEqual(check_bundle(self.bundle)["model"]["ntr"], 3)
         self.assertEqual(
             sorted(str(p.relative_to(self.bundle)) for p in self.bundle.rglob("*")),
-            sorted(["card.toml", "rf_data", *self.files]),
+            sorted([CARD, "rf_data", *self.files]),
         )
         self.assertEqual(
             (self.bundle / "model.onnx").read_bytes(), b"signal_and_derivatives"
@@ -277,7 +279,7 @@ class BundleTest(unittest.TestCase):
 
     def test_a_failed_write_keeps_the_old_bundle(self) -> None:
         write_bundle(self.bundle, self.card(), self.files)
-        before = (self.bundle / "card.toml").read_text()
+        before = (self.bundle / CARD).read_text()
         with self.assertRaises(FileNotFoundError):
             write_bundle(
                 self.bundle, self.card(), {**self.files, "x": self.root / "missing"}
@@ -285,7 +287,7 @@ class BundleTest(unittest.TestCase):
         # A bundle that fails its check does not replace the old one either
         with self.assertRaisesRegex(ValueError, "does not have ntr = 4 values"):
             write_bundle(self.bundle, self.card(ntr=4), self.files)
-        self.assertEqual((self.bundle / "card.toml").read_text(), before)
+        self.assertEqual((self.bundle / CARD).read_text(), before)
         self.assertEqual(sorted(p.name for p in self.root.iterdir()), ["bundle", "src"])
 
     def test_check_finds_damaged_bundles(self) -> None:
@@ -296,6 +298,10 @@ class BundleTest(unittest.TestCase):
         (self.bundle / "model.onnx").unlink()
         with self.assertRaisesRegex(ValueError, "model.onnx, which is missing"):
             check_bundle(self.bundle)
+        card = self.bundle / CARD
+        card.write_text(card.read_text().replace('"1.0"', '"2.0"'))
+        with self.assertRaisesRegex(ValueError, "has schema_version '2.0', not '1.0'"):
+            check_bundle(self.bundle)
 
 
 class TarballTest(unittest.TestCase):
@@ -305,7 +311,7 @@ class TarballTest(unittest.TestCase):
         self.bundle = self.root / "bundle"
         (self.bundle / "rf_data").mkdir(parents=True)
         self.files = {
-            "card.toml": b"format = 3\n",
+            "model_card.toml": b'schema_version = "1.0"\n',
             "model.onnx": b"\x00onnx",
             "rf_data/rf_angle_list.txt": b"1.5\n2.5\n",
         }
@@ -318,7 +324,12 @@ class TarballTest(unittest.TestCase):
         with tarfile.open(self.tarball) as tar:
             self.assertEqual(
                 tar.getnames(),
-                ["card.toml", "model.onnx", "rf_data", "rf_data/rf_angle_list.txt"],
+                [
+                    "model.onnx",
+                    "model_card.toml",
+                    "rf_data",
+                    "rf_data/rf_angle_list.txt",
+                ],
             )
             for name, data in self.files.items():
                 member = tar.extractfile(name)
