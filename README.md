@@ -17,7 +17,7 @@ Contains all configuration files.
 - **model.yaml** – model architecture settings (number of layers, hidden sizes, and output dimensions)
 - **training.yaml** – optimizer and training settings (number of epochs, batch sizes, and learning rate scheduler)
 - **testing.yaml** – evaluation and inference benchmark settings (batch sizes and number or runs)
-- **export.yaml** – model export settings (output paths per target, precision, TensorRT batch size profile, and the model bundle's location, family and version)
+- **export.yaml** – model export settings (output paths for each target, precision, TensorRT batch size profile, and the location, family and version of the model bundle)
 
 ---
 
@@ -53,7 +53,7 @@ Contains automatically generated output files.
 
 - TensorBoard log files
 - Saved model checkpoints (`.pt`)
-- Exported ONNX models (`.onnx`) and TensorRT engines (`.engine`), one of each per target
+- Exported ONNX models (`.onnx`) and TensorRT engines (`.engine`): one model and one engine for each target
 - The model bundle for NeuralBloch.jl (`bundle/`) and its release file (`neuralbloch-model-<family>-v<version>.tar.gz`)
 
 ---
@@ -68,7 +68,7 @@ Contains scripts called by `run.py` and standalone post-training commands.
 - **orthogonalize_basis.py** – optionally orders a trained shared basis and saves smaller-rank checkpoints
 - **export_onnx.py** – exports the trained model to ONNX
 - **build_engine.py** – builds a TensorRT engine from each exported ONNX model
-- **export_bundle.py** – writes the model bundle NeuralBloch.jl reads, and its release file
+- **export_bundle.py** – writes the model bundle that NeuralBloch.jl reads, and the release file of the bundle
 
 ---
 
@@ -96,9 +96,9 @@ Available tasks:
 - `train` – train the surrogate model
 - `test_accuracy` – evaluate prediction accuracy
 - `test_inference` – benchmark inference speed
-- `export_onnx` – export the trained model to ONNX, one model per target
+- `export_onnx` – export the trained model to ONNX (one model for each target)
 - `build_engine` – build a TensorRT engine from each exported ONNX model
-- `export_bundle` – write the model bundle NeuralBloch.jl reads
+- `export_bundle` – write the model bundle that NeuralBloch.jl reads
 
 ## Usage
 
@@ -160,15 +160,15 @@ Measures surrogate inference performance under different execution settings (FP3
 uv run run.py export_onnx
 ```
 
-Reads the trained checkpoint (`experiment.PT_FILE_PATH`) and exports one ONNX model per target, each with a dynamic batch dimension, to the paths in `export.TARGETS`:
+Reads the trained checkpoint (`experiment.PT_FILE_PATH`) and exports one ONNX model for each target to the paths in `export.TARGETS`. Each model has a dynamic batch dimension.
 
 | Target | Model method | Outputs |
 |---|---|---|
 | `signal_and_derivatives` | `forward` | `signal`, `dT1`, `dT2`, each `(batch, NTR, 2)` |
 | `signal` | `forward_signal` | `signal`, `(batch, NTR, 2)` |
-| `coefficients` | `forward_coefficients` | `coefficients`, `(batch, rank)`: the signal's basis coefficients |
+| `coefficients` | `forward_coefficients` | `coefficients`, `(batch, rank)`, the basis coefficients of the signal |
 
-All three take the input `x`, `(batch, 3)` physical parameters `[T1, T2, B1]`. A TensorRT engine computes every output of its model on each call, so a separate model per target lets a caller skip the work it does not need. Each export is verified against the PyTorch model using ONNX Runtime, on parameters sampled from the checkpoint's training domain. With `export.FP16` enabled, the models run internally in FP16 while their inputs and outputs stay FP32.
+All three models take the input `x`, `(batch, 3)`, which contains the physical parameters `[T1, T2, B1]`. A TensorRT engine calculates all the outputs of its model on each call. Thus, a separate model for each target lets a caller do only the work that it needs. The task uses ONNX Runtime to compare each export with the PyTorch model. It uses parameters sampled from the training domain of the checkpoint. If `export.FP16` is `true`, the models run internally in FP16, but their inputs and outputs stay FP32.
 
 ### 6. Build the TensorRT engines
 
@@ -176,7 +176,7 @@ All three take the input `x`, `(batch, 3)` physical parameters `[T1, T2, B1]`. A
 uv run run.py build_engine
 ```
 
-Compiles each exported ONNX model into a serialized TensorRT engine with a dynamic batch size profile, checks that the engine has exactly its target's inputs and outputs, and verifies it against PyTorch. TensorRT networks are strongly typed, so the engine precision is inherited from the ONNX model. Requires a CUDA GPU; the engines are specific to the GPU architecture and TensorRT version they were built with.
+Compiles each exported ONNX model into a serialized TensorRT engine with a dynamic batch size profile. Then the task makes sure that each engine has exactly the inputs and outputs of its target, and compares the engine with PyTorch. TensorRT networks are strongly typed, so each engine gets its precision from the ONNX model. This task requires a CUDA GPU. An engine works only with the GPU architecture and the TensorRT version that built it.
 
 ### 7. Export the model bundle
 
@@ -184,33 +184,43 @@ Compiles each exported ONNX model into a serialized TensorRT engine with a dynam
 uv run run.py export_bundle
 ```
 
-Writes the model bundle that [NeuralBloch.jl](https://github.com/NLeSC-COMPAS/NeuralBloch.jl) reads to `export.BUNDLE_DIR`: the three ONNX models of step 5, the RF tables of the training sequence, and a generated `model_card.toml`. The card states the model's family and version (`export.MODEL_FAMILY`, `export.MODEL_VERSION`), its readouts and basis rank, each ONNX model's sha256, the training domain, how the training derivatives were computed, the sequence, and where the model came from: the NeuralBloch commit, the checkpoint's epoch, a hash of its configuration, the BlochSimulators version and the precision. Every field comes from the checkpoint or the export; each carries a comment naming its source.
+Writes the model bundle that [NeuralBloch.jl](https://github.com/NLeSC-COMPAS/NeuralBloch.jl) reads to `export.BUNDLE_DIR`. The bundle contains the three ONNX models of step 5, the RF tables of the training sequence, and a generated `model_card.toml`. The card gives:
 
-The card's first field, `schema_version` (now `"1.0"`), versions the card itself, as `MAJOR.MINOR`. MINOR rises for a new field that readers may ignore, so NeuralBloch.jl keeps reading cards of its MAJOR. MAJOR rises for any other change of the card (a field renamed, removed, retyped, made required or given another meaning, or the file renamed), together with NeuralBloch.jl, which refuses another MAJOR.
+- the family and the version of the model (`export.MODEL_FAMILY`, `export.MODEL_VERSION`)
+- the number of readouts and the basis rank
+- the sha256 of each ONNX model
+- the training domain
+- the method that calculated the training derivatives
+- the sequence
+- the origin of the model: the NeuralBloch commit, the checkpoint epoch, a hash of the checkpoint configuration, the BlochSimulators version and the precision.
 
-So that the card describes the checkpoint truthfully, the task refuses:
+All fields come from the checkpoint or from the export. Each field has a comment that gives its source.
 
-- a checkpoint that does not store its training configuration (`model_config`, `data_config`);
-- a `MODEL_FAMILY` whose `rank<N>` is not the rank of the checkpoint's signal decoder;
-- ONNX models that do not reproduce the checkpoint (each is verified against it again);
-- uncommitted changes in this repository, since the card names its commit.
+The first field of the card, `schema_version` (now `"1.0"`), is the version of the card format, as `MAJOR.MINOR`. MINOR increases for a new field that readers can ignore. NeuralBloch.jl continues to read all cards of its MAJOR. MAJOR increases for all other changes to the card: a field gets a new name, is removed, gets a new type or a new meaning, or becomes required, or the file gets a new name. When MAJOR increases, change NeuralBloch.jl at the same time, because NeuralBloch.jl does not accept a different MAJOR.
 
-A family is one contract for callers: the sequence, its number of readouts and the basis rank, named `<sequence><ntr>-rank<rank>` (for example `fisp600-rank16`). Its version is a [semantic version](https://semver.org), written in quotes in `export.yaml`: `MAJOR.MINOR.PATCH`, optionally with a pre-release such as `-beta.1`, and without build metadata (`+…`), because the version is part of the release tag. Each version of a family is a drop-in replacement for the one before:
+To make sure that the card describes the checkpoint correctly, the task stops with an error for:
 
-- PATCH: the same weights, exported or packaged again;
-- MINOR: new weights or a wider training domain;
-- MAJOR: stays 0 until the family is stable, and 1.0.0 marks its first stable model;
-- a pre-release (`-beta.1`, `-rc.1`) marks a candidate.
+- a checkpoint that does not contain its training configuration (`model_config`, `data_config`)
+- a `MODEL_FAMILY` with a `rank<N>` that is not the rank of the signal decoder in the checkpoint
+- ONNX models that do not give the same results as the checkpoint (the task compares each model with the checkpoint again)
+- uncommitted changes in this repository, because the card gives the commit.
+
+A family is one contract for callers. It sets the sequence, the number of readouts and the basis rank. The name of a family has the form `<sequence><ntr>-rank<rank>` (for example, `fisp600-rank16`). The version of a family is a [semantic version](https://semver.org) in quotes in `export.yaml`. Its form is `MAJOR.MINOR.PATCH`, with an optional pre-release part such as `-beta.1`. Build metadata (`+…`) is not permitted, because the version is part of the release tag. Each version of a family can replace the version before it with no change for callers:
+
+- PATCH: the same weights, exported or packaged again.
+- MINOR: new weights or a wider training domain.
+- MAJOR: stays 0 until the family is stable. Version 1.0.0 is the first stable model of the family.
+- A pre-release (`-beta.1`, `-rc.1`) is a candidate.
 
 ### 8. Publish a model release
 
-`export_bundle` also writes the bundle's release file next to it: `outputs/neuralbloch-model-<family>-v<version>.tar.gz`, the bundle's files at the root of a reproducible tarball (the same bundle always gives the same bytes). NeuralBloch.jl downloads this file from the release `model-<family>-v<version>` of this repository, as a Julia artifact whose hashes it pins. The task prints the file's sha256 and the command that would create the release; it publishes nothing itself. To publish a model:
+`export_bundle` also writes the release file of the bundle next to the bundle: `outputs/neuralbloch-model-<family>-v<version>.tar.gz`. This file is a reproducible tarball with the bundle files at its root. The same bundle always gives the same bytes. NeuralBloch.jl downloads this file as a Julia artifact from the release `model-<family>-v<version>` of this repository, and pins its hashes. The task prints the sha256 of the file and the command that creates the release. The task does not publish anything. To publish a model, do these steps:
 
 1. Push the commit that the card names (step 7 exports from a clean, committed tree).
-2. In NeuralBloch.jl, bind the file with `julia --project dev/bind_bundle.jl /path/to/the/file.tar.gz` and run its tests and `scripts/validate.jl`.
-3. Create the release with the printed `gh release create` command, or in GitHub's web interface: tag `model-<family>-v<version>` at the card's commit, and attach the tarball as the only file. A version with a pre-release part (`-beta.1`) is published as a pre-release; any other version is not marked latest, so the latest release stays the code's.
+2. In NeuralBloch.jl, bind the file with `julia --project dev/bind_bundle.jl /path/to/the/file.tar.gz`. Then run the tests of NeuralBloch.jl and `scripts/validate.jl`.
+3. Create the release. Use the printed `gh release create` command, or the GitHub web interface: tag `model-<family>-v<version>` at the commit of the card, and attach the tarball as the only file. Publish a version with a pre-release part (`-beta.1`) as a pre-release. Do not mark other versions as latest, so that the latest release stays a code release.
 
-Never replace a published file: NeuralBloch.jl pins its hashes, so every commit that bound it would stop installing. A corrected model is a new version.
+Do not replace a published file. NeuralBloch.jl pins the hashes of the file. If you replace the file, no NeuralBloch.jl commit that bound it can install it. To correct a model, publish a new version.
 
 ## Configuration
 

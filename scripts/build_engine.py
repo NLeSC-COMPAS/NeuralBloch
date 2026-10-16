@@ -14,12 +14,12 @@ from src.utils import sample_parameters
 
 
 def build_engine(config: dict[str, Any]) -> None:
-    """Build a TensorRT engine per target from the exported ONNX models.
+    """Build a TensorRT engine for each target from the exported ONNX models.
 
-    Each target's ONNX model is parsed into a TensorRT network and compiled
-    into a serialized engine with a dynamic batch size profile, at the path
-    ``export.TARGETS`` names. Each engine is then verified against the
-    PyTorch model.
+    For each target, the function parses the ONNX model into a TensorRT network
+    and compiles it into a serialized engine with a dynamic batch size profile.
+    It writes the engine to the path that ``export.TARGETS`` gives. Then it
+    compares each engine with the PyTorch model.
 
     Args:
         config: Full configuration dictionary.
@@ -38,22 +38,22 @@ def build_engine(config: dict[str, Any]) -> None:
 
     logger = trt.Logger(trt.Logger.WARNING)
 
-    # One timing cache for every build: the smaller targets' networks are
-    # parts of the largest one, so their layers need not be timed again
+    # Use one timing cache for all builds. The networks of the smaller targets are
+    # parts of the largest network, so TensorRT does not time their layers again
     timing_cache = trt.Builder(logger).create_builder_config().create_timing_cache(b"")
 
-    # PyTorch float32 reference, and parameters from its training domain
+    # Load the PyTorch float32 reference and sample parameters from its training domain
     model, checkpoint = load_model(config, "cuda")
     x = sample_parameters(
         training_domain(config, checkpoint), export_config["N_VERIFY_SAMPLES"]
     ).to("cuda")
 
+    # TensorRT networks are strongly typed, so each engine has the precision
+    # of its ONNX model
+    precision = onnx_precision([onnx_path for onnx_path, _ in paths.values()])
+
     for target, (onnx_path, engine_path) in paths.items():
         build_target_engine(onnx_path, engine_path, export_config, logger, timing_cache)
-
-        # TensorRT networks are strongly typed: the engine has its ONNX
-        # model's precision
-        precision = onnx_precision([onnx_path])
         print(f"\nBuilt TensorRT engine ({precision}) for {target} at {engine_path}")
 
         verify_engine(model, target, engine_path, x, logger, precision)
@@ -73,7 +73,7 @@ def build_target_engine(
         engine_path: Where to write the serialized engine.
         export_config: The ``export`` configuration (batch size profile).
         logger: TensorRT logger.
-        timing_cache: Layer timings shared between builds.
+        timing_cache: The layer timings that all builds share.
 
     Raises:
         RuntimeError: If the ONNX model cannot be parsed or the build fails.
@@ -121,11 +121,11 @@ def verify_engine(
     logger: trt.Logger,
     precision: str,
 ) -> None:
-    """Compare one target's TensorRT engine against the PyTorch model.
+    """Compare the TensorRT engine of one target with the PyTorch model.
 
-    The engine must have exactly the input ``x`` and the target's outputs.
-    It runs directly on PyTorch CUDA tensors, so no separate CUDA bindings
-    are required.
+    The engine must have exactly the input ``x`` and the outputs of the target.
+    The engine runs directly on PyTorch CUDA tensors, so it does not need
+    separate CUDA bindings.
 
     Args:
         model: The trained PyTorch model, on the GPU.
@@ -133,11 +133,11 @@ def verify_engine(
         engine_path: Path to the serialized TensorRT engine.
         x: Physical parameters ``[T1, T2, B1]`` on the GPU.
         logger: TensorRT logger.
-        precision: ``"FP32"`` or ``"FP16"``, the engine's precision.
+        precision: The precision of the engine, ``"FP32"`` or ``"FP16"``.
 
     Raises:
-        RuntimeError: If the engine's tensors are not the target's, or its
-            predictions deviate from PyTorch.
+        RuntimeError: If the engine tensors are not the target tensors, or the
+            error of its predictions is more than the tolerance.
     """
     # Load the serialized engine
     runtime = trt.Runtime(logger)

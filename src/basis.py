@@ -79,7 +79,7 @@ def truncate_shared_basis(
     """
     if model.derivative_mode != "forward":
         raise ValueError("Basis truncation requires derivative_mode='forward'")
-    full_rank = model.U_signal[0].in_features
+    full_rank = model.rank
     if not 0 < rank <= full_rank:
         raise ValueError(f"rank must be in (0, {full_rank}], got {rank}")
 

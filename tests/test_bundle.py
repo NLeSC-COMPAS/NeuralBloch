@@ -7,7 +7,6 @@ from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 from scripts.export_bundle import CARD
-from scripts.export_bundle import ONNX_FILES
 from scripts.export_bundle import RF_FILES
 from scripts.export_bundle import SCHEMA_VERSION
 from scripts.export_bundle import CardInputs
@@ -26,6 +25,7 @@ from scripts.export_bundle import rf_table_length
 from scripts.export_bundle import tarball_name
 from scripts.export_bundle import write_bundle
 from scripts.export_bundle import write_tarball
+from scripts.export_onnx import TARGETS
 
 
 DATA_CONFIG = {
@@ -56,7 +56,7 @@ INPUTS = CardInputs(
     version="0.1.0-beta.1",
     ntr=600,
     rank=16,
-    onnx_sha256={target: f"{i}" * 64 for i, target in enumerate(ONNX_FILES)},
+    onnx_sha256={target: f"{i}" * 64 for i, target in enumerate(TARGETS)},
     data_config=DATA_CONFIG,
     finite_difference_steps=None,
     upstream="NeuralBloch@" + "a" * 40,
@@ -70,7 +70,7 @@ INPUTS = CardInputs(
 class CardTest(unittest.TestCase):
     def test_card_states_every_field(self) -> None:
         card = tomllib.loads(card_text(INPUTS))
-        # The card's own version comes first: schema 1.0
+        # The first field is the version of the card schema, 1.0
         self.assertEqual(next(iter(card)), "schema_version")
         self.assertEqual(card["schema_version"], SCHEMA_VERSION)
         self.assertEqual(SCHEMA_VERSION, "1.0")
@@ -79,8 +79,10 @@ class CardTest(unittest.TestCase):
             (model["family"], model["version"], model["ntr"], model["rank"]),
             ("fisp600-rank16", "0.1.0-beta.1", 600, 16),
         )
-        for i, (target, onnx) in enumerate(ONNX_FILES.items()):
-            self.assertEqual(model[target], {"onnx": onnx, "sha256": f"{i}" * 64})
+        for i, (target, spec) in enumerate(TARGETS.items()):
+            self.assertEqual(
+                model[target], {"onnx": spec.bundle_file, "sha256": f"{i}" * 64}
+            )
         self.assertEqual(
             card["domain"],
             {
@@ -122,7 +124,7 @@ class CardTest(unittest.TestCase):
 
     def test_integers_floats_and_booleans_keep_their_types(self) -> None:
         card = tomllib.loads(card_text(INPUTS))
-        # An integer bound (T1_upper: 6) is written as a number with a point
+        # The card writes an integer bound (T1_upper: 6) with a decimal point
         self.assertIsInstance(card["domain"]["T1"][1], float)
         self.assertIsInstance(card["sequence"]["max_state"], int)
         self.assertIsInstance(card["sequence"]["TW"], float)
@@ -208,7 +210,7 @@ class FamilyTest(unittest.TestCase):
             "01.0.0",
             "0.1.0-beta.01",  # a numeric identifier with a leading zero
             "0.1.0-",
-            "0.1.0+build.1",  # build metadata would end up in the tag
+            "0.1.0+build.1",  # the tag would contain build metadata
             "0.1.0\n",
             "０.1.0",  # a fullwidth digit, which \d would accept
         )
@@ -241,14 +243,14 @@ class CheckpointTest(unittest.TestCase):
 
 class BundleTest(unittest.TestCase):
     def setUp(self) -> None:
-        # Source files for a bundle with 3 readouts, and where it goes
+        # Make source files for a bundle with 3 readouts, and set the bundle path
         self.root = Path(self.enterContext(tempfile.TemporaryDirectory()))
         (self.root / "src").mkdir()
         self.files: dict[str, str | Path] = {}
-        for target, name in ONNX_FILES.items():
+        for target, spec in TARGETS.items():
             path = self.root / "src" / f"{target}.onnx"
             path.write_bytes(target.encode())
-            self.files[name] = path
+            self.files[spec.bundle_file] = path
         for name, _, _ in RF_FILES.values():
             path = self.root / "src" / Path(name).name
             path.write_text("".join(f"{i}.5\n" for i in range(3)))
@@ -256,7 +258,7 @@ class BundleTest(unittest.TestCase):
         self.bundle = self.root / "bundle"
 
     def card(self, ntr: int = 3) -> str:
-        sha = {t: file_sha256(self.files[name]) for t, name in ONNX_FILES.items()}
+        sha = {t: file_sha256(self.files[s.bundle_file]) for t, s in TARGETS.items()}
         return card_text(replace(INPUTS, ntr=ntr, onnx_sha256=sha))
 
     def test_written_bundle_checks_out(self) -> None:
@@ -284,7 +286,7 @@ class BundleTest(unittest.TestCase):
             write_bundle(
                 self.bundle, self.card(), {**self.files, "x": self.root / "missing"}
             )
-        # A bundle that fails its check does not replace the old one either
+        # Also, a bundle that fails its check does not replace the old bundle
         with self.assertRaisesRegex(ValueError, "does not have ntr = 4 values"):
             write_bundle(self.bundle, self.card(ntr=4), self.files)
         self.assertEqual((self.bundle / CARD).read_text(), before)
@@ -306,7 +308,7 @@ class BundleTest(unittest.TestCase):
 
 class TarballTest(unittest.TestCase):
     def setUp(self) -> None:
-        # A small bundle, and where its release file goes
+        # Make a small bundle and set the path of its release file
         self.root = Path(self.enterContext(tempfile.TemporaryDirectory()))
         self.bundle = self.root / "bundle"
         (self.bundle / "rf_data").mkdir(parents=True)
@@ -340,7 +342,7 @@ class TarballTest(unittest.TestCase):
         sha256 = write_tarball(self.bundle, self.tarball)
         first = self.tarball.read_bytes()
         self.assertEqual(sha256, file_sha256(self.tarball))
-        # Neither the files' times nor their modes reach the tarball
+        # The times and modes of the files have no effect on the tarball
         os.utime(self.bundle / "model.onnx", (0, 1e9))
         (self.bundle / "model.onnx").chmod(0o600)
         self.assertEqual(write_tarball(self.bundle, self.tarball), sha256)
@@ -401,7 +403,7 @@ class TarballTest(unittest.TestCase):
         notes = command[command.index("--notes") + 1]
         self.assertIn("T1 0.1 to 6 s, T2 0.01 to 2 s, B1 0.5 to 1.5 (T2 < T1)", notes)
         self.assertIn("f" * 64, notes)
-        # A release that is not a pre-release is still not marked latest
+        # A version without a pre-release part is also not marked as latest
         card["model"]["version"] = "0.1.0"
         command = release_command(card, Path("outputs/model.tar.gz"), "f" * 64)
         self.assertIn("--latest=false", command)

@@ -211,6 +211,9 @@ class FCModel(nn.Module):
             )
 
         self.NTR = NTR
+        # Signal basis coefficients per sample: the width of
+        # forward_coefficients and the rank of U_signal
+        self.rank: int = config["NB_signal"]
 
         # Physical [T1, T2, B1] -> internal [log(T1), log(T2), B1] coordinates
         self.input_transform = InputTransform(

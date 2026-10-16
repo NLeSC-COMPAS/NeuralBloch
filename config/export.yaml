@@ -1,12 +1,13 @@
-# Exported models will be saved on these locations: one ONNX model and one
-# TensorRT engine per target (TARGETS in scripts/export_onnx.py), each a method of the model:
+# Locations of the exported models. Each target has one ONNX model and one
+# TensorRT engine (TARGETS in scripts/export_onnx.py). Each target is a method of
+# the model:
 #   signal_and_derivatives  forward: the signal and its T1/T2 derivatives
-#   signal                  forward_signal: the signal alone
-#   coefficients            forward_coefficients: the signal's basis coefficients
-# An engine computes every output of its model on each call, so a separate
-# model per target lets a caller skip the work it does not need.
-# signal_and_derivatives keeps the original file names, which MRSTAT.jl's
-# bootstrap.sh copies.
+#   signal                  forward_signal: only the signal
+#   coefficients            forward_coefficients: the basis coefficients of the signal
+# An engine calculates all outputs of its model on each call. Thus, a separate
+# model for each target lets a caller do only the work that it needs.
+# signal_and_derivatives keeps the original file names, because the bootstrap.sh
+# script of MRSTAT.jl copies these files.
 TARGETS:
   signal_and_derivatives:
     ONNX_FILE_PATH: "outputs/model.onnx"
@@ -29,9 +30,8 @@ OPSET_VERSION: 18
 FP16: false
 
 # Dynamic batch size profile of the TensorRT engines.
-# Each engine accepts any batch size in [MIN_BATCH_SIZE, MAX_BATCH_SIZE]
-# and its kernels are tuned for OPT_BATCH_SIZE
-# (set to testing.INFER_BATCH_SIZE, the batch size used during inference).
+# Each engine accepts all batch sizes in [MIN_BATCH_SIZE, MAX_BATCH_SIZE].
+# TensorRT tunes the kernels of each engine for OPT_BATCH_SIZE.
 MIN_BATCH_SIZE: 10000
 OPT_BATCH_SIZE: 14400
 MAX_BATCH_SIZE: 40000
@@ -39,22 +39,24 @@ MAX_BATCH_SIZE: 40000
 # Number of samples used to verify exported models against PyTorch
 N_VERIFY_SAMPLES: 14400
 
-# The model bundle NeuralBloch.jl reads (run.py export_bundle): the ONNX models
-# above, the RF tables and a generated model_card.toml describing them. Its release
-# file, neuralbloch-model-<MODEL_FAMILY>-v<MODEL_VERSION>.tar.gz, is written
-# next to it.
+# The model bundle that NeuralBloch.jl reads (run.py export_bundle). It contains
+# the ONNX models above, the RF tables and a generated model_card.toml that
+# describes them. The task writes the release file of the bundle,
+# neuralbloch-model-<MODEL_FAMILY>-v<MODEL_VERSION>.tar.gz, next to the bundle.
 BUNDLE_DIR: "outputs/bundle"
 
-# The model's name in NeuralBloch.jl and in its release tag,
-# model-<MODEL_FAMILY>-v<MODEL_VERSION>. A family is one contract for callers:
-# the sequence, its number of readouts and the basis rank, named
-# <sequence><ntr>-rank<rank> (export_bundle checks the rank), with a qualifier
-# before the version if two families would otherwise share a name
-# (fisp600b-rank16). The version is a semantic version in quotes:
-# MAJOR.MINOR.PATCH, optionally with a pre-release such as -beta.1, and no
-# build metadata (+...), since it is part of the release tag. Each version of
-# a family is a drop-in replacement for the one before: PATCH re-exports the
-# same weights, MINOR brings new weights or a wider domain, and MAJOR stays 0
-# until the family is stable.
+# The name of the model in NeuralBloch.jl and in its release tag,
+# model-<MODEL_FAMILY>-v<MODEL_VERSION>.
+# A family is one contract for callers: the sequence, the number of readouts and
+# the basis rank. The name of a family has the form <sequence><ntr>-rank<rank>.
+# (export_bundle checks the rank.) If two families would have the same name, add a
+# qualifier before the version (fisp600b-rank16).
+# The version is a semantic version in quotes: MAJOR.MINOR.PATCH, with an optional
+# pre-release part such as -beta.1. Build metadata (+...) is not permitted, because
+# the version is part of the release tag. Each version of a family can replace the
+# version before it with no change for callers:
+#   PATCH: the same weights, exported again
+#   MINOR: new weights or a wider domain
+#   MAJOR: stays 0 until the family is stable
 MODEL_FAMILY: "fisp600-rank16"
 MODEL_VERSION: "0.1.0-beta.1"

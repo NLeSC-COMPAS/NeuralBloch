@@ -79,7 +79,7 @@ def main() -> None:
 
         build_engine(config)
 
-    # Write the model bundle NeuralBloch.jl reads
+    # Write the model bundle that NeuralBloch.jl reads
     elif args.task == "export_bundle":
         from scripts.export_bundle import export_bundle
 

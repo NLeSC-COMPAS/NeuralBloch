@@ -16,7 +16,6 @@ from typing import Any
 import torch
 from scripts.export_onnx import TARGETS
 from scripts.export_onnx import onnx_precision
-from scripts.export_onnx import rank
 from scripts.export_onnx import require_exported
 from scripts.export_onnx import target_paths
 from scripts.export_onnx import training_domain
@@ -25,46 +24,39 @@ from src.utils import load_model
 from src.utils import sample_parameters
 
 
-# The model bundle NeuralBloch.jl reads: the ONNX model of every target, the
-# RF tables of the training sequence, and model_card.toml, which describes
-# them. The card is generated here, never written by hand: every field comes
-# from the checkpoint, from the export, or from a constant below that names
-# its source.
+# The model bundle that NeuralBloch.jl reads contains the ONNX model of each
+# target, the RF tables of the training sequence, and model_card.toml, which
+# describes them. This script generates the card. Do not write it by hand. Each
+# field comes from the checkpoint, from the export, or from a constant below that
+# gives its source.
 
-# The version of the card's schema, "MAJOR.MINOR", which NeuralBloch.jl's
-# src/model.jl reads. Raise MINOR for a field that readers may ignore, a new
-# optional one; NeuralBloch.jl reads any MINOR of its MAJOR. Raise MAJOR for
-# anything else (a field renamed, removed, retyped, made required or given
-# another meaning, or the card renamed), together with NeuralBloch.jl, which
-# refuses another MAJOR.
+# The version of the card schema, "MAJOR.MINOR". src/model.jl in NeuralBloch.jl
+# reads it. Increase MINOR for a new optional field that readers can ignore.
+# NeuralBloch.jl reads all MINOR versions of its MAJOR. Increase MAJOR for all
+# other changes: a field gets a new name, is removed, gets a new type or a new
+# meaning, or becomes required, or the card gets a new name. Change NeuralBloch.jl
+# at the same time, because it does not accept a different MAJOR.
 SCHEMA_VERSION = "1.0"
 
 CARD = "model_card.toml"
 
-# The bundle's file for each target (TARGETS in scripts/export_onnx.py).
-ONNX_FILES = {
-    "signal_and_derivatives": "model.onnx",
-    "signal": "model_signal.onnx",
-    "coefficients": "model_coefficients.onnx",
-}
-
-# The bundle's RF tables, by card key: (file in the bundle, the data
-# configuration's key for the source file, what the table holds).
+# The RF tables of the bundle, by card key: (file in the bundle, key of the source
+# file in the data configuration, contents of the table).
 RF_FILES = {
     "rf_angle": ("rf_data/rf_angle_list.txt", "RF_ANGLE_FILE", "flip angles, degrees"),
     "rf_phase": ("rf_data/rf_phase_list.txt", "RF_PHASE_FILE", "phases, degrees"),
 }
 
-# DERIVATIVE_METHOD as data/data_generation.jl names it -> the card's name,
-# with the same default as data_generation.jl.
+# Each DERIVATIVE_METHOD name in data/data_generation.jl -> the name in the card.
+# The default is the same as in data_generation.jl.
 DERIVATIVE_METHODS = {
     "forward_sensitivity": "forward sensitivity",
     "finite_difference": "forward difference",
 }
 DEFAULT_DERIVATIVE_METHOD = "forward_sensitivity"
 
-# data/data_generation.jl keeps only samples with T1 > T2: a physical
-# requirement, so it is a constant here rather than a setting.
+# data/data_generation.jl keeps only samples with T1 > T2. This is a physical
+# requirement, so it is a constant here and not a setting.
 CONSTRAINT = "T2 < T1"
 
 
@@ -75,18 +67,19 @@ DOMAIN_FIELDS = (
     ("B1", "B1_lower", "B1_upper", "relative to nominal, sampled uniformly"),
 )
 
-# A family is named <sequence><ntr>-rank<rank>, optionally with a qualifier,
-# e.g. fisp600-rank16 or fisp600-rank16-narrow: lowercase words joined by
-# hyphens, exactly one of them rank<N>.
+# The name of a family has the form <sequence><ntr>-rank<rank>, with an optional
+# qualifier, for example fisp600-rank16 or fisp600-rank16-narrow. The name is
+# lowercase words with hyphens between them. Exactly one of these words is
+# rank<N>.
 FAMILY_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 RANK_WORD = re.compile(r"^rank([1-9][0-9]*)$")
 
-# A family's version is a semantic version (semver.org): MAJOR.MINOR.PATCH,
-# optionally with a pre-release such as -beta.1. PATCH counts re-exports of
-# the same weights, MINOR new weights or a wider domain, and MAJOR stays 0
-# until the family is stable. Build metadata (+...) is not allowed: the
-# version is part of the release tag and the download URL. Written with
-# [0-9], since \d also matches other Unicode digits.
+# The version of a family is a semantic version (semver.org): MAJOR.MINOR.PATCH,
+# with an optional pre-release part such as -beta.1. PATCH counts new exports of
+# the same weights. MINOR counts new weights or a wider domain. MAJOR stays 0
+# until the family is stable. Build metadata (+...) is not permitted, because the
+# version is part of the release tag and the download URL. The patterns use
+# [0-9] and not \d, because \d also matches other Unicode digits.
 PRERELEASE_PART = r"(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)"
 SEMVER = re.compile(
     r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
@@ -96,24 +89,24 @@ SEMVER = re.compile(
 
 @dataclass(frozen=True)
 class CardInputs:
-    """Everything the card states, gathered by ``export_bundle``.
+    """The data that ``export_bundle`` collects for the card.
 
     Attributes:
         family: The model family, ``<sequence><ntr>-rank<rank>[-qualifier]``.
         version: The family's semantic version (``SEMVER``), e.g.
             ``0.1.0-beta.1``.
-        ntr: Readouts per voxel.
-        rank: Signal basis coefficients per voxel.
+        ntr: The number of readouts per voxel.
+        rank: The number of signal basis coefficients per voxel.
         onnx_sha256: The sha256 of each target's ONNX model.
         data_config: The checkpoint's data configuration.
-        finite_difference_steps: BlochSimulators' T1 and T2 steps, for a
-            model trained on finite-difference derivatives; else ``None``.
+        finite_difference_steps: The T1 and T2 steps of BlochSimulators if the
+            model was trained on finite-difference derivatives. Otherwise ``None``.
         upstream: The NeuralBloch commit that exported the bundle.
         checkpoint_epoch: The checkpoint's epoch.
-        config_sha256: The hash of the checkpoint's configurations.
+        config_sha256: The hash of the configurations in the checkpoint.
         blochsimulators: The BlochSimulators version of the export
             environment.
-        precision: ``"FP32"`` or ``"FP16"``, of the ONNX models.
+        precision: The precision of the ONNX models, ``"FP32"`` or ``"FP16"``.
     """
 
     family: str
@@ -131,16 +124,16 @@ class CardInputs:
 
 
 def require_configs(checkpoint: Mapping[str, Any], path: str | Path) -> None:
-    """Refuse a checkpoint that does not record its own configuration.
+    """Raise an error if a checkpoint does not contain its own configuration.
 
-    The card describes the model in the checkpoint, so every field must come
-    from the configuration it was trained with. Older checkpoints did not
-    store it, and ``load_model`` then falls back to ``config/``, which may
-    describe another model.
+    The card describes the model in the checkpoint. Thus, all fields must come
+    from the training configuration of the model. Older checkpoints do not
+    contain this configuration. For these checkpoints, ``load_model`` uses the
+    configuration in ``config/``, which can describe a different model.
 
     Args:
         checkpoint: The loaded checkpoint.
-        path: Where it was loaded from, for the message.
+        path: The path of the checkpoint file, for the error message.
 
     Raises:
         ValueError: If ``model_config`` or ``data_config`` is missing.
@@ -149,17 +142,17 @@ def require_configs(checkpoint: Mapping[str, Any], path: str | Path) -> None:
     if missing:
         raise ValueError(
             f"{path} does not store {' and '.join(missing)}, so the model card "
-            "cannot be taken from it: checkpoints written before the training "
-            "configuration was stored in them would otherwise be described by "
-            "config/, which may belong to another model. Retrain, or add the "
-            "configuration the checkpoint was trained with to it deliberately "
+            "cannot come from it. For an old checkpoint without its training "
+            "configuration, the card would describe config/, which can belong to "
+            "a different model. Train the model again, or add its training "
+            "configuration to the checkpoint yourself "
             "(checkpoint['model_config'] = ..., checkpoint['data_config'] = ..., "
             "torch.save(checkpoint, path))."
         )
 
 
 def family_rank(family: str) -> int:
-    """The rank a family name states.
+    """Return the rank that a family name gives.
 
     Args:
         family: A family name, e.g. ``fisp600-rank16``.
@@ -177,18 +170,19 @@ def family_rank(family: str) -> int:
     ]
     if not FAMILY_PATTERN.match(family) or len(ranks) != 1:
         raise ValueError(
-            f"Model family {family!r} must be lowercase words joined by hyphens, "
-            "exactly one of them rank<N>: <sequence><ntr>-rank<rank>, e.g. "
-            "fisp600-rank16, optionally with a qualifier (fisp600-rank16-narrow)"
+            f"Model family {family!r} must be lowercase words with hyphens between "
+            "them, and exactly one word must be rank<N>. The form is "
+            "<sequence><ntr>-rank<rank>, for example fisp600-rank16, with an "
+            "optional qualifier (fisp600-rank16-narrow)"
         )
     return int(ranks[0])
 
 
 def check_family(family: str, model_rank: int) -> None:
-    """Refuse a family name whose rank is not the model's.
+    """Raise an error if the rank in a family name is not the rank of the model.
 
     Raises:
-        ValueError: If the name is malformed or states another rank.
+        ValueError: If the name is not valid or gives a different rank.
     """
     stated = family_rank(family)
     if stated != model_rank:
@@ -200,10 +194,10 @@ def check_family(family: str, model_rank: int) -> None:
 
 
 def check_version(version: object) -> str:
-    """The family version, which must be a semantic version (``SEMVER``).
+    """Return the family version if it is a semantic version (``SEMVER``).
 
     Raises:
-        ValueError: If it is not.
+        ValueError: If the version is not a semantic version.
     """
     if not isinstance(version, str):
         raise ValueError(
@@ -220,7 +214,7 @@ def check_version(version: object) -> str:
 
 
 def derivative_method(data_config: Mapping[str, Any]) -> str:
-    """How the training targets' derivatives were computed, as the card says it.
+    """Return the method that calculated the training derivatives, as the card names it.
 
     Raises:
         ValueError: If the data configuration names an unknown method.
@@ -238,7 +232,7 @@ def config_sha256(
     model_config: Mapping[str, Any],
     data_config: Mapping[str, Any],
 ) -> str:
-    """The sha256 of a checkpoint's configurations, independent of key order."""
+    """Return the sha256 of the checkpoint configurations. Key order has no effect."""
     canonical = json.dumps(
         {"model_config": model_config, "data_config": data_config},
         sort_keys=True,
@@ -248,13 +242,13 @@ def config_sha256(
 
 
 def file_sha256(path: str | Path) -> str:
-    """The sha256 of a file's contents, in hexadecimal."""
+    """Return the sha256 of the file contents, in hexadecimal."""
     with open(path, "rb") as f:
         return hashlib.file_digest(f, "sha256").hexdigest()
 
 
 def rf_table_length(path: str | Path) -> int:
-    """The number of values in an RF table: one number per non-empty line.
+    """Return the number of values in an RF table (one number per non-empty line).
 
     Raises:
         ValueError: If a line is not a number.
@@ -273,7 +267,7 @@ def rf_table_length(path: str | Path) -> int:
 
 
 def toml_value(value: object) -> str:
-    """A TOML literal for a string, boolean, integer, float or list of them."""
+    """Return the TOML literal of a string, boolean, integer, float or list of them."""
     if isinstance(value, bool):
         return "true" if value else "false"
     if isinstance(value, int):
@@ -291,7 +285,7 @@ def toml_value(value: object) -> str:
 
 
 def number(value: object, name: str) -> float:
-    """A card number: a float, or an integer written as one.
+    """Return a card number: a float, or an integer as a float.
 
     Raises:
         ValueError: If ``value`` is not a number.
@@ -302,7 +296,7 @@ def number(value: object, name: str) -> float:
 
 
 def integer(value: object, name: str) -> int:
-    """A card integer.
+    """Return a card integer.
 
     Raises:
         ValueError: If ``value`` is not an integer.
@@ -313,7 +307,7 @@ def integer(value: object, name: str) -> int:
 
 
 def boolean(value: object, name: str) -> bool:
-    """A card boolean.
+    """Return a card boolean.
 
     Raises:
         ValueError: If ``value`` is not true or false.
@@ -323,8 +317,8 @@ def boolean(value: object, name: str) -> bool:
     raise ValueError(f"{name} must be true or false, not {value!r}")
 
 
-# The sequence data/data_generation.jl simulates: FISP3D(...) built from these
-# fields of the data configuration: (card key, data key, type, unit).
+# The sequence that data/data_generation.jl simulates. It is FISP3D(...), made
+# from these fields of the data configuration: (card key, data key, type, unit).
 SEQUENCE_KIND = "FISP3D"
 SEQUENCE_FIELDS = (
     ("TR", "TR_S", number, "seconds"),
@@ -341,7 +335,9 @@ SEQUENCE_FIELDS = (
 
 
 def card_text(inputs: CardInputs) -> str:
-    """The text of model_card.toml, schema ``SCHEMA_VERSION``, with each field's source.
+    """Return the text of model_card.toml with the source of each field.
+
+    The card uses schema ``SCHEMA_VERSION``.
 
     Raises:
         ValueError: If a value has the wrong type, a domain range is empty,
@@ -351,26 +347,28 @@ def card_text(inputs: CardInputs) -> str:
     method = derivative_method(data)
     if (method == "forward difference") != (inputs.finite_difference_steps is not None):
         raise ValueError(
-            "Finite-difference steps belong to, and only to, a model trained on "
-            f"finite-difference derivatives; this one used {method}"
+            "Finite-difference steps are necessary for a model trained on "
+            "finite-difference derivatives, and not permitted for other models. "
+            f"This model used {method}"
         )
 
     lines: list[str] = []
 
-    def field(key: str, value: object, comment: str = "") -> None:
-        line = f"{key} = {toml_value(value)}"
+    def add(line: str, comment: str) -> None:
         lines.append(f"{line:<36}  # {comment}" if comment else line)
+
+    def field(key: str, value: object, comment: str = "") -> None:
+        add(f"{key} = {toml_value(value)}", comment)
 
     def table(name: str, comment: str = "") -> None:
         lines.append("")
-        header = f"[{name}]"
-        lines.append(f"{header:<36}  # {comment}" if comment else header)
+        add(f"[{name}]", comment)
 
     lines += [
-        "# NeuralBloch model card. Generated by NeuralBloch's export_bundle",
-        "# (uv run run.py export_bundle): do not edit by hand. Units are physical:",
-        "# seconds for T1, T2 and times, B1 relative to nominal, derivatives per",
-        "# second.",
+        "# NeuralBloch model card. The export_bundle task of NeuralBloch generates",
+        "# this file (uv run run.py export_bundle). Do not edit it by hand. Units",
+        "# are physical: seconds for T1, T2 and times, B1 relative to nominal,",
+        "# derivatives per second.",
         "",
     ]
     field(
@@ -385,7 +383,7 @@ def card_text(inputs: CardInputs) -> str:
 
     for target, spec in TARGETS.items():
         table(f"model.{target}", f"FCModel.{spec.method}: {', '.join(spec.outputs)}")
-        field("onnx", ONNX_FILES[target])
+        field("onnx", spec.bundle_file)
         field("sha256", inputs.onnx_sha256[target])
 
     table("domain", "where the network was trained: data_config")
@@ -400,8 +398,8 @@ def card_text(inputs: CardInputs) -> str:
     field("method", method, "data_config DERIVATIVE_METHOD")
     if inputs.finite_difference_steps is not None:
         dT1, dT2 = inputs.finite_difference_steps
-        field("dT1_step", number(dT1, "dT1_step"), "BlochSimulators.DEFAULT_ΔT₁")
-        field("dT2_step", number(dT2, "dT2_step"), "BlochSimulators.DEFAULT_ΔT₂")
+        field("dT1_step", dT1, "BlochSimulators.DEFAULT_ΔT₁")
+        field("dT2_step", dT2, "BlochSimulators.DEFAULT_ΔT₂")
 
     table("sequence", "FISP3D(...) in data/data_generation.jl, from data_config")
     field("kind", SEQUENCE_KIND)
@@ -428,17 +426,21 @@ def write_bundle(
     bundle_dir: str | Path,
     card: str,
     files: Mapping[str, str | Path],
-) -> None:
+) -> dict[str, Any]:
     """Write a bundle: ``card`` as model_card.toml and ``files`` copied into it.
 
-    The bundle is assembled in a new directory next to ``bundle_dir``,
-    checked (``check_bundle``), and then takes its place, so ``bundle_dir``
-    never holds a mix of two bundles, nor one that fails the check.
+    The function first makes the bundle in a new directory next to
+    ``bundle_dir`` and checks it (``check_bundle``). Then the new directory
+    replaces ``bundle_dir``. Thus, ``bundle_dir`` never contains a mix of two
+    bundles, or a bundle that fails the check.
 
     Args:
-        bundle_dir: The bundle's directory; an existing one is replaced.
+        bundle_dir: The directory of the bundle. If it exists, it is replaced.
         card: The text of model_card.toml.
-        files: The bundle's other files: path in the bundle -> source.
+        files: The other files of the bundle: path in the bundle -> source.
+
+    Returns:
+        The parsed card, from ``check_bundle``.
 
     Raises:
         ValueError: If the assembled bundle fails ``check_bundle``.
@@ -455,7 +457,7 @@ def write_bundle(
             shutil.copyfile(source, target)
         (new / CARD).write_text(card)
         new.chmod(0o755)
-        check_bundle(new)
+        parsed = check_bundle(new)
         if bundle_dir.exists():
             shutil.rmtree(old, ignore_errors=True)
             bundle_dir.rename(old)
@@ -468,10 +470,11 @@ def write_bundle(
         raise
     if moved:
         shutil.rmtree(old)
+    return parsed
 
 
 def check_bundle(bundle_dir: str | Path) -> dict[str, Any]:
-    """Read a bundle's card back and check the files it names.
+    """Read the card of a bundle again and check the files that it names.
 
     Args:
         bundle_dir: The bundle's directory.
@@ -480,9 +483,9 @@ def check_bundle(bundle_dir: str | Path) -> dict[str, Any]:
         The parsed card.
 
     Raises:
-        ValueError: If the card has another schema version, a file it names
-            is missing, an ONNX model's hash differs from the card's, or an
-            RF table does not have ``ntr`` values.
+        ValueError: If the card has a different schema version, a file that it
+            names is missing, the hash of an ONNX model is not the hash in the
+            card, or an RF table does not have ``ntr`` values.
     """
     bundle_dir = Path(bundle_dir)
     with open(bundle_dir / CARD, "rb") as f:
@@ -510,13 +513,13 @@ def check_bundle(bundle_dir: str | Path) -> dict[str, Any]:
     return card
 
 
-# A family version is published as a GitHub release of this repository, with
-# the bundle's tarball as its one file. NeuralBloch.jl's dev/bind_bundle.jl
-# builds the download URL from the same two names.
+# Each family version is published as a GitHub release of this repository. The
+# release has one file, the tarball of the bundle. dev/bind_bundle.jl in
+# NeuralBloch.jl makes the download URL from the same two names.
 
 
 def release_tag(family: str, version: str) -> str:
-    """The release tag of a family version.
+    """Return the release tag of a family version.
 
     For example ``model-fisp600-rank16-v0.1.0-beta.1``.
     """
@@ -524,7 +527,7 @@ def release_tag(family: str, version: str) -> str:
 
 
 def tarball_name(family: str, version: str) -> str:
-    """The file a family version's release holds.
+    """Return the name of the file in the release of a family version.
 
     For example ``neuralbloch-model-fisp600-rank16-v0.1.0-beta.1.tar.gz``.
     """
@@ -534,20 +537,21 @@ def tarball_name(family: str, version: str) -> str:
 def write_tarball(bundle_dir: str | Path, tarball: str | Path) -> str:
     """Pack a bundle into a reproducible tarball, the release file.
 
-    The bundle's files sit at the tarball's root. The same files always give
-    the same bytes, so the sha256 that NeuralBloch.jl pins for the release
-    can be derived again from the bundle: members in sorted order, USTAR
-    headers with mtime 0, owner 0:0 and mode 0644 for files and 0755 for
-    directories, and a gzip header with mtime 0 and no file name. The
-    tarball is written to a temporary file next to it, which then takes its
-    place, so a failed write leaves no partial tarball.
+    The tarball has the bundle files at its root. The same files always give
+    the same bytes. Thus, you can calculate the sha256 that NeuralBloch.jl pins
+    for the release again from the bundle. For this, the tarball has: members
+    in sorted order, USTAR headers with mtime 0, owner 0:0, mode 0644 for files
+    and 0755 for directories, and a gzip header with mtime 0 and no file name.
+    The function first writes a temporary file next to the tarball. Then this
+    file replaces the tarball. Thus, a failed write does not leave a partial
+    tarball.
 
     Args:
-        bundle_dir: The bundle's directory.
-        tarball: Where to write the tarball; an existing one is replaced.
+        bundle_dir: The directory of the bundle.
+        tarball: The path of the tarball. If it exists, it is replaced.
 
     Returns:
-        The tarball's sha256, in hexadecimal.
+        The sha256 of the tarball, in hexadecimal.
 
     Raises:
         FileNotFoundError: If ``bundle_dir`` is not a directory.
@@ -587,19 +591,20 @@ def write_tarball(bundle_dir: str | Path, tarball: str | Path) -> str:
 
 
 def release_command(card: Mapping[str, Any], tarball: Path, sha256: str) -> list[str]:
-    """The ``gh`` command that publishes a bundle's tarball as its release.
+    """Return the ``gh`` command that publishes a bundle tarball as its release.
 
-    The release is tagged at the commit the card names. A version with a
-    pre-release part (``-beta.1``) becomes a GitHub pre-release, and any
-    other is not marked latest, so the latest release stays the code's.
+    The command tags the release at the commit that the card names. It
+    publishes a version with a pre-release part (``-beta.1``) as a GitHub
+    pre-release. It does not mark other versions as latest, so the latest
+    release stays a code release.
 
     Args:
-        card: The bundle's parsed card.
-        tarball: The tarball ``write_tarball`` wrote.
-        sha256: The tarball's sha256.
+        card: The parsed card of the bundle.
+        tarball: The tarball that ``write_tarball`` wrote.
+        sha256: The sha256 of the tarball.
 
     Returns:
-        The command, one argument per item.
+        The command, as a list with one argument in each item.
     """
     model, domain = card["model"], card["domain"]
     family, version = model["family"], model["version"]
@@ -617,7 +622,7 @@ def release_command(card: Mapping[str, Any], tarball: Path, sha256: str) -> list
         f"{provenance['checkpoint_epoch']}, {provenance['precision']}. "
         f"sha256 of {tarball.name}: {sha256}"
     )
-    # Without build metadata, a hyphen in a semantic version starts its
+    # The version has no build metadata, so a hyphen in it starts the
     # pre-release part
     latest = "--prerelease" if "-" in version else "--latest=false"
     return [
@@ -637,20 +642,21 @@ def release_command(card: Mapping[str, Any], tarball: Path, sha256: str) -> list
 
 
 def export_bundle(config: dict[str, Any]) -> None:
-    """Write the model bundle NeuralBloch.jl reads, from the exported targets.
+    """Write the model bundle that NeuralBloch.jl reads, from the exported targets.
 
-    The bundle (``export.BUNDLE_DIR``) holds the ONNX model of every target,
-    the RF tables of the training sequence and ``model_card.toml``, which states
-    the model's family and version, its shapes, training domain, derivative
-    method, sequence and provenance (see ``card_text``). Next to it goes the
-    bundle's release file (``write_tarball``), and the command that would
-    publish it is printed; nothing is published here.
+    The bundle (``export.BUNDLE_DIR``) contains the ONNX model of each target,
+    the RF tables of the training sequence and ``model_card.toml``. The card
+    gives the family and version of the model, its shapes, the training domain,
+    the derivative method, the sequence and the provenance (see ``card_text``).
+    The function also writes the release file of the bundle next to the bundle
+    (``write_tarball``). It prints the command that publishes this file, but it
+    does not publish anything.
 
-    The card must describe the checkpoint truthfully, so the export refuses
-    a checkpoint without its training configuration, a family name whose
-    rank is not the checkpoint's, ONNX models that do not reproduce the
-    checkpoint, and uncommitted changes in this repository, whose commit the
-    card names.
+    The card must describe the checkpoint correctly. Thus, the export raises an
+    error for: a checkpoint without its training configuration, a family name
+    with a rank that is not the rank of the checkpoint, ONNX models that do not
+    give the same results as the checkpoint, and uncommitted changes in this
+    repository. (The card gives the commit of this repository.)
 
     Args:
         config: Full configuration dictionary.
@@ -661,15 +667,16 @@ def export_bundle(config: dict[str, Any]) -> None:
     require_configs(checkpoint, checkpoint_path)
 
     model, _ = load_model(config, "cpu")
-    model_rank = rank(model)
     family = export_config["MODEL_FAMILY"]
     version = check_version(export_config["MODEL_VERSION"])
-    check_family(family, model_rank)
+    check_family(family, model.rank)
 
-    upstream = f"NeuralBloch@{clean_commit()}"
+    commit = clean_commit()
+    upstream = f"NeuralBloch@{commit}"
 
     data_config = checkpoint["data_config"]
     method = derivative_method(data_config)
+    # check_bundle checks this again, but only after the slow steps below
     for key, (_, data_key, _) in RF_FILES.items():
         values = rf_table_length(data_config[data_key])
         if values != model.NTR:
@@ -678,7 +685,7 @@ def export_bundle(config: dict[str, Any]) -> None:
                 f"the checkpoint has NTR = {model.NTR}"
             )
 
-    # The ONNX models must be this checkpoint's: each is checked against it
+    # The ONNX models must come from this checkpoint. Compare each model with it.
     paths = target_paths(export_config)
     require_exported(paths)
     onnx_paths = {target: onnx_path for target, (onnx_path, _) in paths.items()}
@@ -687,16 +694,16 @@ def export_bundle(config: dict[str, Any]) -> None:
         training_domain(config, checkpoint), export_config["N_VERIFY_SAMPLES"]
     )
     for target, onnx_path in onnx_paths.items():
-        verify_onnx(model, target, onnx_path, x)
+        verify_onnx(model, target, onnx_path, x, precision)
 
-    blochsimulators, steps = blochsimulators_facts(method)
+    blochsimulators, steps = blochsimulators_facts(method == "forward difference")
 
     card = card_text(
         CardInputs(
             family=family,
             version=version,
             ntr=model.NTR,
-            rank=model_rank,
+            rank=model.rank,
             onnx_sha256={t: file_sha256(path) for t, path in onnx_paths.items()},
             data_config=data_config,
             finite_difference_steps=steps,
@@ -709,34 +716,34 @@ def export_bundle(config: dict[str, Any]) -> None:
     )
 
     files: dict[str, str | Path] = {
-        ONNX_FILES[target]: path for target, path in onnx_paths.items()
+        TARGETS[target].bundle_file: path for target, path in onnx_paths.items()
     }
     files |= {name: data_config[data_key] for name, data_key, _ in RF_FILES.values()}
 
     bundle_dir = Path(export_config["BUNDLE_DIR"])
-    write_bundle(bundle_dir, card, files)
+    parsed = write_bundle(bundle_dir, card, files)
 
-    # The release file, next to the bundle
+    # Write the release file next to the bundle
     tarball = bundle_dir.with_name(tarball_name(family, version))
     sha256 = write_tarball(bundle_dir, tarball)
 
     print(
         f"\nWrote the model bundle {family}-v{version} to {bundle_dir}: "
-        f"NTR {model.NTR}, rank {model_rank}, {method} derivatives, {precision}, "
+        f"NTR {model.NTR}, rank {model.rank}, {method} derivatives, {precision}, "
         f"from {checkpoint_path} (epoch {checkpoint['epoch']}) and {upstream}"
     )
     print(
         f"\nWrote its release file {tarball} ({tarball.stat().st_size:,} bytes), "
         f"sha256 {sha256}. Nothing was published. To publish it, push "
-        f"{upstream.removeprefix('NeuralBloch@')[:7]}, bind the file in "
+        f"{commit[:7]}, bind the file in "
         "NeuralBloch.jl (julia --project dev/bind_bundle.jl FILE) and run its "
         "tests, then create the release:\n\n"
-        + shlex.join(release_command(check_bundle(bundle_dir), tarball, sha256))
+        + shlex.join(release_command(parsed, tarball, sha256))
     )
 
 
 def clean_commit() -> str:
-    """The commit of this repository, which must have no uncommitted changes.
+    """Return the commit of this repository if it has no uncommitted changes.
 
     Returns:
         The full hash of ``HEAD``.
@@ -754,27 +761,31 @@ def clean_commit() -> str:
 
 
 def git(*args: str) -> str:
-    """The output of a git command in this repository, stripped."""
+    """Return the stripped output of a git command in this repository."""
     return subprocess.run(
         ["git", *args], check=True, capture_output=True, text=True
     ).stdout.strip()
 
 
-def blochsimulators_facts(method: str) -> tuple[str, tuple[float, float] | None]:
-    """BlochSimulators' version, and its T1 and T2 steps for forward differences.
+def blochsimulators_facts(
+    finite_difference: bool,
+) -> tuple[str, tuple[float, float] | None]:
+    """Return the BlochSimulators version and its T1 and T2 forward-difference steps.
 
-    The training data are simulated in this repository's Julia environment
-    (juliapkg.json), so it is the one asked. The version is read from the
-    package's Project.toml, without loading the package, which would also
-    initialize CUDA next to PyTorch's; the steps, when needed, from the
-    package itself.
+    The training data come from simulations in the Julia environment of this
+    repository (juliapkg.json), so the function reads the data from this
+    environment. It reads the version from the Project.toml file of the package
+    and does not load the package. (When Julia loads the package, the package
+    also initializes CUDA, in addition to the CUDA of PyTorch.) The function
+    loads the package only when it needs the steps, and reads them from it.
 
     Args:
-        method: The card's derivative method.
+        finite_difference: Whether the model was trained on finite-difference
+            derivatives.
 
     Returns:
-        The version, and ``(dT1_step, dT2_step)`` for ``"forward
-        difference"`` or ``None`` otherwise.
+        The version, and ``(dT1_step, dT2_step)`` if ``finite_difference``,
+        else ``None``.
     """
     from juliacall import Main as jl
 
@@ -786,7 +797,7 @@ def blochsimulators_facts(method: str) -> tuple[str, tuple[float, float] | None]
         )
     )
     steps = None
-    if method == "forward difference":
+    if finite_difference:
         jl.seval("using BlochSimulators")
         steps = (
             float(jl.seval("BlochSimulators.DEFAULT_ΔT₁")),

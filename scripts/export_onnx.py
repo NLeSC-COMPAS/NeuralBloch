@@ -17,43 +17,48 @@ from src.utils import sample_parameters
 
 @dataclass(frozen=True)
 class Target:
-    """One method of ``FCModel`` that is exported on its own.
+    """A method of ``FCModel`` that has its own exported model.
 
     Attributes:
-        method: The ``FCModel`` method the target runs.
-        outputs: The names of its outputs, in the order the method returns
-            them. They name the outputs of the ONNX model and the TensorRT
-            engine.
+        method: The ``FCModel`` method that the target runs.
+        outputs: The names of its outputs, in the order that the method returns
+            them. The ONNX model and the TensorRT engine use these names for
+            their outputs.
+        bundle_file: The name of its ONNX model in the model bundle.
     """
 
     method: str
     outputs: tuple[str, ...]
+    bundle_file: str
 
 
-# What a caller can ask the surrogate for, keyed by the names NeuralBloch.jl
-# uses for them. Each target is exported to its own ONNX model and built into
-# its own TensorRT engine: an engine computes every output of its model on
-# each call, so a separate model per target is what lets a caller skip the
-# work it does not need.
+# The data that a caller can get from the surrogate. The keys are the names that
+# NeuralBloch.jl uses for these data. Each target has its own ONNX model and its
+# own TensorRT engine. An engine calculates all outputs of its model on each
+# call. Thus, a separate model for each target lets a caller do only the work
+# that it needs.
 TARGETS: dict[str, Target] = {
-    "signal_and_derivatives": Target("forward", ("signal", "dT1", "dT2")),
-    "signal": Target("forward_signal", ("signal",)),
-    "coefficients": Target("forward_coefficients", ("coefficients",)),
+    "signal_and_derivatives": Target("forward", ("signal", "dT1", "dT2"), "model.onnx"),
+    "signal": Target("forward_signal", ("signal",), "model_signal.onnx"),
+    "coefficients": Target(
+        "forward_coefficients", ("coefficients",), "model_coefficients.onnx"
+    ),
 }
 
 
 class TargetModel(nn.Module):
-    """``FCModel`` with one target's method as its ``forward``.
+    """``FCModel`` with the method of one target as its ``forward``.
 
-    ``torch.onnx.export`` traces ``forward`` only, so each target is exported
-    through this wrapper, and ``FCModel`` keeps its three methods as they are.
-    The outputs are always a tuple, in the target's output order.
+    ``torch.onnx.export`` traces only ``forward``. Thus, the export uses this
+    wrapper for each target, and the three methods of ``FCModel`` do not change.
+    The outputs are always a tuple, in the output order of the target.
 
-    With ``fp16``, the model runs in half precision behind an FP32 interface:
-    inputs are cast to FP16 and outputs back to FP32. TensorRT engines inherit
-    their precision from the ONNX model, so exporting this wrapper yields an
-    FP16 engine with unchanged input and output dtypes. The wrapper then holds
-    an FP16 copy of the model and leaves ``model`` itself untouched.
+    With ``fp16``, the model runs in half precision behind an FP32 interface.
+    The wrapper casts the inputs to FP16 and the outputs back to FP32. TensorRT
+    engines get their precision from the ONNX model. Thus, an export of this
+    wrapper gives an FP16 engine, and the input and output dtypes do not change.
+    In this mode, the wrapper holds an FP16 copy of the model and does not
+    change ``model``.
     """
 
     def __init__(self, model: FCModel, target: str, fp16: bool = False) -> None:
@@ -61,8 +66,8 @@ class TargetModel(nn.Module):
         self.method = TARGETS[target].method
         self.fp16 = fp16
         self.model = copy.deepcopy(model).half() if fp16 else model
-        # A new module starts in training mode; follow the model's own mode,
-        # so that wrapping an evaluation model exports one
+        # A new module starts in training mode. Use the mode of the model, so
+        # that a wrapped evaluation model also exports as an evaluation model
         self.train(model.training)
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, ...]:
@@ -73,26 +78,13 @@ class TargetModel(nn.Module):
         return tuple(output.float() for output in outputs) if self.fp16 else outputs
 
 
-def rank(model: FCModel) -> int:
-    """The number of signal basis coefficients per sample.
-
-    This is the width of the ``coefficients`` output and the rank of the
-    signal decoder ``U_signal``, read from the decoder itself: a rank-reduced
-    checkpoint (``scripts/orthogonalize_basis.py``) has fewer than
-    ``config/model.yaml`` names.
-    """
-    decoder = model.U_signal[0]
-    assert isinstance(decoder, nn.Linear)
-    return decoder.in_features
-
-
 def export_onnx(config: dict[str, Any]) -> None:
     """Export the trained surrogate model to ONNX, one model per target.
 
-    The trained checkpoint is loaded, and each target (``TARGETS``) is
-    exported to the ONNX model that ``export.TARGETS`` names for it, with a
-    dynamic batch dimension, and verified against the PyTorch model using
-    ONNX Runtime.
+    The function loads the trained checkpoint. It exports each target
+    (``TARGETS``) to the ONNX model that ``export.TARGETS`` gives for it, with a
+    dynamic batch dimension. Then it uses ONNX Runtime to compare each ONNX
+    model with the PyTorch model.
 
     Args:
         config: Full configuration dictionary.
@@ -104,13 +96,14 @@ def export_onnx(config: dict[str, Any]) -> None:
     model, checkpoint = load_model(config, "cpu")
 
     fp16 = export_config["FP16"]
+    precision = "FP16" if fp16 else "FP32"
 
     x = sample_parameters(
         training_domain(config, checkpoint), export_config["N_VERIFY_SAMPLES"]
     )
 
     for target, (onnx_path, _) in paths.items():
-        # Any batch size > 1 traces the model
+        # A batch size > 1 is sufficient to trace the model
         export_target(
             model,
             target,
@@ -121,13 +114,13 @@ def export_onnx(config: dict[str, Any]) -> None:
         )
         print(
             f"\nExported target {target} of the model from epoch "
-            f"{checkpoint['epoch']} to {onnx_path} ({'FP16' if fp16 else 'FP32'})"
+            f"{checkpoint['epoch']} to {onnx_path} ({precision})"
         )
-        verify_onnx(model, target, onnx_path, x)
+        verify_onnx(model, target, onnx_path, x, precision)
 
 
 def target_paths(export_config: dict[str, Any]) -> dict[str, tuple[Path, Path]]:
-    """The ONNX and engine paths of every target, from ``export.TARGETS``.
+    """Return the ONNX and engine paths of each target from ``export.TARGETS``.
 
     Args:
         export_config: The ``export`` configuration.
@@ -136,7 +129,7 @@ def target_paths(export_config: dict[str, Any]) -> dict[str, tuple[Path, Path]]:
         ``(onnx_path, engine_path)`` per target, in ``TARGETS`` order.
 
     Raises:
-        ValueError: If ``export.TARGETS`` does not name exactly the targets.
+        ValueError: If ``export.TARGETS`` does not name all targets and only them.
     """
     configured = export_config.get("TARGETS") or {}
     if set(configured) != set(TARGETS):
@@ -154,7 +147,7 @@ def target_paths(export_config: dict[str, Any]) -> dict[str, tuple[Path, Path]]:
 
 
 def require_exported(paths: dict[str, tuple[Path, Path]]) -> None:
-    """Refuse to go on before ``export_onnx`` has written every ONNX model.
+    """Raise an error if an ONNX model from ``export_onnx`` is missing.
 
     Args:
         paths: The targets' paths (``target_paths``).
@@ -173,11 +166,12 @@ def training_domain(
     config: dict[str, Any],
     checkpoint: dict[str, Any],
 ) -> dict[str, Any]:
-    """The configuration to sample verification parameters from.
+    """Return the configuration from which to sample the verification parameters.
 
-    Checkpoints record the data configuration they were trained with, so
-    verification samples the model's own training domain. Checkpoints from
-    before that was recorded fall back to ``config/data.yaml``.
+    Checkpoints contain the data configuration of their training. Thus, the
+    verification samples the training domain of the model. Old checkpoints do
+    not contain this configuration. For these checkpoints, the function uses
+    ``config/data.yaml``.
 
     Args:
         config: Full configuration dictionary.
@@ -200,10 +194,10 @@ def export_target(
 ) -> None:
     """Export one target of ``model`` to the ONNX model at ``onnx_path``.
 
-    The model takes one input, ``x``: Float32 ``(batch, 3)`` physical
-    parameters ``[T1, T2, B1]``, with a dynamic batch dimension. Its outputs
-    are the target's, Float32 and named as in ``TARGETS``. The weights are
-    stored inside the file, so it is self-contained.
+    The model has one input, ``x``: Float32 ``(batch, 3)`` physical parameters
+    ``[T1, T2, B1]``, with a dynamic batch dimension. Its outputs are the
+    outputs of the target, in Float32, with the names in ``TARGETS``. The file
+    contains the weights, so it is self-contained.
 
     Args:
         model: The trained model.
@@ -211,7 +205,7 @@ def export_target(
         onnx_path: Where to write the ONNX model.
         example: Input used to trace the model (a batch size > 1).
         opset: The ONNX opset version.
-        fp16: Run the model in FP16 behind an FP32 interface.
+        fp16: If ``True``, the model runs in FP16 behind an FP32 interface.
     """
     torch.onnx.export(
         TargetModel(model, target, fp16=fp16),
@@ -229,7 +223,7 @@ def export_target(
 
 
 def onnx_precision(paths: list[Path]) -> str:
-    """``"FP16"`` or ``"FP32"``: the precision the ONNX models' weights have.
+    """Return the precision of the ONNX model weights, ``"FP16"`` or ``"FP32"``.
 
     Raises:
         ValueError: If the models do not all have the same precision.
@@ -251,6 +245,7 @@ def verify_onnx(
     target: str,
     onnx_path: Path,
     x: torch.Tensor,
+    precision: str,
 ) -> None:
     """Compare ONNX Runtime predictions of one target against PyTorch.
 
@@ -258,11 +253,12 @@ def verify_onnx(
         model: The trained PyTorch model (on CPU).
         target: The target the ONNX model was exported for.
         onnx_path: Path to the exported ONNX model.
-        x: Physical parameters ``[T1, T2, B1]`` to predict for.
+        x: The physical parameters ``[T1, T2, B1]`` for the predictions.
+        precision: ``"FP32"`` or ``"FP16"``, the precision of the ONNX model.
 
     Raises:
-        RuntimeError: If an output has another shape than PyTorch's or
-            deviates from it.
+        RuntimeError: If an output has a shape different from the PyTorch
+            output, or its error is more than the tolerance.
     """
     session = ort.InferenceSession(
         str(onnx_path),
@@ -280,7 +276,7 @@ def verify_onnx(
         target,
         x,
         predictions,
-        onnx_precision([onnx_path]),
+        precision,
     )
 
 
@@ -292,23 +288,23 @@ def check_outputs(
     predictions: Sequence[npt.NDArray[np.float32]],
     precision: str,
 ) -> None:
-    """Check an exported model's predictions of one target against PyTorch's.
+    """Check the predictions of an exported model for one target against PyTorch.
 
-    Every output must have the shape of PyTorch's, and a mean NRMSE against it
-    of at most 0.1 %, or 1 % for an FP16 model, which trades a small amount of
-    accuracy for speed.
+    Each output must have the same shape as the PyTorch output. Its mean NRMSE
+    against the PyTorch output must be 0.1 % or less. For an FP16 model, the
+    limit is 1 %, because FP16 is faster but a little less accurate.
 
     Args:
-        title: What is compared, for the printed report.
+        title: The name of the comparison, for the printed report.
         model: The PyTorch model, on the device of ``x``.
-        target: The target the predictions are of.
-        x: The physical parameters they were predicted for.
-        predictions: The exported model's outputs, in the target's order.
-        precision: ``"FP32"`` or ``"FP16"``, the exported model's precision.
+        target: The target of the predictions.
+        x: The physical parameters for the predictions.
+        predictions: The outputs of the exported model, in the target order.
+        precision: The precision of the exported model, ``"FP32"`` or ``"FP16"``.
 
     Raises:
-        RuntimeError: If an output has another shape than PyTorch's or
-            deviates from it.
+        RuntimeError: If an output has a shape different from the PyTorch
+            output, or its error is more than the tolerance.
     """
     tolerance = 1.0 if precision == "FP16" else 0.1
 

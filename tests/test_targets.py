@@ -10,7 +10,6 @@ from scripts.export_onnx import TARGETS
 from scripts.export_onnx import TargetModel
 from scripts.export_onnx import export_target
 from scripts.export_onnx import onnx_precision
-from scripts.export_onnx import rank
 from scripts.export_onnx import target_paths
 from src.model import FCModel
 
@@ -42,8 +41,8 @@ FORWARD_CONFIG = {
 
 X = torch.tensor([[0.8, 0.07, 1.0], [1.2, 0.1, 0.9], [2.0, 0.3, 1.1]])
 
-# Each output's shape after the batch dimension: the contract NeuralBloch.jl
-# checks the engines against
+# The shape of each output after the batch dimension. NeuralBloch.jl uses these
+# shapes to check the engines.
 SIZES = {
     "signal": (NTR, 2),
     "dT1": (NTR, 2),
@@ -81,7 +80,7 @@ class TargetModelTest(unittest.TestCase):
 
     def test_output_shapes(self) -> None:
         model = FCModel(NTR, SEPARATE_CONFIG).eval()
-        self.assertEqual(rank(model), SEPARATE_CONFIG["NB_signal"])
+        self.assertEqual(model.rank, SEPARATE_CONFIG["NB_signal"])
         for name, target in TARGETS.items():
             with torch.no_grad():
                 outputs = TargetModel(model, name)(X)
@@ -94,7 +93,7 @@ class TargetModelTest(unittest.TestCase):
         model = FCModel(NTR, SEPARATE_CONFIG).eval()
         half = TargetModel(model, "signal_and_derivatives", fp16=True)
         self.assertTrue(all(p.dtype == torch.float16 for p in half.parameters()))
-        # The wrapper converts a copy; the model itself stays FP32
+        # The wrapper converts a copy, so the model stays FP32
         self.assertTrue(all(p.dtype == torch.float32 for p in model.parameters()))
         with torch.no_grad():
             outputs = half(X)
@@ -128,7 +127,7 @@ class ExportTest(unittest.TestCase):
         name: str,
         sizes: tuple[int, ...],
     ) -> str:
-        """Check one graph input or output; return its batch dimension's name."""
+        """Check a graph input or output and return the name of its batch dimension."""
         self.assertEqual(value.name, name)
         tensor = value.type.tensor_type
         self.assertEqual(tensor.elem_type, onnx.TensorProto.FLOAT, name)
