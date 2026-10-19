@@ -386,6 +386,10 @@ class BundleTest(unittest.TestCase):
         (self.bundle / "model.onnx").unlink()
         with self.assertRaisesRegex(ValueError, "model.onnx, which is missing"):
             check_bundle(self.bundle)
+        write_bundle(self.bundle, self.card(), self.files)
+        (self.bundle / "rf_data" / "rf_phase_list.txt").unlink()
+        with self.assertRaisesRegex(ValueError, "rf_phase_list.txt, which is missing"):
+            check_bundle(self.bundle)
         card = self.bundle / CARD
         card.write_text(card.read_text().replace('"1.0"', '"2.0"'))
         with self.assertRaisesRegex(ValueError, "has schema_version '2.0', not '1.0'"):

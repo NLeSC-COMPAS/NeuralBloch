@@ -529,6 +529,8 @@ def write_bundle(
         ValueError: If ``bundle_dir`` is a symbolic link, exists and is not a
             bundle, a source is inside ``bundle_dir``, or the assembled bundle
             fails ``check_bundle``.
+        KeyError: If ``card`` does not have a table or key that
+            ``check_bundle`` reads.
     """
     bundle_dir = Path(bundle_dir)
     if bundle_dir.is_symlink():
@@ -597,6 +599,8 @@ def check_bundle(bundle_dir: str | Path) -> dict[str, Any]:
         ValueError: If the card has a different schema version, a file that it
             names is missing, the hash of an ONNX model is not the hash in the
             card, or an RF table does not have ``ntr`` values.
+        KeyError: If the card does not have a table or key that the function
+            reads.
     """
     bundle_dir = Path(bundle_dir)
     with open(bundle_dir / CARD, "rb") as f:
@@ -617,6 +621,10 @@ def check_bundle(bundle_dir: str | Path) -> dict[str, Any]:
             raise ValueError(f"{path} does not have the sha256 the card states")
     for key in RF_FILES:
         path = bundle_dir / card["sequence"][key]
+        if not path.is_file():
+            raise ValueError(
+                f"{bundle_dir / CARD} names {card['sequence'][key]}, which is missing"
+            )
         if rf_table_length(path) != card["model"]["ntr"]:
             raise ValueError(
                 f"{path} does not have ntr = {card['model']['ntr']} values"
