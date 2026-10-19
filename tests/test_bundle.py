@@ -1,3 +1,4 @@
+import contextlib
 import io
 import os
 import subprocess
@@ -10,6 +11,7 @@ from pathlib import Path
 from unittest import mock
 import torch
 from scripts.export_bundle import CARD
+from scripts.export_bundle import REPO_ROOT
 from scripts.export_bundle import RF_FILES
 from scripts.export_bundle import SCHEMA_VERSION
 from scripts.export_bundle import CardInputs
@@ -24,6 +26,7 @@ from scripts.export_bundle import derivative_method
 from scripts.export_bundle import export_bundle
 from scripts.export_bundle import family_rank
 from scripts.export_bundle import file_sha256
+from scripts.export_bundle import git
 from scripts.export_bundle import release_command
 from scripts.export_bundle import release_tag
 from scripts.export_bundle import require_configs
@@ -687,6 +690,14 @@ class ReleaseTest(unittest.TestCase):
         # Offline does not permit a version that is released here
         with self.assertRaisesRegex(RuntimeError, "Increase"):
             self.run_git(self.TAG, error, offline=True)
+
+
+class GitTest(unittest.TestCase):
+    def test_git_runs_in_this_repository(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, contextlib.chdir(tmp):
+            self.assertEqual(Path(git("rev-parse", "--show-toplevel")), REPO_ROOT)
+            with self.assertRaisesRegex(RuntimeError, "is not a git command"):
+                git("no-such-command")
 
 
 class RfTableTest(unittest.TestCase):

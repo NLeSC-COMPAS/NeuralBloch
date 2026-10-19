@@ -893,7 +893,8 @@ def clean_commit() -> str:
         The full hash of ``HEAD``.
 
     Raises:
-        RuntimeError: If tracked or untracked files differ from ``HEAD``.
+        RuntimeError: If ``git status`` gives a change (a changed or staged
+            file, or a file that is not tracked and not ignored), or git fails.
     """
     status = git("status", "--porcelain")
     if status:
@@ -940,6 +941,7 @@ def require_unreleased(tag: str, offline: bool) -> str | None:
             check=True,
             capture_output=True,
             text=True,
+            cwd=REPO_ROOT,
             env=env,
             timeout=60,
         ).stdout.strip()
@@ -960,11 +962,27 @@ def require_unreleased(tag: str, offline: bool) -> str | None:
     return None
 
 
+# The card names the commit of this repository. Thus, git runs in this
+# repository and not in the current directory, which can be a different
+# repository.
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
 def git(*args: str) -> str:
-    """Return the stripped output of a git command in this repository."""
-    return subprocess.run(
-        ["git", *args], check=True, capture_output=True, text=True
-    ).stdout.strip()
+    """Return the stripped output of a git command in this repository.
+
+    Raises:
+        RuntimeError: If git fails.
+    """
+    try:
+        result = subprocess.run(
+            ["git", *args], check=True, capture_output=True, text=True, cwd=REPO_ROOT
+        )
+    except subprocess.CalledProcessError as error:
+        raise RuntimeError(
+            f"git {' '.join(args)} failed in {REPO_ROOT}: {error.stderr.strip()}"
+        ) from error
+    return result.stdout.strip()
 
 
 def blochsimulators_facts(
