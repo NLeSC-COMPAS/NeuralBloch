@@ -14,7 +14,6 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-import torch
 from scripts.export_onnx import TARGETS
 from scripts.export_onnx import onnx_precision
 from scripts.export_onnx import require_exported
@@ -709,10 +708,9 @@ def export_bundle(config: dict[str, Any]) -> None:
     """
     export_config = config["export"]
     checkpoint_path = Path(config["experiment"]["PT_FILE_PATH"])
-    checkpoint = torch.load(checkpoint_path, map_location="cpu")
+    model, checkpoint = load_model(config, "cpu")
     require_configs(checkpoint, checkpoint_path)
 
-    model, _ = load_model(config, "cpu")
     family = export_config["MODEL_FAMILY"]
     version = check_version(export_config["MODEL_VERSION"])
     check_family(family, model.rank)
