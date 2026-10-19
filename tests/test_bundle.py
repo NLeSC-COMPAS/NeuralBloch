@@ -162,9 +162,12 @@ class CardTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Finite-difference steps"):
             card_text(replace(INPUTS, data_config=fd))
 
-    def test_derivative_method_defaults_like_data_generation(self) -> None:
+    def test_the_derivative_method_is_required(self) -> None:
+        # Old configurations without DERIVATIVE_METHOD used finite differences,
+        # but data_generation.jl now defaults to forward sensitivity
         config = {k: v for k, v in DATA_CONFIG.items() if k != "DERIVATIVE_METHOD"}
-        self.assertEqual(derivative_method(config), "forward sensitivity")
+        with self.assertRaisesRegex(ValueError, "does not give DERIVATIVE_METHOD"):
+            derivative_method(config)
         with self.assertRaisesRegex(ValueError, "Unknown DERIVATIVE_METHOD 'adjoint'"):
             derivative_method({"DERIVATIVE_METHOD": "adjoint"})
 

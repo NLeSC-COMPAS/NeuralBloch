@@ -52,12 +52,10 @@ RF_FILES = {
 }
 
 # Each DERIVATIVE_METHOD name in data/data_generation.jl -> the name in the card.
-# The default is the same as in data_generation.jl.
 DERIVATIVE_METHODS = {
     "forward_sensitivity": "forward sensitivity",
     "finite_difference": "forward difference",
 }
-DEFAULT_DERIVATIVE_METHOD = "forward_sensitivity"
 
 # data/data_generation.jl keeps only samples with T1 > T2. This is a physical
 # requirement, so it is a constant here and not a setting.
@@ -220,10 +218,26 @@ def check_version(version: object) -> str:
 def derivative_method(data_config: Mapping[str, Any]) -> str:
     """Return the method that calculated the training derivatives, as the card names it.
 
+    The data configuration must give the method. data_generation.jl uses
+    forward sensitivity if DERIVATIVE_METHOD is missing, but before commit
+    088ba08 it used only finite differences, and its configurations did not
+    give DERIVATIVE_METHOD. Thus, a missing method does not tell which method
+    calculated the derivatives.
+
     Raises:
-        ValueError: If the data configuration names an unknown method.
+        ValueError: If the data configuration does not give the method, or
+            names an unknown method.
     """
-    method = data_config.get("DERIVATIVE_METHOD", DEFAULT_DERIVATIVE_METHOD)
+    if "DERIVATIVE_METHOD" not in data_config:
+        raise ValueError(
+            "The checkpoint's data_config does not give DERIVATIVE_METHOD, so the "
+            "card cannot state the derivative method. Checkpoints from before "
+            "commit 088ba08 were trained with finite_difference. Add the method "
+            "of the training to the checkpoint yourself "
+            "(checkpoint['data_config']['DERIVATIVE_METHOD'] = ..., "
+            "torch.save(checkpoint, path))."
+        )
+    method = data_config["DERIVATIVE_METHOD"]
     if method not in DERIVATIVE_METHODS:
         raise ValueError(
             f"Unknown DERIVATIVE_METHOD {method!r}; "
