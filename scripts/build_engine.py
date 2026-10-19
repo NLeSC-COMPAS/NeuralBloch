@@ -6,6 +6,7 @@ from scripts.export_onnx import TARGETS
 from scripts.export_onnx import check_outputs
 from scripts.export_onnx import onnx_precision
 from scripts.export_onnx import require_exported
+from scripts.export_onnx import staged
 from scripts.export_onnx import target_paths
 from scripts.export_onnx import training_domain
 from src.model import FCModel
@@ -18,8 +19,9 @@ def build_engine(config: dict[str, Any]) -> None:
 
     For each target, the function parses the ONNX model into a TensorRT network
     and compiles it into a serialized engine with a dynamic batch size profile.
-    It writes the engine to the path that ``export.TARGETS`` gives. Then it
-    compares each engine with the PyTorch model.
+    Then it compares each engine with the PyTorch model. Only an engine that
+    passes this check replaces the file that ``export.TARGETS`` gives
+    (``staged``).
 
     Args:
         config: Full configuration dictionary.
@@ -59,10 +61,15 @@ def build_engine(config: dict[str, Any]) -> None:
     precision = onnx_precision([onnx_path for onnx_path, _ in paths.values()])
 
     for target, (onnx_path, engine_path) in paths.items():
-        build_target_engine(onnx_path, engine_path, export_config, logger, timing_cache)
-        print(f"\nBuilt TensorRT engine ({precision}) for {target} at {engine_path}")
+        with staged(engine_path) as staged_path:
+            build_target_engine(
+                onnx_path, staged_path, export_config, logger, timing_cache
+            )
+            print(
+                f"\nBuilt TensorRT engine ({precision}) for {target} at {engine_path}"
+            )
 
-        verify_engine(model, target, engine_path, x, logger, precision)
+            verify_engine(model, target, staged_path, x, logger, precision)
 
 
 def check_batch_profile(export_config: dict[str, Any]) -> None:

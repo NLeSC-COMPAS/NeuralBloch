@@ -1,4 +1,8 @@
+import contextlib
 import copy
+import os
+import tempfile
+from collections.abc import Iterator
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -86,7 +90,8 @@ def export_onnx(config: dict[str, Any]) -> None:
     (``TARGETS``) to the ONNX model that ``export.TARGETS`` gives for it, with a
     dynamic batch dimension, and records the sha256 of the checkpoint in the
     model (``stamp_checkpoint``). Then it uses ONNX Runtime to compare each ONNX
-    model with the PyTorch model.
+    model with the PyTorch model. A model replaces the old file only if it
+    passes this check (``staged``).
 
     Args:
         config: Full configuration dictionary.
@@ -107,21 +112,48 @@ def export_onnx(config: dict[str, Any]) -> None:
     checkpoint_sha256 = file_sha256(config["experiment"]["PT_FILE_PATH"])
 
     for target, (onnx_path, _) in paths.items():
-        # A batch size > 1 is sufficient to trace the model
-        export_target(
-            model,
-            target,
-            onnx_path,
-            example=x[:2],
-            opset=export_config["OPSET_VERSION"],
-            fp16=fp16,
-        )
-        stamp_checkpoint(onnx_path, checkpoint_sha256)
-        print(
-            f"\nExported target {target} of the model from epoch "
-            f"{checkpoint['epoch']} to {onnx_path} ({precision})"
-        )
-        verify_onnx(model, target, onnx_path, x, precision)
+        with staged(onnx_path) as staged_path:
+            # A batch size > 1 is sufficient to trace the model
+            export_target(
+                model,
+                target,
+                staged_path,
+                example=x[:2],
+                opset=export_config["OPSET_VERSION"],
+                fp16=fp16,
+            )
+            stamp_checkpoint(staged_path, checkpoint_sha256)
+            print(
+                f"\nExported target {target} of the model from epoch "
+                f"{checkpoint['epoch']} to {onnx_path} ({precision})"
+            )
+            verify_onnx(model, target, staged_path, x, precision)
+
+
+@contextlib.contextmanager
+def staged(path: Path) -> Iterator[Path]:
+    """Give a temporary file that replaces ``path`` only if the block succeeds.
+
+    The temporary file is in the directory of ``path`` and has its suffix. Write
+    and check the new file in the block. If the block raises an error, the
+    function deletes the temporary file, and ``path`` does not change. Thus, a
+    model that fails its check does not replace a good model, and a caller does
+    not find a model that failed its check at ``path``.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, name = tempfile.mkstemp(
+        prefix=f".{path.name}-", suffix=path.suffix, dir=path.parent
+    )
+    os.close(fd)
+    temporary = Path(name)
+    try:
+        yield temporary
+        # mkstemp makes the file readable only by its owner
+        temporary.chmod(0o644)
+        temporary.replace(path)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
 
 
 # The key of the ONNX metadata that gives the sha256 of the checkpoint file that

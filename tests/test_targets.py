@@ -14,6 +14,7 @@ from scripts.export_onnx import export_target
 from scripts.export_onnx import onnx_checkpoint
 from scripts.export_onnx import onnx_precision
 from scripts.export_onnx import require_checkpoint
+from scripts.export_onnx import staged
 from scripts.export_onnx import stamp_checkpoint
 from scripts.export_onnx import target_paths
 from scripts.export_onnx import verify_onnx
@@ -258,6 +259,27 @@ class VerifyTest(unittest.TestCase):
         nan[0, 0, 0] = np.nan
         with self.assertRaisesRegex(RuntimeError, "1 values that are not finite"):
             check_outputs("nan", model, "signal", X, [nan], "FP16")
+
+
+class StagedTest(unittest.TestCase):
+    def test_a_file_replaces_the_old_file_only_after_its_check(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "model.onnx"
+            path.write_bytes(b"old")
+            with self.assertRaisesRegex(RuntimeError, "failed check"):
+                with staged(path) as new:
+                    self.assertEqual(new.parent, path.parent)
+                    self.assertEqual(new.suffix, ".onnx")
+                    new.write_bytes(b"rejected")
+                    raise RuntimeError("failed check")
+            self.assertEqual(path.read_bytes(), b"old")
+            self.assertEqual(list(Path(tmp).iterdir()), [path])
+
+            with staged(path) as new:
+                new.write_bytes(b"new")
+            self.assertEqual(path.read_bytes(), b"new")
+            self.assertEqual(path.stat().st_mode & 0o777, 0o644)
+            self.assertEqual(list(Path(tmp).iterdir()), [path])
 
 
 class CheckpointStampTest(unittest.TestCase):
