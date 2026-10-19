@@ -26,13 +26,15 @@ def build_engine(config: dict[str, Any]) -> None:
 
     Raises:
         RuntimeError: If no GPU is available, an ONNX model cannot be
-            parsed, or an engine build fails.
+            parsed, an engine build fails, or an engine fails its check.
         FileNotFoundError: If an ONNX model has not been exported yet.
+        ValueError: If the batch sizes are not in order (``check_batch_profile``).
     """
     if not torch.cuda.is_available():
         raise RuntimeError("Building a TensorRT engine requires a CUDA GPU")
 
     export_config = config["export"]
+    check_batch_profile(export_config)
     paths = target_paths(export_config)
     require_exported(paths)
 
@@ -63,6 +65,28 @@ def build_engine(config: dict[str, Any]) -> None:
         verify_engine(model, target, engine_path, x, logger, precision)
 
 
+def check_batch_profile(export_config: dict[str, Any]) -> None:
+    """Raise an error if the batch sizes of the engine profile are not in order.
+
+    An engine accepts the batch sizes from MIN_BATCH_SIZE to MAX_BATCH_SIZE,
+    and TensorRT tunes it for OPT_BATCH_SIZE. The check of the engines runs
+    N_VERIFY_SAMPLES in one batch, so this number must also be in the range.
+
+    Raises:
+        ValueError: If 1 <= MIN_BATCH_SIZE <= OPT_BATCH_SIZE <= MAX_BATCH_SIZE
+            and MIN_BATCH_SIZE <= N_VERIFY_SAMPLES <= MAX_BATCH_SIZE are not
+            true.
+    """
+    low, high = export_config["MIN_BATCH_SIZE"], export_config["MAX_BATCH_SIZE"]
+    for key in ("OPT_BATCH_SIZE", "N_VERIFY_SAMPLES"):
+        if not 1 <= low <= export_config[key] <= high:
+            raise ValueError(
+                f"export.{key} is {export_config[key]}, but it must be in the "
+                f"batch size range of the engines, MIN_BATCH_SIZE {low} to "
+                f"MAX_BATCH_SIZE {high}"
+            )
+
+
 def build_target_engine(
     onnx_path: Path,
     engine_path: Path,
@@ -91,8 +115,14 @@ def build_target_engine(
         errors = "\n".join(str(parser.get_error(i)) for i in range(parser.num_errors))
         raise RuntimeError(f"Failed to parse {onnx_path}:\n{errors}")
 
+    if network.num_inputs != 1:
+        raise RuntimeError(
+            f"{onnx_path} has {network.num_inputs} inputs; the model has one, x"
+        )
+
     builder_config = builder.create_builder_config()
-    builder_config.set_timing_cache(timing_cache, ignore_mismatch=False)
+    if not builder_config.set_timing_cache(timing_cache, ignore_mismatch=False):
+        raise RuntimeError("TensorRT cannot use the shared timing cache")
 
     # Dynamic batch size profile: the engine accepts any batch size between
     # MIN_BATCH_SIZE and MAX_BATCH_SIZE, with kernels tuned for OPT_BATCH_SIZE
@@ -105,7 +135,13 @@ def build_target_engine(
         (export_config["OPT_BATCH_SIZE"], *sample),
         (export_config["MAX_BATCH_SIZE"], *sample),
     )
-    builder_config.add_optimization_profile(profile)
+    if builder_config.add_optimization_profile(profile) < 0:
+        raise RuntimeError(
+            f"TensorRT refuses the batch size profile of {onnx_path}: "
+            f"{(export_config['MIN_BATCH_SIZE'], *sample)}, "
+            f"{(export_config['OPT_BATCH_SIZE'], *sample)}, "
+            f"{(export_config['MAX_BATCH_SIZE'], *sample)}"
+        )
 
     # Compile and serialize the engine. TensorRT networks are strongly typed,
     # so the engine precision (FP32 or FP16) is inherited from the ONNX model.
@@ -146,7 +182,13 @@ def verify_engine(
     # Load the serialized engine
     runtime = trt.Runtime(logger)
     engine = runtime.deserialize_cuda_engine(engine_path.read_bytes())
+    if engine is None:
+        raise RuntimeError(f"TensorRT cannot load the engine at {engine_path}")
     context = engine.create_execution_context()
+    if context is None:
+        raise RuntimeError(
+            f"TensorRT cannot make an execution context for {engine_path}"
+        )
 
     names = [engine.get_tensor_name(i) for i in range(engine.num_io_tensors)]
     inputs = [n for n in names if engine.get_tensor_mode(n) == trt.TensorIOMode.INPUT]
@@ -159,21 +201,30 @@ def verify_engine(
         )
 
     # Bind the input and allocate output buffers as PyTorch CUDA tensors
-    context.set_input_shape("x", tuple(x.shape))
-    context.set_tensor_address("x", x.data_ptr())
+    if not context.set_input_shape("x", tuple(x.shape)):
+        raise RuntimeError(
+            f"The engine at {engine_path} does not accept input shape {tuple(x.shape)}"
+        )
+    bind(context, "x", x)
 
+    # Fill the outputs with NaN. If the engine does not write them,
+    # check_outputs then refuses them. Memory from the PyTorch cache can
+    # otherwise hold correct values from an earlier check.
     buffers: dict[str, torch.Tensor] = {}
 
     for name in outputs:
         shape = tuple(context.get_tensor_shape(name))
-        buffers[name] = torch.empty(shape, dtype=torch.float32, device="cuda")
-        context.set_tensor_address(name, buffers[name].data_ptr())
+        buffers[name] = torch.full(
+            shape, float("nan"), dtype=torch.float32, device="cuda"
+        )
+        bind(context, name, buffers[name])
 
     # Run inference on a dedicated CUDA stream
     stream = torch.cuda.Stream()
     torch.cuda.synchronize()
 
-    context.execute_async_v3(stream.cuda_stream)
+    if not context.execute_async_v3(stream.cuda_stream):
+        raise RuntimeError(f"The engine at {engine_path} failed to run")
     stream.synchronize()
 
     check_outputs(
@@ -184,3 +235,13 @@ def verify_engine(
         [buffers[name].cpu().numpy() for name in TARGETS[target].outputs],
         precision,
     )
+
+
+def bind(context: trt.IExecutionContext, name: str, tensor: torch.Tensor) -> None:
+    """Give the engine tensor ``name`` the memory of a PyTorch CUDA tensor.
+
+    Raises:
+        RuntimeError: If TensorRT refuses the address.
+    """
+    if not context.set_tensor_address(name, tensor.data_ptr()):
+        raise RuntimeError(f"TensorRT refuses the address of engine tensor {name}")

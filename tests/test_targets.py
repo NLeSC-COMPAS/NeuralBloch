@@ -1,3 +1,4 @@
+import importlib.util
 import tempfile
 import unittest
 from pathlib import Path
@@ -140,6 +141,30 @@ class TargetPathsTest(unittest.TestCase):
         targets["coefficients"]["ONNX_FILE_PATH"] = "signal.e"
         with self.assertRaisesRegex(ValueError, "and signal.ENGINE_FILE_PATH"):
             target_paths({"TARGETS": targets})
+
+
+@unittest.skipUnless(importlib.util.find_spec("tensorrt"), "needs TensorRT")
+class BatchProfileTest(unittest.TestCase):
+    def test_batch_sizes_are_in_order(self) -> None:
+        from scripts.build_engine import check_batch_profile
+
+        sizes = {
+            "MIN_BATCH_SIZE": 10,
+            "OPT_BATCH_SIZE": 20,
+            "MAX_BATCH_SIZE": 30,
+            "N_VERIFY_SAMPLES": 30,
+        }
+        check_batch_profile(sizes)
+        for key, value in [
+            ("OPT_BATCH_SIZE", 31),
+            ("OPT_BATCH_SIZE", 9),
+            ("N_VERIFY_SAMPLES", 40),
+            ("N_VERIFY_SAMPLES", 5),
+            ("MIN_BATCH_SIZE", 0),
+        ]:
+            with self.subTest(key=key, value=value):
+                with self.assertRaisesRegex(ValueError, "batch size range"):
+                    check_batch_profile({**sizes, key: value})
 
 
 class ExportTest(unittest.TestCase):
