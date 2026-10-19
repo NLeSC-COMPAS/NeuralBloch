@@ -217,6 +217,7 @@ class FamilyTest(unittest.TestCase):
             "fisp600-rank016",
             "fisp600_rank16",
             "fisp600--rank16",
+            "fisp600-rank16\n",  # a YAML block scalar, which $ would accept
             "",
         ):
             with self.subTest(name=name), self.assertRaisesRegex(ValueError, "rank<N>"):

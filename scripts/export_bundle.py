@@ -73,8 +73,9 @@ DOMAIN_FIELDS = (
 # qualifier, for example fisp600-rank16 or fisp600-rank16-narrow. The name is
 # lowercase words with hyphens between them. Exactly one of these words is
 # rank<N>.
-FAMILY_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
-RANK_WORD = re.compile(r"^rank([1-9][0-9]*)$")
+# The checks use fullmatch, because $ also matches before a final newline.
+FAMILY_PATTERN = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*")
+RANK_WORD = re.compile(r"rank([1-9][0-9]*)")
 
 # The version of a family is a semantic version (semver.org): MAJOR.MINOR.PATCH,
 # with an optional pre-release part such as -beta.1. PATCH counts new exports of
@@ -168,9 +169,9 @@ def family_rank(family: str) -> int:
     ranks = [
         match.group(1)
         for word in family.split("-")
-        if (match := RANK_WORD.match(word)) is not None
+        if (match := RANK_WORD.fullmatch(word)) is not None
     ]
-    if not FAMILY_PATTERN.match(family) or len(ranks) != 1:
+    if not FAMILY_PATTERN.fullmatch(family) or len(ranks) != 1:
         raise ValueError(
             f"Model family {family!r} must be lowercase words with hyphens between "
             "them, and exactly one word must be rank<N>. The form is "
