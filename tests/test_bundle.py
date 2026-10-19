@@ -1,3 +1,4 @@
+import io
 import os
 import subprocess
 import tarfile
@@ -7,6 +8,7 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 from unittest import mock
+import torch
 from scripts.export_bundle import CARD
 from scripts.export_bundle import RF_FILES
 from scripts.export_bundle import SCHEMA_VERSION
@@ -19,6 +21,7 @@ from scripts.export_bundle import check_undersampling
 from scripts.export_bundle import check_version
 from scripts.export_bundle import config_sha256
 from scripts.export_bundle import derivative_method
+from scripts.export_bundle import export_bundle
 from scripts.export_bundle import family_rank
 from scripts.export_bundle import file_sha256
 from scripts.export_bundle import release_command
@@ -30,8 +33,12 @@ from scripts.export_bundle import tarball_name
 from scripts.export_bundle import write_bundle
 from scripts.export_bundle import write_tarball
 from scripts.export_onnx import TARGETS
+from scripts.export_onnx import export_target
+from scripts.export_onnx import stamp_checkpoint
+from src.model import FCModel
 from src.utils import RF_TABLE_KEYS
 from src.utils import rf_sha256
+from src.utils import sample_parameters
 
 
 DATA_CONFIG = {
@@ -498,6 +505,140 @@ class TarballTest(unittest.TestCase):
         command = release_command(card, Path("outputs/model.tar.gz"), "f" * 64)
         self.assertIn("--latest=false", command)
         self.assertNotIn("--prerelease", command)
+
+
+class ExportBundleTest(unittest.TestCase):
+    """export_bundle, from a small checkpoint to the bundle and its release file."""
+
+    NTR = 5
+    MODEL_CONFIG = {
+        "input_dim": 3,
+        "derivative_mode": "separate",
+        "NB_signal": 3,
+        "NB_dT1": 2,
+        "NB_dT2": 2,
+        "hidden_size_signal": 4,
+        "hidden_size_dT1": 4,
+        "hidden_size_dT2": 4,
+        "num_layers_signal": 2,
+        "num_layers_dT1": 2,
+        "num_layers_dT2": 2,
+    }
+
+    def setUp(self) -> None:
+        self.root = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        source = self.root / "src"
+        source.mkdir()
+        self.data_config = dict(DATA_CONFIG)
+        for name, data_key, _ in RF_FILES.values():
+            path = source / Path(name).name
+            path.write_text("".join(f"{i}.5\n" for i in range(self.NTR)))
+            self.data_config[data_key] = str(path)
+        torch.manual_seed(0)
+        self.model = FCModel(self.NTR, self.MODEL_CONFIG, self.data_config).eval()
+        self.checkpoint = source / "model.pt"
+        self.onnx = {t: source / spec.bundle_file for t, spec in TARGETS.items()}
+        self.bundle = self.root / "out" / "bundle"
+        self.config = {
+            "experiment": {"PT_FILE_PATH": str(self.checkpoint)},
+            "model": {},
+            "data": {},
+            "export": {
+                "TARGETS": {
+                    target: {
+                        "ONNX_FILE_PATH": str(path),
+                        "ENGINE_FILE_PATH": str(path.with_suffix(".engine")),
+                    }
+                    for target, path in self.onnx.items()
+                },
+                "N_VERIFY_SAMPLES": 8,
+                "BUNDLE_DIR": str(self.bundle),
+                "MODEL_FAMILY": "fisp5-rank3",
+                "MODEL_VERSION": "0.1.0",
+                "OFFLINE": False,
+            },
+        }
+        self.tarball = self.bundle.with_name(tarball_name("fisp5-rank3", "0.1.0"))
+        # git and Julia are not part of this test
+        for name, value in (
+            ("clean_commit", "a" * 40),
+            ("require_unreleased", None),
+            ("blochsimulators_facts", ("0.10.0", None)),
+        ):
+            self.enterContext(
+                mock.patch(f"scripts.export_bundle.{name}", return_value=value)
+            )
+        self.printed = io.StringIO()
+        self.enterContext(mock.patch("sys.stdout", self.printed))
+        self.save_checkpoint(rf_recorded=True)
+
+    def save_checkpoint(self, rf_recorded: bool) -> None:
+        """Save the checkpoint, then export and stamp the ONNX model of each target."""
+        checkpoint = {
+            "model_state": self.model.state_dict(),
+            "epoch": 7,
+            "NTR": self.NTR,
+            "model_config": self.MODEL_CONFIG,
+            "data_config": self.data_config,
+        }
+        if rf_recorded:
+            checkpoint["rf_sha256"] = rf_sha256(self.data_config)
+        torch.save(checkpoint, self.checkpoint)
+        example = sample_parameters({"data": self.data_config}, 2)
+        for target, path in self.onnx.items():
+            export_target(self.model, target, path, example=example, opset=18)
+            stamp_checkpoint(path, file_sha256(self.checkpoint))
+
+    def test_the_bundle_and_its_release_file_describe_the_checkpoint(self) -> None:
+        export_bundle(self.config)
+        card = check_bundle(self.bundle)
+        model = card["model"]
+        self.assertEqual(
+            (model["family"], model["version"], model["ntr"], model["rank"]),
+            ("fisp5-rank3", "0.1.0", self.NTR, 3),
+        )
+        for target, path in self.onnx.items():
+            self.assertEqual(model[target]["sha256"], file_sha256(path))
+        self.assertEqual(card["provenance"]["checkpoint_epoch"], 7)
+        self.assertEqual(card["provenance"]["precision"], "FP32")
+        self.assertIn("gh release create", self.printed.getvalue())
+        self.assertNotIn("WARNING", self.printed.getvalue())
+
+        # The release file holds the same bundle, and the bundle in it gives
+        # the same release file again
+        extracted = self.root / "extracted"
+        with tarfile.open(self.tarball) as tar:
+            tar.extractall(extracted, filter="data")
+        self.assertEqual(check_bundle(extracted), card)
+        again = write_tarball(extracted, self.root / "again.tar.gz")
+        self.assertEqual(again, file_sha256(self.tarball))
+
+    def test_the_warnings_come_again_after_the_release_command(self) -> None:
+        self.save_checkpoint(rf_recorded=False)
+        export_bundle(self.config)
+        printed = self.printed.getvalue()
+        command = printed.index("gh release create")
+        self.assertIn("WARNING: the checkpoint does not record", printed[:command])
+        self.assertIn("WARNING: the checkpoint does not record", printed[command:])
+
+    def assert_refused(self, error: str) -> None:
+        """Check that export_bundle raises ``error`` and writes nothing."""
+        with self.assertRaisesRegex(ValueError, error):
+            export_bundle(self.config)
+        self.assertFalse(self.bundle.parent.exists())
+
+    def test_onnx_models_of_another_checkpoint_are_refused(self) -> None:
+        stamp_checkpoint(self.onnx["signal"], "0" * 64)
+        self.assert_refused("from a different checkpoint")
+
+    def test_a_family_with_another_rank_is_refused(self) -> None:
+        self.config["export"]["MODEL_FAMILY"] = "fisp5-rank16"
+        self.assert_refused("states rank 16")
+
+    def test_rf_tables_changed_after_the_training_are_refused(self) -> None:
+        path = Path(self.data_config["RF_PHASE_FILE"])
+        path.write_text(path.read_text().replace("0.5", "9.5"))
+        self.assert_refused("is not the RF table of the training")
 
 
 class ReleaseTest(unittest.TestCase):
