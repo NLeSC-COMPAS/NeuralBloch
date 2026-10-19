@@ -322,8 +322,9 @@ def rf_table_length(path: str | Path) -> int:
     """Return the number of values in an RF table (one number per non-empty line).
 
     NeuralBloch.jl reads each line with ``tryparse(Float64, line)``. Python
-    ``float`` also accepts ``_`` between digits, so the function refuses ``_``.
-    It also refuses values that are not finite.
+    ``float`` also accepts ``_`` between digits and digits that are not ASCII
+    (for example ``١``), so the function refuses ``_`` and characters that are
+    not ASCII. It also refuses values that are not finite.
 
     Raises:
         ValueError: If a line is not a finite number.
@@ -337,7 +338,7 @@ def rf_table_length(path: str | Path) -> int:
                 value = float(line)
             except ValueError:
                 value = math.nan
-            if "_" in line or not math.isfinite(value):
+            if "_" in line or not line.isascii() or not math.isfinite(value):
                 raise ValueError(f"{path}:{number}: not a finite number: {line!r}")
             count += 1
     return count
