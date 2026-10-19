@@ -171,6 +171,18 @@ class CardTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Finite-difference steps"):
             card_text(replace(INPUTS, data_config=fd))
 
+    def test_card_inputs_agree(self) -> None:
+        cases = [
+            ({"version": "0.1"}, "must be a semantic version"),
+            ({"family": "fisp600-rank8"}, "states rank 8"),
+            ({"onnx_sha256": {"signal": "0" * 64}}, "exactly the targets"),
+            ({"precision": "fp16"}, 'must be "FP32" or "FP16"'),
+        ]
+        for change, words in cases:
+            with self.subTest(change=change):
+                with self.assertRaisesRegex(ValueError, words):
+                    replace(INPUTS, **change)
+
     def test_the_derivative_method_is_required(self) -> None:
         # Old configurations without DERIVATIVE_METHOD used finite differences,
         # but data_generation.jl now defaults to forward sensitivity

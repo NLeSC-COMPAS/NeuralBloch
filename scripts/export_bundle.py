@@ -126,6 +126,36 @@ class CardInputs:
     blochsimulators: str
     precision: str
 
+    def __post_init__(self) -> None:
+        """Raise an error if the fields do not agree.
+
+        Raises:
+            ValueError: If the version or the family is not valid, the family
+                gives a different rank, the finite-difference steps do not
+                match the derivative method, ``onnx_sha256`` does not have
+                exactly the targets, or the precision is unknown.
+        """
+        check_version(self.version)
+        check_family(self.family, self.rank)
+        method = derivative_method(self.data_config)
+        if (method == "forward difference") != (
+            self.finite_difference_steps is not None
+        ):
+            raise ValueError(
+                "Finite-difference steps are necessary for a model trained on "
+                "finite-difference derivatives, and not permitted for other "
+                f"models. This model used {method}"
+            )
+        if set(self.onnx_sha256) != set(TARGETS):
+            raise ValueError(
+                f"The card needs the sha256 of exactly the targets {list(TARGETS)}, "
+                f"not {list(self.onnx_sha256)}"
+            )
+        if self.precision not in ("FP32", "FP16"):
+            raise ValueError(
+                f'The precision must be "FP32" or "FP16", not {self.precision!r}'
+            )
+
 
 def require_configs(checkpoint: Mapping[str, Any], path: str | Path) -> None:
     """Raise an error if a checkpoint does not contain its own configuration.
@@ -418,18 +448,14 @@ def card_text(inputs: CardInputs) -> str:
 
     The card uses schema ``SCHEMA_VERSION``.
 
+    ``CardInputs`` checks that its fields agree. This function checks the
+    values of the data configuration while it writes them.
+
     Raises:
-        ValueError: If a value has the wrong type, a domain range is empty,
-            or the finite-difference steps do not match the method.
+        ValueError: If a value has the wrong type, or a domain range is empty.
     """
     data = inputs.data_config
     method = derivative_method(data)
-    if (method == "forward difference") != (inputs.finite_difference_steps is not None):
-        raise ValueError(
-            "Finite-difference steps are necessary for a model trained on "
-            "finite-difference derivatives, and not permitted for other models. "
-            f"This model used {method}"
-        )
 
     lines: list[str] = []
 
