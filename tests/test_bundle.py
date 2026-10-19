@@ -15,6 +15,7 @@ from scripts.export_bundle import CardInputs
 from scripts.export_bundle import card_text
 from scripts.export_bundle import check_bundle
 from scripts.export_bundle import check_family
+from scripts.export_bundle import check_rf_provenance
 from scripts.export_bundle import check_undersampling
 from scripts.export_bundle import check_version
 from scripts.export_bundle import config_sha256
@@ -30,6 +31,8 @@ from scripts.export_bundle import tarball_name
 from scripts.export_bundle import write_bundle
 from scripts.export_bundle import write_tarball
 from scripts.export_onnx import TARGETS
+from src.utils import RF_TABLE_KEYS
+from src.utils import rf_sha256
 
 
 DATA_CONFIG = {
@@ -496,6 +499,31 @@ class RfTableTest(unittest.TestCase):
                     path.write_text(f"1.0\n{value}\n")
                     with self.assertRaisesRegex(ValueError, "rf.txt:2: not a finite"):
                         rf_table_length(path)
+
+    def test_rf_files_are_the_rf_tables_of_the_training(self) -> None:
+        self.assertEqual(
+            sorted(data_key for _, data_key, _ in RF_FILES.values()),
+            sorted(RF_TABLE_KEYS),
+        )
+
+    def test_the_rf_tables_must_be_the_tables_of_the_training(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            data = dict(DATA_CONFIG)
+            for key in RF_TABLE_KEYS:
+                data[key] = Path(tmp) / f"{key}.txt"
+                data[key].write_text("1.0\n2.0\n")
+            checkpoint = {"rf_sha256": rf_sha256(data)}
+            check_rf_provenance(checkpoint, data)
+            data["RF_PHASE_FILE"].write_text("1.0\n3.0\n")
+            with self.assertRaisesRegex(
+                ValueError, "RF_PHASE_FILE.txt \\(RF_PHASE_FILE\\) is not the RF table"
+            ):
+                check_rf_provenance(checkpoint, data)
+            # An old checkpoint does not record the tables: only a warning
+            printed = io.StringIO()
+            with mock.patch("sys.stdout", printed):
+                check_rf_provenance({}, data)
+            self.assertIn("WARNING: the checkpoint does not record", printed.getvalue())
 
     def test_the_repository_rf_tables_have_600_values(self) -> None:
         for name in ("rf_angle_list.txt", "rf_phase_list.txt"):

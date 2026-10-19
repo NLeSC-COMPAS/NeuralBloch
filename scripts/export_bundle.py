@@ -21,8 +21,10 @@ from scripts.export_onnx import require_exported
 from scripts.export_onnx import target_paths
 from scripts.export_onnx import training_domain
 from scripts.export_onnx import verify_onnx
+from src.utils import RF_TABLE_KEYS
 from src.utils import file_sha256
 from src.utils import load_model
+from src.utils import rf_sha256
 from src.utils import sample_parameters
 
 
@@ -228,6 +230,40 @@ def derivative_method(data_config: Mapping[str, Any]) -> str:
             f"known: {', '.join(DERIVATIVE_METHODS)}"
         )
     return DERIVATIVE_METHODS[method]
+
+
+def check_rf_provenance(
+    checkpoint: Mapping[str, Any], data_config: Mapping[str, Any]
+) -> None:
+    """Raise an error if the RF tables changed after the training.
+
+    The trainer records the sha256 of the RF tables in the checkpoint
+    (``rf_sha256``). Older checkpoints do not record them. For these, the
+    function prints a warning, because it cannot check the tables.
+
+    Args:
+        checkpoint: The loaded checkpoint.
+        data_config: The checkpoint's data configuration.
+
+    Raises:
+        ValueError: If an RF table does not have the sha256 that the checkpoint
+            records.
+    """
+    recorded = checkpoint.get("rf_sha256")
+    if recorded is None:
+        print(
+            "\nWARNING: the checkpoint does not record the sha256 of its RF tables, "
+            "so the export cannot check that the RF tables are the tables of the "
+            "training: " + ", ".join(str(data_config[k]) for k in RF_TABLE_KEYS)
+        )
+        return
+    current = rf_sha256(data_config)
+    for key in RF_TABLE_KEYS:
+        if recorded.get(key) != current[key]:
+            raise ValueError(
+                f"{data_config[key]} ({key}) is not the RF table of the training: "
+                "its sha256 is not the sha256 that the checkpoint records"
+            )
 
 
 def check_undersampling(data_config: Mapping[str, Any]) -> None:
@@ -696,9 +732,10 @@ def export_bundle(config: dict[str, Any]) -> None:
     error for: a checkpoint without its training configuration, a family name
     with a rank that is not the rank of the checkpoint, ONNX models that come
     from a different checkpoint or do not give the same results as the
-    checkpoint, and uncommitted changes in this repository. (The card gives the
-    commit of this repository.) It also raises an error if the release of the
-    family version exists (``require_unreleased``).
+    checkpoint, RF tables that changed after the training
+    (``check_rf_provenance``), and uncommitted changes in this repository. (The
+    card gives the commit of this repository.) It also raises an error if the
+    release of the family version exists (``require_unreleased``).
 
     Args:
         config: Full configuration dictionary.
@@ -727,6 +764,7 @@ def export_bundle(config: dict[str, Any]) -> None:
                 f"{data_config[data_key]} ({key}) has {values} values; "
                 f"the checkpoint has NTR = {model.NTR}"
             )
+    check_rf_provenance(checkpoint, data_config)
 
     # The ONNX models must come from this checkpoint. Check the checkpoint that
     # export_onnx recorded in each model, then compare each model with it.

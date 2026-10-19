@@ -1,5 +1,6 @@
 import hashlib
 import random
+from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import Any
@@ -98,3 +99,17 @@ def file_sha256(path: str | Path) -> str:
     """Return the sha256 of the file contents, in hexadecimal."""
     with open(path, "rb") as f:
         return hashlib.file_digest(f, "sha256").hexdigest()
+
+
+# The keys of the data configuration that give the RF tables of the training
+# sequence (data/data_generation.jl)
+RF_TABLE_KEYS = ("RF_ANGLE_FILE", "RF_PHASE_FILE")
+
+
+def rf_sha256(data_config: Mapping[str, Any]) -> dict[str, str]:
+    """Return the sha256 of each RF table that a data configuration gives.
+
+    Returns:
+        The sha256 by key of the data configuration (``RF_TABLE_KEYS``).
+    """
+    return {key: file_sha256(data_config[key]) for key in RF_TABLE_KEYS}
