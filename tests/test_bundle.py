@@ -332,6 +332,53 @@ class BundleTest(unittest.TestCase):
         write_bundle(self.bundle, self.card(), self.files)
         self.assertFalse((self.bundle / "checkpoint.pt").exists())
 
+    def test_a_failed_swap_restores_the_old_bundle(self) -> None:
+        write_bundle(self.bundle, self.card(), self.files)
+        before = (self.bundle / CARD).read_bytes()
+        rename = Path.rename
+        calls = []
+
+        def fail_second(path: Path, target: Path) -> Path:
+            # The first rename moves the old bundle away, the second moves the
+            # new bundle in
+            calls.append(path)
+            if len(calls) == 2:
+                raise OSError("disk full")
+            return rename(path, target)
+
+        with mock.patch.object(Path, "rename", fail_second):
+            with self.assertRaisesRegex(OSError, "disk full"):
+                write_bundle(self.bundle, self.card(), self.files)
+        self.assertEqual((self.bundle / CARD).read_bytes(), before)
+        self.assertEqual(sorted(p.name for p in self.root.iterdir()), ["bundle", "src"])
+
+    def test_a_left_over_old_bundle_is_deleted(self) -> None:
+        write_bundle(self.bundle, self.card(), self.files)
+        for name, make in [
+            ("directory", lambda old: (old.mkdir(), (old / CARD).write_text(""))),
+            ("file", lambda old: old.write_text("")),
+            ("link", lambda old: old.symlink_to(self.root / "nowhere")),
+        ]:
+            with self.subTest(old=name):
+                make(self.root / ".bundle-old")
+                write_bundle(self.bundle, self.card(), self.files)
+                self.assertEqual(
+                    sorted(p.name for p in self.root.iterdir()), ["bundle", "src"]
+                )
+
+    def test_a_link_is_not_replaced(self) -> None:
+        # The new bundle would replace the link, and the bundle that the link
+        # points to would not change
+        target = self.root / "scratch"
+        write_bundle(target, self.card(), self.files)
+        self.bundle.symlink_to(target)
+        with self.assertRaisesRegex(ValueError, "is a symbolic link"):
+            write_bundle(self.bundle, self.card(), self.files)
+        self.assertTrue(self.bundle.is_symlink())
+        self.assertEqual(
+            sorted(p.name for p in self.root.iterdir()), ["bundle", "scratch", "src"]
+        )
+
     def test_check_finds_damaged_bundles(self) -> None:
         write_bundle(self.bundle, self.card(), self.files)
         (self.bundle / "model_signal.onnx").write_bytes(b"changed")

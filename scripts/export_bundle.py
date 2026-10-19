@@ -508,7 +508,9 @@ def write_bundle(
 
     The function deletes the old ``bundle_dir``. Thus, it replaces only a
     directory that contains model_card.toml, and it does not accept sources
-    inside ``bundle_dir``.
+    inside ``bundle_dir``. It also does not accept a symbolic link as
+    ``bundle_dir``, because the new directory would replace the link and not
+    the bundle that the link points to.
 
     Args:
         bundle_dir: The directory of the bundle. If it exists, it must be a
@@ -520,10 +522,16 @@ def write_bundle(
         The parsed card, from ``check_bundle``.
 
     Raises:
-        ValueError: If ``bundle_dir`` exists and is not a bundle, a source is
-            inside ``bundle_dir``, or the assembled bundle fails ``check_bundle``.
+        ValueError: If ``bundle_dir`` is a symbolic link, exists and is not a
+            bundle, a source is inside ``bundle_dir``, or the assembled bundle
+            fails ``check_bundle``.
     """
     bundle_dir = Path(bundle_dir)
+    if bundle_dir.is_symlink():
+        raise ValueError(
+            f"{bundle_dir} is a symbolic link, so it is not replaced. Set "
+            f"export.BUNDLE_DIR to the directory itself, {bundle_dir.resolve()}"
+        )
     if bundle_dir.exists() and not (bundle_dir / CARD).is_file():
         raise ValueError(
             f"{bundle_dir} is not a bundle (it has no {CARD}), so it is not "
@@ -549,7 +557,8 @@ def write_bundle(
         new.chmod(0o755)
         parsed = check_bundle(new)
         if bundle_dir.exists():
-            shutil.rmtree(old, ignore_errors=True)
+            # An earlier write can leave the old bundle
+            remove(old)
             bundle_dir.rename(old)
             moved = True
         new.rename(bundle_dir)
@@ -561,6 +570,14 @@ def write_bundle(
     if moved:
         shutil.rmtree(old)
     return parsed
+
+
+def remove(path: Path) -> None:
+    """Delete a file, a symbolic link or a directory tree, if it exists."""
+    if path.is_symlink() or path.is_file():
+        path.unlink()
+    elif path.exists():
+        shutil.rmtree(path)
 
 
 def check_bundle(bundle_dir: str | Path) -> dict[str, Any]:
