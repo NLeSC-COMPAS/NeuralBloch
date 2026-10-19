@@ -43,6 +43,9 @@ N_VERIFY_SAMPLES: 14400
 # the ONNX models above, the RF tables and a generated model_card.toml that
 # describes them. The task writes the release file of the bundle,
 # neuralbloch-model-<MODEL_FAMILY>-v<MODEL_VERSION>.tar.gz, next to the bundle.
+# The task deletes an old bundle in BUNDLE_DIR. Thus, BUNDLE_DIR must be a new
+# directory or a bundle (a directory with model_card.toml), and the sources of
+# the bundle must be outside it.
 BUNDLE_DIR: "outputs/bundle"
 
 # The name of the model in NeuralBloch.jl and in its release tag,

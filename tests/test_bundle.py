@@ -292,6 +292,24 @@ class BundleTest(unittest.TestCase):
         self.assertEqual((self.bundle / CARD).read_text(), before)
         self.assertEqual(sorted(p.name for p in self.root.iterdir()), ["bundle", "src"])
 
+    def test_only_a_bundle_is_replaced(self) -> None:
+        # A directory without a card, for example outputs/, is not deleted
+        self.bundle.mkdir()
+        (self.bundle / "checkpoint.pt").write_bytes(b"weights")
+        with self.assertRaisesRegex(ValueError, "is not a bundle"):
+            write_bundle(self.bundle, self.card(), self.files)
+        self.assertEqual((self.bundle / "checkpoint.pt").read_bytes(), b"weights")
+        self.assertEqual(sorted(p.name for p in self.root.iterdir()), ["bundle", "src"])
+        # The sources of a bundle cannot be inside the bundle that it replaces
+        (self.bundle / CARD).write_text("")
+        inside = {**self.files, "model.onnx": self.bundle / "checkpoint.pt"}
+        with self.assertRaisesRegex(ValueError, "is inside"):
+            write_bundle(self.bundle, self.card(), inside)
+        self.assertTrue((self.bundle / "checkpoint.pt").exists())
+        # A bundle is replaced
+        write_bundle(self.bundle, self.card(), self.files)
+        self.assertFalse((self.bundle / "checkpoint.pt").exists())
+
     def test_check_finds_damaged_bundles(self) -> None:
         write_bundle(self.bundle, self.card(), self.files)
         (self.bundle / "model_signal.onnx").write_bytes(b"changed")

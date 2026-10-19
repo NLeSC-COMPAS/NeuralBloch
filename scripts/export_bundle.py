@@ -434,8 +434,13 @@ def write_bundle(
     replaces ``bundle_dir``. Thus, ``bundle_dir`` never contains a mix of two
     bundles, or a bundle that fails the check.
 
+    The function deletes the old ``bundle_dir``. Thus, it replaces only a
+    directory that contains model_card.toml, and it does not accept sources
+    inside ``bundle_dir``.
+
     Args:
-        bundle_dir: The directory of the bundle. If it exists, it is replaced.
+        bundle_dir: The directory of the bundle. If it exists, it must be a
+            bundle, and it is replaced.
         card: The text of model_card.toml.
         files: The other files of the bundle: path in the bundle -> source.
 
@@ -443,9 +448,21 @@ def write_bundle(
         The parsed card, from ``check_bundle``.
 
     Raises:
-        ValueError: If the assembled bundle fails ``check_bundle``.
+        ValueError: If ``bundle_dir`` exists and is not a bundle, a source is
+            inside ``bundle_dir``, or the assembled bundle fails ``check_bundle``.
     """
     bundle_dir = Path(bundle_dir)
+    if bundle_dir.exists() and not (bundle_dir / CARD).is_file():
+        raise ValueError(
+            f"{bundle_dir} is not a bundle (it has no {CARD}), so it is not "
+            "replaced. Set export.BUNDLE_DIR to a new directory or to a bundle"
+        )
+    for source in files.values():
+        if Path(source).resolve().is_relative_to(bundle_dir.resolve()):
+            raise ValueError(
+                f"{source} is inside {bundle_dir}, which the new bundle replaces. "
+                "Keep the sources of the bundle outside export.BUNDLE_DIR"
+            )
     bundle_dir.parent.mkdir(parents=True, exist_ok=True)
     new = Path(tempfile.mkdtemp(prefix=f".{bundle_dir.name}-", dir=bundle_dir.parent))
     old = bundle_dir.with_name(f".{bundle_dir.name}-old")
