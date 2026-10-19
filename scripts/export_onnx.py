@@ -11,6 +11,7 @@ import torch
 import torch.nn as nn
 from scripts.test_accuracy import nrmse
 from src.model import FCModel
+from src.utils import file_sha256
 from src.utils import load_model
 from src.utils import sample_parameters
 
@@ -83,7 +84,8 @@ def export_onnx(config: dict[str, Any]) -> None:
 
     The function loads the trained checkpoint. It exports each target
     (``TARGETS``) to the ONNX model that ``export.TARGETS`` gives for it, with a
-    dynamic batch dimension. Then it uses ONNX Runtime to compare each ONNX
+    dynamic batch dimension, and records the sha256 of the checkpoint in the
+    model (``stamp_checkpoint``). Then it uses ONNX Runtime to compare each ONNX
     model with the PyTorch model.
 
     Args:
@@ -102,6 +104,8 @@ def export_onnx(config: dict[str, Any]) -> None:
         training_domain(config, checkpoint), export_config["N_VERIFY_SAMPLES"]
     )
 
+    checkpoint_sha256 = file_sha256(config["experiment"]["PT_FILE_PATH"])
+
     for target, (onnx_path, _) in paths.items():
         # A batch size > 1 is sufficient to trace the model
         export_target(
@@ -112,11 +116,64 @@ def export_onnx(config: dict[str, Any]) -> None:
             opset=export_config["OPSET_VERSION"],
             fp16=fp16,
         )
+        stamp_checkpoint(onnx_path, checkpoint_sha256)
         print(
             f"\nExported target {target} of the model from epoch "
             f"{checkpoint['epoch']} to {onnx_path} ({precision})"
         )
         verify_onnx(model, target, onnx_path, x, precision)
+
+
+# The key of the ONNX metadata that gives the sha256 of the checkpoint file that
+# the model was exported from. export_bundle uses it to find ONNX models from a
+# different checkpoint.
+CHECKPOINT_KEY = "neuralbloch.checkpoint_sha256"
+
+
+def stamp_checkpoint(onnx_path: Path, checkpoint_sha256: str) -> None:
+    """Record the sha256 of the source checkpoint in the metadata of an ONNX model."""
+    onnx_model = onnx.load(str(onnx_path))
+    props = [p for p in onnx_model.metadata_props if p.key != CHECKPOINT_KEY]
+    del onnx_model.metadata_props[:]
+    onnx_model.metadata_props.extend(props)
+    onnx_model.metadata_props.add(key=CHECKPOINT_KEY, value=checkpoint_sha256)
+    onnx.save(onnx_model, str(onnx_path))
+
+
+def onnx_checkpoint(onnx_path: Path) -> str | None:
+    """Return the checkpoint sha256 that ``stamp_checkpoint`` recorded, or ``None``."""
+    onnx_model = onnx.load(str(onnx_path), load_external_data=False)
+    for prop in onnx_model.metadata_props:
+        if prop.key == CHECKPOINT_KEY:
+            return prop.value
+    return None
+
+
+def require_checkpoint(
+    onnx_path: Path, checkpoint_sha256: str, checkpoint_path: str | Path
+) -> None:
+    """Raise an error if an ONNX model does not come from a checkpoint.
+
+    Args:
+        onnx_path: The ONNX model.
+        checkpoint_sha256: The sha256 of the checkpoint file.
+        checkpoint_path: The path of the checkpoint file, for the error message.
+
+    Raises:
+        ValueError: If the model does not record its checkpoint, or records a
+            different checkpoint.
+    """
+    recorded = onnx_checkpoint(onnx_path)
+    if recorded is None:
+        raise ValueError(
+            f"{onnx_path} does not record its checkpoint. Export it again with "
+            "`uv run run.py export_onnx`"
+        )
+    if recorded != checkpoint_sha256:
+        raise ValueError(
+            f"{onnx_path} comes from a different checkpoint than {checkpoint_path}. "
+            "Export it again with `uv run run.py export_onnx`"
+        )
 
 
 def target_paths(export_config: dict[str, Any]) -> dict[str, tuple[Path, Path]]:

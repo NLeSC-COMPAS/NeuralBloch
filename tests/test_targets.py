@@ -9,7 +9,10 @@ from onnx import numpy_helper
 from scripts.export_onnx import TARGETS
 from scripts.export_onnx import TargetModel
 from scripts.export_onnx import export_target
+from scripts.export_onnx import onnx_checkpoint
 from scripts.export_onnx import onnx_precision
+from scripts.export_onnx import require_checkpoint
+from scripts.export_onnx import stamp_checkpoint
 from scripts.export_onnx import target_paths
 from src.model import FCModel
 
@@ -187,6 +190,28 @@ class ExportTest(unittest.TestCase):
             self.assert_tensor(graph.input[0], "x", (3,))
             self.assert_tensor(graph.output[0], "signal", SIZES["signal"])
             self.assertEqual(onnx_precision([path]), "FP16")
+
+
+class CheckpointStampTest(unittest.TestCase):
+    def test_a_model_records_its_checkpoint(self) -> None:
+        torch.manual_seed(0)
+        model = FCModel(NTR, SEPARATE_CONFIG).eval()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "signal.onnx"
+            export_target(model, "signal", path, example=X[:2], opset=18)
+            self.assertIsNone(onnx_checkpoint(path))
+            with self.assertRaisesRegex(ValueError, "does not record its checkpoint"):
+                require_checkpoint(path, "a" * 64, "model.pt")
+
+            stamp_checkpoint(path, "a" * 64)
+            stamp_checkpoint(path, "b" * 64)
+            self.assertEqual(onnx_checkpoint(path), "b" * 64)
+            onnx_model = onnx.load(str(path))
+            onnx.checker.check_model(onnx_model)
+            self.assertEqual(len(onnx_model.metadata_props), 1)
+            require_checkpoint(path, "b" * 64, "model.pt")
+            with self.assertRaisesRegex(ValueError, "from a different checkpoint"):
+                require_checkpoint(path, "a" * 64, "model.pt")
 
 
 class PrecisionTest(unittest.TestCase):

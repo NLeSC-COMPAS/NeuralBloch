@@ -16,10 +16,12 @@ from pathlib import Path
 from typing import Any
 from scripts.export_onnx import TARGETS
 from scripts.export_onnx import onnx_precision
+from scripts.export_onnx import require_checkpoint
 from scripts.export_onnx import require_exported
 from scripts.export_onnx import target_paths
 from scripts.export_onnx import training_domain
 from scripts.export_onnx import verify_onnx
+from src.utils import file_sha256
 from src.utils import load_model
 from src.utils import sample_parameters
 
@@ -259,12 +261,6 @@ def config_sha256(
         separators=(",", ":"),
     )
     return hashlib.sha256(canonical.encode()).hexdigest()
-
-
-def file_sha256(path: str | Path) -> str:
-    """Return the sha256 of the file contents, in hexadecimal."""
-    with open(path, "rb") as f:
-        return hashlib.file_digest(f, "sha256").hexdigest()
 
 
 def rf_table_length(path: str | Path) -> int:
@@ -698,10 +694,11 @@ def export_bundle(config: dict[str, Any]) -> None:
 
     The card must describe the checkpoint correctly. Thus, the export raises an
     error for: a checkpoint without its training configuration, a family name
-    with a rank that is not the rank of the checkpoint, ONNX models that do not
-    give the same results as the checkpoint, and uncommitted changes in this
-    repository. (The card gives the commit of this repository.) It also raises
-    an error if the release of the family version exists (``require_unreleased``).
+    with a rank that is not the rank of the checkpoint, ONNX models that come
+    from a different checkpoint or do not give the same results as the
+    checkpoint, and uncommitted changes in this repository. (The card gives the
+    commit of this repository.) It also raises an error if the release of the
+    family version exists (``require_unreleased``).
 
     Args:
         config: Full configuration dictionary.
@@ -731,10 +728,14 @@ def export_bundle(config: dict[str, Any]) -> None:
                 f"the checkpoint has NTR = {model.NTR}"
             )
 
-    # The ONNX models must come from this checkpoint. Compare each model with it.
+    # The ONNX models must come from this checkpoint. Check the checkpoint that
+    # export_onnx recorded in each model, then compare each model with it.
     paths = target_paths(export_config)
     require_exported(paths)
     onnx_paths = {target: onnx_path for target, (onnx_path, _) in paths.items()}
+    checkpoint_sha256 = file_sha256(checkpoint_path)
+    for onnx_path in onnx_paths.values():
+        require_checkpoint(onnx_path, checkpoint_sha256, checkpoint_path)
     precision = onnx_precision(list(onnx_paths.values()))
     x = sample_parameters(
         training_domain(config, checkpoint), export_config["N_VERIFY_SAMPLES"]

@@ -1,4 +1,6 @@
+import hashlib
 import random
+from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import Any
 import numpy as np
@@ -90,3 +92,9 @@ def load_model(
     model.eval()
 
     return model, checkpoint
+
+
+def file_sha256(path: str | Path) -> str:
+    """Return the sha256 of the file contents, in hexadecimal."""
+    with open(path, "rb") as f:
+        return hashlib.file_digest(f, "sha256").hexdigest()
