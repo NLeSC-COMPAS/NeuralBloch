@@ -228,6 +228,26 @@ def derivative_method(data_config: Mapping[str, Any]) -> str:
     return DERIVATIVE_METHODS[method]
 
 
+def check_undersampling(data_config: Mapping[str, Any]) -> None:
+    """Raise an error if the training sequence is undersampled.
+
+    With PY_UNDERSAMPLING_FACTOR R, BlochSimulators gives R readouts for each RF
+    pulse, so NTR = R * (length of the RF tables). Schema 1.0 and NeuralBloch.jl
+    require one RF table value for each readout, thus R = 1.
+
+    Raises:
+        ValueError: If PY_UNDERSAMPLING_FACTOR is not the integer 1.
+    """
+    factor = integer(data_config["PY_UNDERSAMPLING_FACTOR"], "PY_UNDERSAMPLING_FACTOR")
+    if factor != 1:
+        raise ValueError(
+            f"PY_UNDERSAMPLING_FACTOR is {factor!r}. A bundle requires 1, because "
+            f"the RF tables of schema {SCHEMA_VERSION} have one value for each "
+            "readout, and BlochSimulators gives PY_UNDERSAMPLING_FACTOR readouts "
+            "for each RF pulse"
+        )
+
+
 def config_sha256(
     model_config: Mapping[str, Any],
     data_config: Mapping[str, Any],
@@ -693,6 +713,7 @@ def export_bundle(config: dict[str, Any]) -> None:
 
     data_config = checkpoint["data_config"]
     method = derivative_method(data_config)
+    check_undersampling(data_config)
     # check_bundle checks this again, but only after the slow steps below
     for key, (_, data_key, _) in RF_FILES.items():
         values = rf_table_length(data_config[data_key])

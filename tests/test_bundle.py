@@ -13,6 +13,7 @@ from scripts.export_bundle import CardInputs
 from scripts.export_bundle import card_text
 from scripts.export_bundle import check_bundle
 from scripts.export_bundle import check_family
+from scripts.export_bundle import check_undersampling
 from scripts.export_bundle import check_version
 from scripts.export_bundle import config_sha256
 from scripts.export_bundle import derivative_method
@@ -160,6 +161,18 @@ class CardTest(unittest.TestCase):
         self.assertEqual(derivative_method(config), "forward sensitivity")
         with self.assertRaisesRegex(ValueError, "Unknown DERIVATIVE_METHOD 'adjoint'"):
             derivative_method({"DERIVATIVE_METHOD": "adjoint"})
+
+    def test_only_a_sequence_without_undersampling_is_bundled(self) -> None:
+        check_undersampling(DATA_CONFIG)
+        for factor, message in (
+            (2, "requires 1"),
+            (0, "requires 1"),
+            (True, "integer"),
+        ):
+            with self.subTest(factor=factor):
+                data = {**DATA_CONFIG, "PY_UNDERSAMPLING_FACTOR": factor}
+                with self.assertRaisesRegex(ValueError, message):
+                    check_undersampling(data)
 
     def test_malformed_configuration_is_refused(self) -> None:
         cases = [
