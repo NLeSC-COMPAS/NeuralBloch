@@ -54,7 +54,7 @@ Contains automatically generated output files.
 - TensorBoard log files
 - Saved model checkpoints (`.pt`)
 - Exported ONNX models (`.onnx`) and TensorRT engines (`.engine`): one model and one engine for each target
-- The model bundle for NeuralBloch.jl (`bundle/`) and its release file (`neuralbloch-model-<family>-v<version>.tar.gz`)
+- The model bundle (`bundle/`) and its release file (`neuralbloch-model-<family>-v<version>.tar.gz`)
 
 ---
 
@@ -68,7 +68,7 @@ Contains scripts called by `run.py` and standalone post-training commands.
 - **orthogonalize_basis.py** – optionally orders a trained shared basis and saves smaller-rank checkpoints
 - **export_onnx.py** – exports the trained model to ONNX
 - **build_engine.py** – builds a TensorRT engine from each exported ONNX model
-- **export_bundle.py** – writes the model bundle that NeuralBloch.jl reads, and the release file of the bundle
+- **export_bundle.py** – writes the model bundle and its release file
 
 ---
 
@@ -98,7 +98,7 @@ Available tasks:
 - `test_inference` – benchmark inference speed
 - `export_onnx` – export the trained model to ONNX (one model for each target)
 - `build_engine` – build a TensorRT engine from each exported ONNX model
-- `export_bundle` – write the model bundle that NeuralBloch.jl reads
+- `export_bundle` – write the model bundle and its release file
 
 ## Usage
 
@@ -184,43 +184,20 @@ Compiles each exported ONNX model into a serialized TensorRT engine with a dynam
 uv run run.py export_bundle
 ```
 
-Writes the model bundle that [NeuralBloch.jl](https://github.com/NLeSC-COMPAS/NeuralBloch.jl) reads to `export.BUNDLE_DIR`. The bundle contains the three ONNX models of step 5, the RF tables of the training sequence, and a generated `model_card.toml`. The card gives:
+Writes the model bundle to `export.BUNDLE_DIR`: the three ONNX models of step 5, the RF tables of the training sequence, and `model_card.toml`. The card describes the model: its family and version, shapes, training domain, sequence and origin. Next to the bundle, the task writes the release file `neuralbloch-model-<family>-v<version>.tar.gz` (step 8).
 
-- the family and the version of the model (`export.MODEL_FAMILY`, `export.MODEL_VERSION`)
-- the number of readouts and the basis rank
-- the sha256 of each ONNX model
-- the training domain
-- the method that calculated the training derivatives
-- the sequence
-- the origin of the model: the NeuralBloch commit, the checkpoint epoch, a hash of the checkpoint configuration, the BlochSimulators version and the precision.
-
-All fields come from the checkpoint or from the export. Each field has a comment that gives its source.
-
-The first field of the card, `schema_version` (now `"1.0"`), is the version of the card format, as `MAJOR.MINOR`. MINOR increases for a new field that readers can ignore. NeuralBloch.jl continues to read all cards of its MAJOR. MAJOR increases for all other changes to the card: a field gets a new name, is removed, gets a new type or a new meaning, or becomes required, or the file gets a new name. When MAJOR increases, change NeuralBloch.jl at the same time, because NeuralBloch.jl does not accept a different MAJOR.
-
-To make sure that the card describes the checkpoint correctly, the task stops with an error for:
-
-- a checkpoint that does not contain its training configuration (`model_config`, `data_config`)
-- a `MODEL_FAMILY` with a `rank<N>` that is not the rank of the signal decoder in the checkpoint
-- ONNX models that do not give the same results as the checkpoint (the task compares each model with the checkpoint again)
-- uncommitted changes in this repository, because the card gives the commit.
-
-A family is one contract for callers. It sets the sequence, the number of readouts and the basis rank. The name of a family has the form `<sequence><ntr>-rank<rank>` (for example, `fisp600-rank16`). The version of a family is a [semantic version](https://semver.org) in quotes in `export.yaml`. Its form is `MAJOR.MINOR.PATCH`, with an optional pre-release part such as `-beta.1`. Build metadata (`+…`) is not permitted, because the version is part of the release tag. Each version of a family can replace the version before it with no change for callers:
-
-- PATCH: the same weights, exported or packaged again.
-- MINOR: new weights or a wider training domain.
-- MAJOR: stays 0 until the family is stable. Version 1.0.0 is the first stable model of the family.
-- A pre-release (`-beta.1`, `-rc.1`) is a candidate.
+The task checks the checkpoint and the ONNX models before it writes. It stops if the repository has uncommitted changes, because the card records the commit. For the card fields, the checks and the version rules, refer to `scripts/export_bundle.py` and `config/export.yaml`.
 
 ### 8. Publish a model release
 
-`export_bundle` also writes the release file of the bundle next to the bundle: `outputs/neuralbloch-model-<family>-v<version>.tar.gz`. This file is a reproducible tarball with the bundle files at its root. The same bundle always gives the same bytes. NeuralBloch.jl downloads this file as a Julia artifact from the release `model-<family>-v<version>` of this repository, and pins its hashes. The task prints the sha256 of the file and the command that creates the release. The task does not publish anything. To publish a model, do these steps:
+A model release is a GitHub release with the tag `model-<family>-v<version>` and one file: the release file of step 7. To publish a model, do these steps:
 
-1. Push the commit that the card names (step 7 exports from a clean, committed tree).
-2. In NeuralBloch.jl, bind the file with `julia --project dev/bind_bundle.jl /path/to/the/file.tar.gz`. Then run the tests of NeuralBloch.jl and `scripts/validate.jl`.
-3. Create the release. Use the printed `gh release create` command, or the GitHub web interface: tag `model-<family>-v<version>` at the commit of the card, and attach the tarball as the only file. Publish a version with a pre-release part (`-beta.1`) as a pre-release. Do not mark other versions as latest, so that the latest release stays a code release.
+1. Set `MODEL_FAMILY` and `MODEL_VERSION` in `config/export.yaml`. Then commit and push.
+2. Do steps 5 to 7. Keep the sha256 and the `gh release create` command that step 7 prints.
+3. Create the release with this command, or in the GitHub web interface. In the web interface, create the tag at the commit that the card records, not at `main`. Attach the release file. Publish a pre-release version (`-beta.1`) as a pre-release. Do not mark other versions as latest.
+4. Make sure that the sha256 of the published file is the printed sha256.
 
-Do not replace a published file. NeuralBloch.jl pins the hashes of the file. If you replace the file, no NeuralBloch.jl commit that bound it can install it. To correct a model, publish a new version.
+CAUTION: Do not change a published file, because users can pin its sha256. To correct a model, publish a new version.
 
 ## Configuration
 
