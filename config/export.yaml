@@ -63,3 +63,9 @@ BUNDLE_DIR: "outputs/bundle"
 #   MAJOR: stays 0 until the family is stable
 MODEL_FAMILY: "fisp600-rank16"
 MODEL_VERSION: "0.1.0-beta.1"
+
+# export_bundle refuses a family version whose release tag exists, here or on
+# origin. If it cannot get the tags of origin (for example without a network),
+# it stops. Set OFFLINE to true to continue with only a warning; then make sure
+# that the version is not released before you publish it.
+OFFLINE: false

@@ -786,7 +786,17 @@ def export_bundle(config: dict[str, Any]) -> None:
 
     commit = clean_commit()
     upstream = f"NeuralBloch@{commit}"
-    require_unreleased(release_tag(family, version))
+
+    # The export continues after a warning. Thus, give each warning when it
+    # occurs, and again at the end, where the user reads the result.
+    warnings: list[str] = []
+
+    def warn(warning: str | None) -> None:
+        if warning is not None:
+            print(f"\nWARNING: {warning}")
+            warnings.append(warning)
+
+    warn(require_unreleased(release_tag(family, version), export_config["OFFLINE"]))
 
     data_config = checkpoint["data_config"]
     method = derivative_method(data_config)
@@ -799,12 +809,7 @@ def export_bundle(config: dict[str, Any]) -> None:
                 f"{data_config[data_key]} ({key}) has {values} values; "
                 f"the checkpoint has NTR = {model.NTR}"
             )
-    # The export continues after a warning. Thus, give each warning when it
-    # occurs, and again at the end, where the user reads the result.
-    warnings: list[str] = []
-    if (warning := check_rf_provenance(checkpoint, data_config)) is not None:
-        print(f"\nWARNING: {warning}")
-        warnings.append(warning)
+    warn(check_rf_provenance(checkpoint, data_config))
 
     # The ONNX models must come from this checkpoint. Check the checkpoint that
     # export_onnx recorded in each model, then compare each model with it.
@@ -887,19 +892,26 @@ def clean_commit() -> str:
     return git("rev-parse", "HEAD")
 
 
-def require_unreleased(tag: str) -> None:
+def require_unreleased(tag: str, offline: bool) -> str | None:
     """Raise an error if the release tag of a family version exists.
 
     Users can pin the sha256 of a published release file, so a published
     version must not get a new file. The function looks for the tag in this
-    repository and on ``origin``. If it cannot get the tags of ``origin`` (for
-    example, without a network), it prints a warning and continues.
+    repository and on ``origin``.
 
     Args:
         tag: The release tag (``release_tag``).
+        offline: What to do if the function cannot get the tags of ``origin``,
+            for example without a network. If ``True``, return a warning. If
+            ``False``, raise an error.
+
+    Returns:
+        The warning if ``offline`` and the tags of ``origin`` are not
+        available, else ``None``.
 
     Raises:
-        RuntimeError: If the tag exists.
+        RuntimeError: If the tag exists, or the tags of ``origin`` are not
+            available and ``offline`` is ``False``.
     """
     exists = RuntimeError(
         f"The release {tag} exists, and a published version does not change. "
@@ -920,14 +932,20 @@ def require_unreleased(tag: str) -> None:
             timeout=60,
         ).stdout.strip()
     except (OSError, subprocess.SubprocessError) as error:
-        print(
-            f"\nWARNING: cannot get the tags of origin ({error}), so the export "
-            f"does not know if the release {tag} exists. Do not publish a "
-            "version that exists"
+        reason = (getattr(error, "stderr", None) or str(error)).strip()
+        unknown = (
+            f"cannot get the tags of origin ({reason}), so the export does not "
+            f"know if the release {tag} exists"
         )
-        return
+        if not offline:
+            raise RuntimeError(
+                f"The export {unknown}. Correct the access to origin, or set "
+                "export.OFFLINE to true to continue without this check"
+            ) from error
+        return f"{unknown}. Do not publish a version that exists"
     if remote:
         raise exists
+    return None
 
 
 def git(*args: str) -> str:

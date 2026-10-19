@@ -1,4 +1,3 @@
-import io
 import os
 import subprocess
 import tarfile
@@ -500,8 +499,10 @@ class TarballTest(unittest.TestCase):
 class ReleaseTest(unittest.TestCase):
     TAG = "model-fisp600-rank16-v0.1.0-beta.1"
 
-    def run_git(self, local: str, remote: str | Exception) -> str:
-        """Run require_unreleased with git output; return what it prints."""
+    def run_git(
+        self, local: str, remote: str | Exception, offline: bool = False
+    ) -> str | None:
+        """Run require_unreleased with git output; return its warning."""
 
         def run(args: list[str], **kwargs: object) -> subprocess.CompletedProcess:
             if args[1] == "ls-remote":
@@ -510,16 +511,12 @@ class ReleaseTest(unittest.TestCase):
                 return subprocess.CompletedProcess(args, 0, remote, "")
             return subprocess.CompletedProcess(args, 0, local, "")
 
-        printed = io.StringIO()
-        with (
-            mock.patch("scripts.export_bundle.subprocess.run", side_effect=run),
-            mock.patch("sys.stdout", printed),
-        ):
-            require_unreleased(self.TAG)
-        return printed.getvalue()
+        with mock.patch("scripts.export_bundle.subprocess.run", side_effect=run):
+            return require_unreleased(self.TAG, offline)
 
     def test_a_new_version_is_not_released(self) -> None:
-        self.assertEqual(self.run_git("", ""), "")
+        self.assertIsNone(self.run_git("", ""))
+        self.assertIsNone(self.run_git("", "", offline=True))
 
     def test_a_released_version_is_refused(self) -> None:
         for local, remote in ((self.TAG, ""), ("", f"abc\trefs/tags/{self.TAG}")):
@@ -527,11 +524,21 @@ class ReleaseTest(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "Increase"):
                     self.run_git(local, remote)
 
-    def test_without_origin_the_export_warns(self) -> None:
-        error = subprocess.CalledProcessError(128, "git")
-        self.assertIn("WARNING: cannot get the tags", self.run_git("", error))
+    def test_without_origin_the_export_stops_unless_offline(self) -> None:
+        denied = "git@github.com: Permission denied (publickey)."
+        error = subprocess.CalledProcessError(128, "git", stderr=denied)
         timeout = subprocess.TimeoutExpired("git", 60)
-        self.assertIn("WARNING: cannot get the tags", self.run_git("", timeout))
+        for failure, reason in ((error, denied), (timeout, "timed out")):
+            with self.subTest(failure=type(failure).__name__):
+                with self.assertRaisesRegex(RuntimeError, "export.OFFLINE") as raised:
+                    self.run_git("", failure)
+                self.assertIn(reason, str(raised.exception))
+                warning = self.run_git("", failure, offline=True)
+                self.assertIn("cannot get the tags of origin", str(warning))
+                self.assertIn(reason, str(warning))
+        # Offline does not permit a version that is released here
+        with self.assertRaisesRegex(RuntimeError, "Increase"):
+            self.run_git(self.TAG, error, offline=True)
 
 
 class RfTableTest(unittest.TestCase):
