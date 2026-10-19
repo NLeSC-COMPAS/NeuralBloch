@@ -563,17 +563,15 @@ class RfTableTest(unittest.TestCase):
                 data[key] = Path(tmp) / f"{key}.txt"
                 data[key].write_text("1.0\n2.0\n")
             checkpoint = {"rf_sha256": rf_sha256(data)}
-            check_rf_provenance(checkpoint, data)
+            self.assertIsNone(check_rf_provenance(checkpoint, data))
             data["RF_PHASE_FILE"].write_text("1.0\n3.0\n")
             with self.assertRaisesRegex(
                 ValueError, "RF_PHASE_FILE.txt \\(RF_PHASE_FILE\\) is not the RF table"
             ):
                 check_rf_provenance(checkpoint, data)
             # An old checkpoint does not record the tables: only a warning
-            printed = io.StringIO()
-            with mock.patch("sys.stdout", printed):
-                check_rf_provenance({}, data)
-            self.assertIn("WARNING: the checkpoint does not record", printed.getvalue())
+            warning = check_rf_provenance({}, data)
+            self.assertIn("the checkpoint does not record", str(warning))
 
     def test_the_repository_rf_tables_have_600_values(self) -> None:
         for name in ("rf_angle_list.txt", "rf_phase_list.txt"):

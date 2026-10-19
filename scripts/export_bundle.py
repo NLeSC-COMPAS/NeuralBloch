@@ -248,16 +248,20 @@ def derivative_method(data_config: Mapping[str, Any]) -> str:
 
 def check_rf_provenance(
     checkpoint: Mapping[str, Any], data_config: Mapping[str, Any]
-) -> None:
+) -> str | None:
     """Raise an error if the RF tables changed after the training.
 
     The trainer records the sha256 of the RF tables in the checkpoint
     (``rf_sha256``). Older checkpoints do not record them. For these, the
-    function prints a warning, because it cannot check the tables.
+    function cannot check the tables, and it returns a warning.
 
     Args:
         checkpoint: The loaded checkpoint.
         data_config: The checkpoint's data configuration.
+
+    Returns:
+        The warning if the checkpoint does not record its RF tables, else
+        ``None``.
 
     Raises:
         ValueError: If an RF table does not have the sha256 that the checkpoint
@@ -265,12 +269,11 @@ def check_rf_provenance(
     """
     recorded = checkpoint.get("rf_sha256")
     if recorded is None:
-        print(
-            "\nWARNING: the checkpoint does not record the sha256 of its RF tables, "
-            "so the export cannot check that the RF tables are the tables of the "
+        return (
+            "the checkpoint does not record the sha256 of its RF tables, so the "
+            "export cannot check that the RF tables are the tables of the "
             "training: " + ", ".join(str(data_config[k]) for k in RF_TABLE_KEYS)
         )
-        return
     current = rf_sha256(data_config)
     for key in RF_TABLE_KEYS:
         if recorded.get(key) != current[key]:
@@ -278,6 +281,7 @@ def check_rf_provenance(
                 f"{data_config[key]} ({key}) is not the RF table of the training: "
                 "its sha256 is not the sha256 that the checkpoint records"
             )
+    return None
 
 
 def check_undersampling(data_config: Mapping[str, Any]) -> None:
@@ -795,7 +799,12 @@ def export_bundle(config: dict[str, Any]) -> None:
                 f"{data_config[data_key]} ({key}) has {values} values; "
                 f"the checkpoint has NTR = {model.NTR}"
             )
-    check_rf_provenance(checkpoint, data_config)
+    # The export continues after a warning. Thus, give each warning when it
+    # occurs, and again at the end, where the user reads the result.
+    warnings: list[str] = []
+    if (warning := check_rf_provenance(checkpoint, data_config)) is not None:
+        print(f"\nWARNING: {warning}")
+        warnings.append(warning)
 
     # The ONNX models must come from this checkpoint. Check the checkpoint that
     # export_onnx recorded in each model, then compare each model with it.
@@ -856,6 +865,8 @@ def export_bundle(config: dict[str, Any]) -> None:
         "tests, then create the release:\n\n"
         + shlex.join(release_command(parsed, tarball, sha256))
     )
+    for warning in warnings:
+        print(f"\nWARNING: {warning}. Make sure of this before you publish.")
 
 
 def clean_commit() -> str:
