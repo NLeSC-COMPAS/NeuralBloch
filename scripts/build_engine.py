@@ -5,11 +5,13 @@ import torch
 from scripts.export_onnx import TARGETS
 from scripts.export_onnx import check_outputs
 from scripts.export_onnx import onnx_precision
+from scripts.export_onnx import require_checkpoint
 from scripts.export_onnx import require_exported
 from scripts.export_onnx import staged
 from scripts.export_onnx import target_paths
 from scripts.export_onnx import training_domain
 from src.model import FCModel
+from src.utils import file_sha256
 from src.utils import load_model
 from src.utils import sample_parameters
 
@@ -30,7 +32,8 @@ def build_engine(config: dict[str, Any]) -> None:
         RuntimeError: If no GPU is available, an ONNX model cannot be
             parsed, an engine build fails, or an engine fails its check.
         FileNotFoundError: If an ONNX model has not been exported yet.
-        ValueError: If the batch sizes are not in order (``check_batch_profile``).
+        ValueError: If the batch sizes are not in order (``check_batch_profile``),
+            or an ONNX model does not come from the checkpoint.
     """
     if not torch.cuda.is_available():
         raise RuntimeError("Building a TensorRT engine requires a CUDA GPU")
@@ -39,6 +42,12 @@ def build_engine(config: dict[str, Any]) -> None:
     check_batch_profile(export_config)
     paths = target_paths(export_config)
     require_exported(paths)
+    # The engines are compared with the checkpoint, so the ONNX models must
+    # come from it
+    checkpoint_path = config["experiment"]["PT_FILE_PATH"]
+    checkpoint_sha256 = file_sha256(checkpoint_path)
+    for onnx_path, _ in paths.values():
+        require_checkpoint(onnx_path, checkpoint_sha256, checkpoint_path)
 
     logger = trt.Logger(trt.Logger.WARNING)
 

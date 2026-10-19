@@ -157,8 +157,8 @@ def staged(path: Path) -> Iterator[Path]:
 
 
 # The key of the ONNX metadata that gives the sha256 of the checkpoint file that
-# the model was exported from. export_bundle uses it to find ONNX models from a
-# different checkpoint.
+# the model was exported from. build_engine and export_bundle use it to find ONNX
+# models from a different checkpoint.
 CHECKPOINT_KEY = "neuralbloch.checkpoint_sha256"
 
 
