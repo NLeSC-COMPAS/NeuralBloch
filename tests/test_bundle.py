@@ -420,6 +420,8 @@ class TarballTest(unittest.TestCase):
 
     def test_the_bundle_sits_at_the_root(self) -> None:
         write_tarball(self.bundle, self.tarball)
+        # Other users can read the release file, as the bundle
+        self.assertEqual(self.tarball.stat().st_mode & 0o777, 0o644)
         with tarfile.open(self.tarball) as tar:
             self.assertEqual(
                 tar.getnames(),

@@ -702,6 +702,8 @@ def write_tarball(bundle_dir: str | Path, tarball: str | Path) -> str:
                     info.size, info.mode = path.stat().st_size, 0o644
                     with open(path, "rb") as f:
                         tar.addfile(info, f)
+        # mkstemp makes the file readable only by its owner
+        os.chmod(temporary, 0o644)
         Path(temporary).replace(tarball)
     except BaseException:
         Path(temporary).unlink(missing_ok=True)
