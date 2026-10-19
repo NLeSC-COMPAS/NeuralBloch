@@ -1,4 +1,6 @@
+import io
 import os
+import subprocess
 import tarfile
 import tempfile
 import tomllib
@@ -22,6 +24,7 @@ from scripts.export_bundle import file_sha256
 from scripts.export_bundle import release_command
 from scripts.export_bundle import release_tag
 from scripts.export_bundle import require_configs
+from scripts.export_bundle import require_unreleased
 from scripts.export_bundle import rf_table_length
 from scripts.export_bundle import tarball_name
 from scripts.export_bundle import write_bundle
@@ -439,6 +442,43 @@ class TarballTest(unittest.TestCase):
         command = release_command(card, Path("outputs/model.tar.gz"), "f" * 64)
         self.assertIn("--latest=false", command)
         self.assertNotIn("--prerelease", command)
+
+
+class ReleaseTest(unittest.TestCase):
+    TAG = "model-fisp600-rank16-v0.1.0-beta.1"
+
+    def run_git(self, local: str, remote: str | Exception) -> str:
+        """Run require_unreleased with git output; return what it prints."""
+
+        def run(args: list[str], **kwargs: object) -> subprocess.CompletedProcess:
+            if args[1] == "ls-remote":
+                if isinstance(remote, Exception):
+                    raise remote
+                return subprocess.CompletedProcess(args, 0, remote, "")
+            return subprocess.CompletedProcess(args, 0, local, "")
+
+        printed = io.StringIO()
+        with (
+            mock.patch("scripts.export_bundle.subprocess.run", side_effect=run),
+            mock.patch("sys.stdout", printed),
+        ):
+            require_unreleased(self.TAG)
+        return printed.getvalue()
+
+    def test_a_new_version_is_not_released(self) -> None:
+        self.assertEqual(self.run_git("", ""), "")
+
+    def test_a_released_version_is_refused(self) -> None:
+        for local, remote in ((self.TAG, ""), ("", f"abc\trefs/tags/{self.TAG}")):
+            with self.subTest(local=local, remote=remote):
+                with self.assertRaisesRegex(RuntimeError, "Increase"):
+                    self.run_git(local, remote)
+
+    def test_without_origin_the_export_warns(self) -> None:
+        error = subprocess.CalledProcessError(128, "git")
+        self.assertIn("WARNING: cannot get the tags", self.run_git("", error))
+        timeout = subprocess.TimeoutExpired("git", 60)
+        self.assertIn("WARNING: cannot get the tags", self.run_git("", timeout))
 
 
 class RfTableTest(unittest.TestCase):

@@ -186,7 +186,7 @@ uv run run.py export_bundle
 
 Writes the model bundle to `export.BUNDLE_DIR`: the three ONNX models of step 5, the RF tables of the training sequence, and `model_card.toml`. The card describes the model: its family and version, shapes, training domain, sequence and origin. Next to the bundle, the task writes the release file `neuralbloch-model-<family>-v<version>.tar.gz` (step 8).
 
-The task checks the checkpoint and the ONNX models before it writes. It stops if the repository has uncommitted changes, because the card records the commit. For the card fields, the checks and the version rules, refer to `scripts/export_bundle.py` and `config/export.yaml`.
+The task checks the checkpoint and the ONNX models before it writes. It stops if the repository has uncommitted changes, because the card records the commit. It also stops if the release of the family version exists (step 8). For the card fields, the checks and the version rules, refer to `scripts/export_bundle.py` and `config/export.yaml`.
 
 ### 8. Publish a model release
 

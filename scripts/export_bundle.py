@@ -2,6 +2,7 @@ import gzip
 import hashlib
 import json
 import math
+import os
 import re
 import shlex
 import shutil
@@ -693,7 +694,8 @@ def export_bundle(config: dict[str, Any]) -> None:
     error for: a checkpoint without its training configuration, a family name
     with a rank that is not the rank of the checkpoint, ONNX models that do not
     give the same results as the checkpoint, and uncommitted changes in this
-    repository. (The card gives the commit of this repository.)
+    repository. (The card gives the commit of this repository.) It also raises
+    an error if the release of the family version exists (``require_unreleased``).
 
     Args:
         config: Full configuration dictionary.
@@ -710,6 +712,7 @@ def export_bundle(config: dict[str, Any]) -> None:
 
     commit = clean_commit()
     upstream = f"NeuralBloch@{commit}"
+    require_unreleased(release_tag(family, version))
 
     data_config = checkpoint["data_config"]
     method = derivative_method(data_config)
@@ -796,6 +799,49 @@ def clean_commit() -> str:
             "commit or remove these changes first:\n" + status
         )
     return git("rev-parse", "HEAD")
+
+
+def require_unreleased(tag: str) -> None:
+    """Raise an error if the release tag of a family version exists.
+
+    Users can pin the sha256 of a published release file, so a published
+    version must not get a new file. The function looks for the tag in this
+    repository and on ``origin``. If it cannot get the tags of ``origin`` (for
+    example, without a network), it prints a warning and continues.
+
+    Args:
+        tag: The release tag (``release_tag``).
+
+    Raises:
+        RuntimeError: If the tag exists.
+    """
+    exists = RuntimeError(
+        f"The release {tag} exists, and a published version does not change. "
+        "Increase export.MODEL_VERSION"
+    )
+    if git("tag", "--list", tag):
+        raise exists
+    # Do not wait for a password or a passphrase
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+    env.setdefault("GIT_SSH_COMMAND", "ssh -o BatchMode=yes")
+    try:
+        remote = subprocess.run(
+            ["git", "ls-remote", "--tags", "origin", f"refs/tags/{tag}"],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=60,
+        ).stdout.strip()
+    except (OSError, subprocess.SubprocessError) as error:
+        print(
+            f"\nWARNING: cannot get the tags of origin ({error}), so the export "
+            f"does not know if the release {tag} exists. Do not publish a "
+            "version that exists"
+        )
+        return
+    if remote:
+        raise exists
 
 
 def git(*args: str) -> str:
