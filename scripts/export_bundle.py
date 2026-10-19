@@ -23,7 +23,8 @@ from scripts.export_onnx import training_domain
 from scripts.export_onnx import verify_onnx
 from src.utils import RF_TABLE_KEYS
 from src.utils import file_sha256
-from src.utils import load_model
+from src.utils import load_checkpoint
+from src.utils import model_from_checkpoint
 from src.utils import rf_sha256
 from src.utils import sample_parameters
 
@@ -131,8 +132,8 @@ def require_configs(checkpoint: Mapping[str, Any], path: str | Path) -> None:
 
     The card describes the model in the checkpoint. Thus, all fields must come
     from the training configuration of the model. Older checkpoints do not
-    contain this configuration. For these checkpoints, ``load_model`` uses the
-    configuration in ``config/``, which can describe a different model.
+    contain this configuration. For these checkpoints, ``model_from_checkpoint``
+    uses the configuration in ``config/``, which can describe a different model.
 
     Args:
         checkpoint: The loaded checkpoint.
@@ -789,8 +790,10 @@ def export_bundle(config: dict[str, Any]) -> None:
     """
     export_config = config["export"]
     checkpoint_path = Path(config["experiment"]["PT_FILE_PATH"])
-    model, checkpoint = load_model(config, "cpu")
+    # Check the configurations before the model is made from them
+    checkpoint = load_checkpoint(config, "cpu")
     require_configs(checkpoint, checkpoint_path)
+    model = model_from_checkpoint(checkpoint, config, "cpu")
 
     family = export_config["MODEL_FAMILY"]
     version = check_version(export_config["MODEL_VERSION"])

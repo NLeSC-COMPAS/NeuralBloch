@@ -637,6 +637,14 @@ class ExportBundleTest(unittest.TestCase):
         stamp_checkpoint(self.onnx["signal"], "0" * 64)
         self.assert_refused("from a different checkpoint")
 
+    def test_a_checkpoint_without_its_configuration_is_refused(self) -> None:
+        # The model of config/ can have a different architecture, so the
+        # export must not make the model before it checks the checkpoint
+        checkpoint = torch.load(self.checkpoint)
+        del checkpoint["model_config"]
+        torch.save(checkpoint, self.checkpoint)
+        self.assert_refused("does not store model_config")
+
     def test_a_family_with_another_rank_is_refused(self) -> None:
         self.config["export"]["MODEL_FAMILY"] = "fisp5-rank16"
         self.assert_refused("states rank 16")

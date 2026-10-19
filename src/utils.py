@@ -73,14 +73,33 @@ def load_model(
 ) -> tuple["FCModel", dict[str, Any]]:
     """Load a trained surrogate model from a checkpoint.
 
-    The model architecture is created from the configuration file,
-    after which the saved weights are loaded.
+    Returns:
+        The model (``model_from_checkpoint``) and the checkpoint.
     """
+    checkpoint = load_checkpoint(config, device)
+    return model_from_checkpoint(checkpoint, config, device), checkpoint
+
+
+def load_checkpoint(config: dict[str, Any], device: str) -> dict[str, Any]:
+    """Load the checkpoint file that ``experiment.PT_FILE_PATH`` gives."""
     checkpoint: dict[str, Any] = torch.load(
         config["experiment"]["PT_FILE_PATH"],
         map_location=device,
     )
+    return checkpoint
 
+
+def model_from_checkpoint(
+    checkpoint: dict[str, Any],
+    config: dict[str, Any],
+    device: str,
+) -> "FCModel":
+    """Create the model of a checkpoint and load its saved weights.
+
+    The model architecture comes from the configurations in the checkpoint.
+    Old checkpoints do not contain them. For these checkpoints, the function
+    uses the configurations in ``config``.
+    """
     from src.model import FCModel
 
     NTR = checkpoint["NTR"]
@@ -92,7 +111,7 @@ def load_model(
     model.to(device)
     model.eval()
 
-    return model, checkpoint
+    return model
 
 
 def file_sha256(path: str | Path) -> str:
