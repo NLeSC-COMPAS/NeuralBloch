@@ -129,7 +129,8 @@ def target_paths(export_config: dict[str, Any]) -> dict[str, tuple[Path, Path]]:
         ``(onnx_path, engine_path)`` per target, in ``TARGETS`` order.
 
     Raises:
-        ValueError: If ``export.TARGETS`` does not name all targets and only them.
+        ValueError: If ``export.TARGETS`` does not name all targets and only
+            them, or two of the paths are the same file.
     """
     configured = export_config.get("TARGETS") or {}
     if set(configured) != set(TARGETS):
@@ -137,13 +138,23 @@ def target_paths(export_config: dict[str, Any]) -> dict[str, tuple[Path, Path]]:
             f"export.TARGETS must name the targets {', '.join(TARGETS)}; "
             f"it names {', '.join(configured) or 'none'}"
         )
-    return {
+    paths = {
         target: (
             Path(configured[target]["ONNX_FILE_PATH"]),
             Path(configured[target]["ENGINE_FILE_PATH"]),
         )
         for target in TARGETS
     }
+    # Each export writes its file, so two exports to one file keep only the last
+    seen: dict[Path, str] = {}
+    for target, target_files in paths.items():
+        for key, path in zip(("ONNX_FILE_PATH", "ENGINE_FILE_PATH"), target_files):
+            name = f"{target}.{key}"
+            if (other := seen.setdefault(path.resolve(), name)) != name:
+                raise ValueError(
+                    f"export.TARGETS {name} and {other} are the same file, {path}"
+                )
+    return paths
 
 
 def require_exported(paths: dict[str, tuple[Path, Path]]) -> None:

@@ -119,6 +119,23 @@ class TargetPathsTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "it names none"):
             target_paths({"ONNX_FILE_PATH": "outputs/model.onnx"})
 
+    def test_each_path_is_a_different_file(self) -> None:
+        targets = {
+            name: {"ONNX_FILE_PATH": f"{name}.onnx", "ENGINE_FILE_PATH": f"{name}.e"}
+            for name in TARGETS
+        }
+        # For example, a copied entry that keeps the ONNX file of another target
+        targets["coefficients"]["ONNX_FILE_PATH"] = "./signal_and_derivatives.onnx"
+        with self.assertRaisesRegex(
+            ValueError,
+            "coefficients.ONNX_FILE_PATH and signal_and_derivatives.ONNX_FILE_PATH "
+            "are the same file",
+        ):
+            target_paths({"TARGETS": targets})
+        targets["coefficients"]["ONNX_FILE_PATH"] = "signal.e"
+        with self.assertRaisesRegex(ValueError, "and signal.ENGINE_FILE_PATH"):
+            target_paths({"TARGETS": targets})
+
 
 class ExportTest(unittest.TestCase):
     def assert_tensor(
