@@ -39,8 +39,12 @@ def build_engine(config: dict[str, Any]) -> None:
     logger = trt.Logger(trt.Logger.WARNING)
 
     # Use one timing cache for all builds. The networks of the smaller targets are
-    # parts of the largest network, so TensorRT does not time their layers again
-    timing_cache = trt.Builder(logger).create_builder_config().create_timing_cache(b"")
+    # parts of the largest network, so TensorRT does not time their layers again.
+    # Keep the builder and the configuration that make the cache until the
+    # builds are done, so that the cache does not live longer than its creator
+    cache_builder = trt.Builder(logger)
+    cache_config = cache_builder.create_builder_config()
+    timing_cache = cache_config.create_timing_cache(b"")
 
     # Load the PyTorch float32 reference and sample parameters from its training domain
     model, checkpoint = load_model(config, "cuda")
