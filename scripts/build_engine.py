@@ -140,8 +140,8 @@ def verify_engine(
         precision: The precision of the engine, ``"FP32"`` or ``"FP16"``.
 
     Raises:
-        RuntimeError: If the engine tensors are not the target tensors, or the
-            error of its predictions is more than the tolerance.
+        RuntimeError: If the engine tensors are not the target tensors, or its
+            predictions fail ``check_outputs``.
     """
     # Load the serialized engine
     runtime = trt.Runtime(logger)

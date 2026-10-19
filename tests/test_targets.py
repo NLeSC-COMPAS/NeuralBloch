@@ -8,12 +8,14 @@ from onnx import helper
 from onnx import numpy_helper
 from scripts.export_onnx import TARGETS
 from scripts.export_onnx import TargetModel
+from scripts.export_onnx import check_outputs
 from scripts.export_onnx import export_target
 from scripts.export_onnx import onnx_checkpoint
 from scripts.export_onnx import onnx_precision
 from scripts.export_onnx import require_checkpoint
 from scripts.export_onnx import stamp_checkpoint
 from scripts.export_onnx import target_paths
+from scripts.export_onnx import verify_onnx
 from src.model import FCModel
 
 
@@ -190,6 +192,47 @@ class ExportTest(unittest.TestCase):
             self.assert_tensor(graph.input[0], "x", (3,))
             self.assert_tensor(graph.output[0], "signal", SIZES["signal"])
             self.assertEqual(onnx_precision([path]), "FP16")
+
+
+class VerifyTest(unittest.TestCase):
+    def test_an_exported_model_gives_the_pytorch_values(self) -> None:
+        torch.manual_seed(0)
+        model = FCModel(NTR, SEPARATE_CONFIG).eval()
+        with tempfile.TemporaryDirectory() as tmp:
+            for name in TARGETS:
+                with self.subTest(target=name):
+                    path = Path(tmp) / f"{name}.onnx"
+                    # Trace with batch 2 and verify with batch 3, so that the
+                    # batch dimension is dynamic in the values too
+                    export_target(model, name, path, example=X[:2], opset=18)
+                    verify_onnx(model, name, path, X, "FP32")
+
+    def test_a_model_from_other_weights_deviates(self) -> None:
+        torch.manual_seed(0)
+        exported = FCModel(NTR, SEPARATE_CONFIG).eval()
+        torch.manual_seed(1)
+        other = FCModel(NTR, SEPARATE_CONFIG).eval()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "signal.onnx"
+            export_target(exported, "signal", path, example=X[:2], opset=18)
+            with self.assertRaisesRegex(RuntimeError, "deviate"):
+                verify_onnx(other, "signal", path, X, "FP32")
+
+    def test_outputs_need_the_pytorch_shape_and_finite_values(self) -> None:
+        torch.manual_seed(0)
+        model = FCModel(NTR, SEPARATE_CONFIG).eval()
+        with torch.no_grad():
+            (signal,) = TargetModel(model, "signal")(X)
+        signal = signal.numpy()
+
+        check_outputs("same", model, "signal", X, [signal.copy()], "FP32")
+        with self.assertRaisesRegex(RuntimeError, "shape"):
+            check_outputs("shape", model, "signal", X, [signal[:2]], "FP32")
+        # One NaN gives a NaN mean error, and NaN is not more than the tolerance
+        nan = signal.copy()
+        nan[0, 0, 0] = np.nan
+        with self.assertRaisesRegex(RuntimeError, "1 values that are not finite"):
+            check_outputs("nan", model, "signal", X, [nan], "FP16")
 
 
 class CheckpointStampTest(unittest.TestCase):

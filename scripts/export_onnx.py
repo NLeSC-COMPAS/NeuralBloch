@@ -325,8 +325,7 @@ def verify_onnx(
         precision: ``"FP32"`` or ``"FP16"``, the precision of the ONNX model.
 
     Raises:
-        RuntimeError: If an output has a shape different from the PyTorch
-            output, or its error is more than the tolerance.
+        RuntimeError: If the predictions fail ``check_outputs``.
     """
     session = ort.InferenceSession(
         str(onnx_path),
@@ -358,9 +357,10 @@ def check_outputs(
 ) -> None:
     """Check the predictions of an exported model for one target against PyTorch.
 
-    Each output must have the same shape as the PyTorch output. Its mean NRMSE
-    against the PyTorch output must be 0.1 % or less. For an FP16 model, the
-    limit is 1 %, because FP16 is faster but a little less accurate.
+    Each output must have the same shape as the PyTorch output, and all its
+    values must be finite. Its mean NRMSE against the PyTorch output must be
+    0.1 % or less. For an FP16 model, the limit is 1 %, because FP16 is faster
+    but a little less accurate.
 
     Args:
         title: The name of the comparison, for the printed report.
@@ -372,7 +372,8 @@ def check_outputs(
 
     Raises:
         RuntimeError: If an output has a shape different from the PyTorch
-            output, or its error is more than the tolerance.
+            output, has a value that is not finite, or its error is more than
+            the tolerance.
     """
     tolerance = 1.0 if precision == "FP16" else 0.1
 
@@ -389,12 +390,20 @@ def check_outputs(
                 f"Exported {name} output has shape {pred.shape}, PyTorch's {ref.shape}"
             )
 
+        # NaN is not more than the tolerance, so the error test does not
+        # find it
+        not_finite = np.count_nonzero(~np.isfinite(pred))
+        if not_finite:
+            raise RuntimeError(
+                f"Exported {name} output has {not_finite} values that are not finite"
+            )
+
         max_diff = np.abs(pred - ref).max()
         error = nrmse(pred, ref).mean()
 
         print(f"  {name:12s} | max abs diff: {max_diff:.2e} | NRMSE: {error:.5f}%")
 
-        if error > tolerance:
+        if not error <= tolerance:
             raise RuntimeError(
                 f"Exported predictions for {name} deviate from PyTorch "
                 f"(NRMSE {error:.5f}% > {tolerance}%)"
