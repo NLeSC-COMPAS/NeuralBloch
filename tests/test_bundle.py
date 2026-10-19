@@ -488,8 +488,14 @@ class RfTableTest(unittest.TestCase):
             path.write_text("1.0\n\n2.5\n3\n")
             self.assertEqual(rf_table_length(path), 3)
             path.write_text("1.0\nangle\n")
-            with self.assertRaisesRegex(ValueError, "rf.txt:2: not a number"):
+            with self.assertRaisesRegex(ValueError, "rf.txt:2: not a finite number"):
                 rf_table_length(path)
+            # NeuralBloch.jl does not read 1_000, and the angles must be finite
+            for value in ("1_000", "nan", "inf", "-Infinity"):
+                with self.subTest(value=value):
+                    path.write_text(f"1.0\n{value}\n")
+                    with self.assertRaisesRegex(ValueError, "rf.txt:2: not a finite"):
+                        rf_table_length(path)
 
     def test_the_repository_rf_tables_have_600_values(self) -> None:
         for name in ("rf_angle_list.txt", "rf_phase_list.txt"):

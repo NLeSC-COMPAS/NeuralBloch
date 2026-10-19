@@ -271,18 +271,24 @@ def file_sha256(path: str | Path) -> str:
 def rf_table_length(path: str | Path) -> int:
     """Return the number of values in an RF table (one number per non-empty line).
 
+    NeuralBloch.jl reads each line with ``tryparse(Float64, line)``. Python
+    ``float`` also accepts ``_`` between digits, so the function refuses ``_``.
+    It also refuses values that are not finite.
+
     Raises:
-        ValueError: If a line is not a number.
+        ValueError: If a line is not a finite number.
     """
     count = 0
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         for number, line in enumerate(f, start=1):
             if not line.strip():
                 continue
             try:
-                float(line)
+                value = float(line)
             except ValueError:
-                raise ValueError(f"{path}:{number}: not a number: {line!r}") from None
+                value = math.nan
+            if "_" in line or not math.isfinite(value):
+                raise ValueError(f"{path}:{number}: not a finite number: {line!r}")
             count += 1
     return count
 
@@ -493,7 +499,8 @@ def write_bundle(
             target = new / name
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source, target)
-        (new / CARD).write_text(card)
+        # The card can contain characters that are not ASCII (ΔT₁)
+        (new / CARD).write_text(card, encoding="utf-8")
         new.chmod(0o755)
         parsed = check_bundle(new)
         if bundle_dir.exists():
