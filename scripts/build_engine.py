@@ -51,8 +51,9 @@ def build_engine(config: dict[str, Any]) -> None:
 
     logger = trt.Logger(trt.Logger.WARNING)
 
-    # Use one timing cache for all builds. The networks of the smaller targets are
-    # parts of the largest network, so TensorRT does not time their layers again.
+    # Use one timing cache for all builds. The networks of the smaller targets
+    # have many layers of the largest network, which TARGETS gives first, so
+    # TensorRT can use the timings of these layers again.
     # Keep the builder and the configuration that make the cache until the
     # builds are done, so that the cache does not live longer than its creator
     cache_builder = trt.Builder(logger)
@@ -159,8 +160,7 @@ def build_target_engine(
             f"{(export_config['MAX_BATCH_SIZE'], *sample)}"
         )
 
-    # Compile and serialize the engine. TensorRT networks are strongly typed,
-    # so the engine precision (FP32 or FP16) is inherited from the ONNX model.
+    # Compile and serialize the engine
     serialized_engine = builder.build_serialized_network(network, builder_config)
 
     if serialized_engine is None:

@@ -70,10 +70,11 @@ DOMAIN_FIELDS = (
     ("B1", "B1_lower", "B1_upper", "relative to nominal, sampled uniformly"),
 )
 
-# The name of a family has the form <sequence><ntr>-rank<rank>, with an optional
-# qualifier, for example fisp600-rank16 or fisp600-rank16-narrow. The name is
-# lowercase words with hyphens between them. Exactly one of these words is
-# rank<N>.
+# The name of a family has the form <sequence><ntr>-rank<rank>[-<qualifier>], for
+# example fisp600-rank16 or fisp600-rank16-narrow. A qualifier makes the names of
+# two families different. The checks are only these: the name is lowercase words
+# with hyphens between them, and exactly one of these words is rank<N>, with the
+# rank of the model.
 # The checks use fullmatch, because $ also matches before a final newline.
 FAMILY_PATTERN = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*")
 RANK_WORD = re.compile(r"rank([1-9][0-9]*)")
@@ -685,9 +686,11 @@ def tarball_name(family: str, version: str) -> str:
 def write_tarball(bundle_dir: str | Path, tarball: str | Path) -> str:
     """Pack a bundle into a reproducible tarball, the release file.
 
-    The tarball has the bundle files at its root. The same files always give
-    the same bytes. Thus, you can calculate the sha256 that NeuralBloch.jl pins
-    for the release again from the bundle. For this, the tarball has: members
+    The tarball has the bundle files at its root. With the same zlib, the same
+    files always give the same bytes. Thus, you can calculate the sha256 that
+    NeuralBloch.jl pins for the release again from the bundle. (A different
+    zlib can compress the same files to different bytes.) For this, the tarball
+    has: members
     in sorted order, USTAR headers with mtime 0, owner 0:0, mode 0644 for files
     and 0755 for directories, and a gzip header with mtime 0 and no file name.
     The function first writes a temporary file next to the tarball. Then this

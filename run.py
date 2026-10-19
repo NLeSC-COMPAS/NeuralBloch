@@ -73,7 +73,7 @@ def main() -> None:
 
         export_onnx(config)
 
-    # Build a TensorRT engine from the exported ONNX model
+    # Build a TensorRT engine from each exported ONNX model
     elif args.task == "build_engine":
         from scripts.build_engine import build_engine
 
