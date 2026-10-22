@@ -1,6 +1,23 @@
-# Exported models will be saved on these locations
-ONNX_FILE_PATH: "outputs/model.onnx"
-ENGINE_FILE_PATH: "outputs/model.engine"
+# Locations of the exported models. Each target has one ONNX model and one
+# TensorRT engine (TARGETS in scripts/export_onnx.py). Each target is a method of
+# the model:
+#   signal_and_derivatives  forward: the signal and its T1/T2 derivatives
+#   signal                  forward_signal: only the signal
+#   coefficients            forward_coefficients: the basis coefficients of the signal
+# An engine calculates all outputs of its model on each call. Thus, a separate
+# model for each target lets a caller do only the work that it needs.
+# signal_and_derivatives keeps the original file names, because the bootstrap.sh
+# script of MRSTAT.jl copies these files.
+TARGETS:
+  signal_and_derivatives:
+    ONNX_FILE_PATH: "outputs/model.onnx"
+    ENGINE_FILE_PATH: "outputs/model.engine"
+  signal:
+    ONNX_FILE_PATH: "outputs/model_signal.onnx"
+    ENGINE_FILE_PATH: "outputs/model_signal.engine"
+  coefficients:
+    ONNX_FILE_PATH: "outputs/model_coefficients.onnx"
+    ENGINE_FILE_PATH: "outputs/model_coefficients.engine"
 
 # ONNX opset version used for export
 OPSET_VERSION: 18
@@ -9,16 +26,47 @@ OPSET_VERSION: 18
 # TensorRT engines inherit their precision from the ONNX model (TensorRT
 # networks are strongly typed), so this yields an FP16 engine that trades a
 # small accuracy cost for inference speed.
-# Re-run both `export_onnx` and `build_engine` after changing this setting.
+# Re-run `export_onnx`, `build_engine` and `export_bundle` after changing this
+# setting.
 FP16: false
 
-# Dynamic batch size profile of the TensorRT engine.
-# The engine accepts any batch size in [MIN_BATCH_SIZE, MAX_BATCH_SIZE]
-# and its kernels are tuned for OPT_BATCH_SIZE
-# (set to testing.INFER_BATCH_SIZE, the batch size used during inference).
+# Dynamic batch size profile of the TensorRT engines.
+# Each engine accepts all batch sizes in [MIN_BATCH_SIZE, MAX_BATCH_SIZE].
+# TensorRT tunes the kernels of each engine for OPT_BATCH_SIZE.
 MIN_BATCH_SIZE: 10000
 OPT_BATCH_SIZE: 14400
 MAX_BATCH_SIZE: 40000
 
 # Number of samples used to verify exported models against PyTorch
 N_VERIFY_SAMPLES: 14400
+
+# The model bundle that NeuralBloch.jl reads (run.py export_bundle). It contains
+# the ONNX models above, the RF tables and a generated model_card.toml that
+# describes them. The task writes the release file of the bundle,
+# neuralbloch-model-<MODEL_FAMILY>-v<MODEL_VERSION>.tar.gz, next to the bundle.
+# The task deletes an old bundle in BUNDLE_DIR. Thus, BUNDLE_DIR must be a new
+# directory or a bundle (a directory with model_card.toml), and the sources of
+# the bundle must be outside it.
+BUNDLE_DIR: "outputs/bundle"
+
+# The name of the model in NeuralBloch.jl and in its release tag,
+# model-<MODEL_FAMILY>-v<MODEL_VERSION>.
+# A family is one contract for callers: the sequence, the number of readouts and
+# the rank of the signal basis (model.NB_signal). The name of a family has the form
+# <sequence><ntr>-rank<rank>. (export_bundle checks the rank.) If two families
+# would have the same name, add a qualifier at the end (fisp600-rank16-narrow).
+# The version is a semantic version in quotes: MAJOR.MINOR.PATCH, with an optional
+# pre-release part such as -beta.1. Build metadata (+...) is not permitted, because
+# the version is part of the release tag. Each version of a family can replace the
+# version before it with no change for callers:
+#   PATCH: the same weights, exported again
+#   MINOR: new weights or a wider domain
+#   MAJOR: stays 0 until the family is stable
+MODEL_FAMILY: "fisp600-rank16"
+MODEL_VERSION: "0.1.0-beta.1"
+
+# export_bundle refuses a family version whose release tag exists, here or on
+# origin. If it cannot get the tags of origin (for example without a network),
+# it stops. Set OFFLINE to true to continue with only a warning; then make sure
+# that the version is not released before you publish it.
+OFFLINE: false

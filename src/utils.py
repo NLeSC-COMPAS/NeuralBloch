@@ -1,4 +1,7 @@
+import hashlib
 import random
+from collections.abc import Mapping
+from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import Any
 import numpy as np
@@ -70,14 +73,33 @@ def load_model(
 ) -> tuple["FCModel", dict[str, Any]]:
     """Load a trained surrogate model from a checkpoint.
 
-    The model architecture is created from the configuration file,
-    after which the saved weights are loaded.
+    Returns:
+        The model (``model_from_checkpoint``) and the checkpoint.
     """
+    checkpoint = load_checkpoint(config, device)
+    return model_from_checkpoint(checkpoint, config, device), checkpoint
+
+
+def load_checkpoint(config: dict[str, Any], device: str) -> dict[str, Any]:
+    """Load the checkpoint file that ``experiment.PT_FILE_PATH`` gives."""
     checkpoint: dict[str, Any] = torch.load(
         config["experiment"]["PT_FILE_PATH"],
         map_location=device,
     )
+    return checkpoint
 
+
+def model_from_checkpoint(
+    checkpoint: dict[str, Any],
+    config: dict[str, Any],
+    device: str,
+) -> "FCModel":
+    """Create the model of a checkpoint and load its saved weights.
+
+    The model architecture comes from the configurations in the checkpoint.
+    Old checkpoints do not contain them. For these checkpoints, the function
+    uses the configurations in ``config``.
+    """
     from src.model import FCModel
 
     NTR = checkpoint["NTR"]
@@ -89,4 +111,24 @@ def load_model(
     model.to(device)
     model.eval()
 
-    return model, checkpoint
+    return model
+
+
+def file_sha256(path: str | Path) -> str:
+    """Return the sha256 of the file contents, in hexadecimal."""
+    with open(path, "rb") as f:
+        return hashlib.file_digest(f, "sha256").hexdigest()
+
+
+# The keys of the data configuration that give the RF tables of the training
+# sequence (data/data_generation.jl)
+RF_TABLE_KEYS = ("RF_ANGLE_FILE", "RF_PHASE_FILE")
+
+
+def rf_sha256(data_config: Mapping[str, Any]) -> dict[str, str]:
+    """Return the sha256 of each RF table that a data configuration gives.
+
+    Returns:
+        The sha256 by key of the data configuration (``RF_TABLE_KEYS``).
+    """
+    return {key: file_sha256(data_config[key]) for key in RF_TABLE_KEYS}

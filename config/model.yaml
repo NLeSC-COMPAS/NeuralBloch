@@ -2,20 +2,41 @@
 # Input: [T1, T2, B1]
 input_dim: 3
 
-# Hidden-layer activation: "relu", "silu", or "gelu".
+# How the model gets the T1/T2 derivatives.
+#   "separate": independent sub-networks predict the signal, dT1 and dT2.
+#               This mode needs all keys below, including the *_dT1 / *_dT2 keys.
+#   "forward":  forward sensitivity differentiates one signal network, so all
+#               three outputs use the same signal decoder. This mode needs a
+#               smooth activation (not "relu"). It ignores the *_dT1 / *_dT2 keys.
+derivative_mode: "separate"
+
+# Hidden-layer activation: "relu", "silu", "gelu", "tanh", or "softplus".
+# "relu" is only valid when derivative_mode is "separate".
 activation: "relu"
 
-# Latent representation size for each output quantity
+# --- Always required (signal network) ---
+
+# Latent representation size of the signal.
+# In "forward" mode, this value is the total basis rank, which all outputs share.
 NB_signal: 16
+
+# Number of neurons in each hidden layer.
+hidden_size_signal: 64
+
+# Number of fully connected layers.
+num_layers_signal: 4
+
+# --- Required only when derivative_mode is "separate" ---
+# When derivative_mode is "forward", the model ignores these keys. You can remove them.
+
+# Latent representation size for each derivative.
 NB_dT1: 32
 NB_dT2: 32
 
-# Number of neurons in each hidden layer of the fully connected networks.
-hidden_size_signal: 64
+# Number of neurons in each hidden layer.
 hidden_size_dT1: 128
 hidden_size_dT2: 128
 
-# Number of fully connected layers in each sub-network.
-num_layers_signal: 4
+# Number of fully connected layers.
 num_layers_dT1: 6
 num_layers_dT2: 6

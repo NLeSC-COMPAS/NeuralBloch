@@ -11,6 +11,7 @@ from data.data_loading import generate_train_loader
 from src.loss import Loss
 from src.model import FCModel
 from src.utils import get_device
+from src.utils import rf_sha256
 
 
 class Trainer:
@@ -116,6 +117,9 @@ class Trainer:
         best_val_loss = float("inf")
 
         pt_file_path = self.config["experiment"]["PT_FILE_PATH"]
+        # The training data come from the RF tables. Record their sha256 in the
+        # checkpoint, so that export_bundle can check the tables of a bundle
+        rf_tables = rf_sha256(self.config["data"])
         n_epochs = self.config["training"]["N_EPOCHS"]
         validate_every = self.config["training"].get("VALIDATE_EVERY", 1)
         training_started = time.perf_counter()
@@ -175,6 +179,7 @@ class Trainer:
                         "NTR": self.model.NTR,
                         "model_config": dict(self.config["model"]),
                         "data_config": dict(self.config["data"]),
+                        "rf_sha256": rf_tables,
                     },
                     pt_file_path,
                 )

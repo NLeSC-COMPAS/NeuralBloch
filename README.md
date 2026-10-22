@@ -17,7 +17,7 @@ Contains all configuration files.
 - **model.yaml** – model architecture settings (number of layers, hidden sizes, and output dimensions)
 - **training.yaml** – optimizer and training settings (number of epochs, batch sizes, and learning rate scheduler)
 - **testing.yaml** – evaluation and inference benchmark settings (batch sizes and number or runs)
-- **export.yaml** – model export settings (output paths, precision, and TensorRT batch size profile)
+- **export.yaml** – model export settings (output paths for each target, precision, TensorRT batch size profile, and the location, family and version of the model bundle)
 
 ---
 
@@ -53,7 +53,8 @@ Contains automatically generated output files.
 
 - TensorBoard log files
 - Saved model checkpoints (`.pt`)
-- Exported ONNX models (`.onnx`) and TensorRT engines (`.engine`)
+- Exported ONNX models (`.onnx`) and TensorRT engines (`.engine`): one model and one engine for each target
+- The model bundle (`bundle/`) and its release file (`neuralbloch-model-<family>-v<version>.tar.gz`)
 
 ---
 
@@ -66,7 +67,8 @@ Contains scripts called by `run.py` and standalone post-training commands.
 - **test_inference.py** – benchmarks surrogate inference speed
 - **orthogonalize_basis.py** – optionally orders a trained shared basis and saves smaller-rank checkpoints
 - **export_onnx.py** – exports the trained model to ONNX
-- **build_engine.py** – builds a TensorRT engine from the exported ONNX model
+- **build_engine.py** – builds a TensorRT engine from each exported ONNX model
+- **export_bundle.py** – writes the model bundle and its release file
 
 ---
 
@@ -94,8 +96,9 @@ Available tasks:
 - `train` – train the surrogate model
 - `test_accuracy` – evaluate prediction accuracy
 - `test_inference` – benchmark inference speed
-- `export_onnx` – export the trained model to ONNX
-- `build_engine` – build a TensorRT engine from the exported ONNX model
+- `export_onnx` – export the trained model to ONNX (one model for each target)
+- `build_engine` – build a TensorRT engine from each exported ONNX model
+- `export_bundle` – write the model bundle and its release file
 
 ## Usage
 
@@ -157,15 +160,44 @@ Measures surrogate inference performance under different execution settings (FP3
 uv run run.py export_onnx
 ```
 
-Reads the trained checkpoint (`experiment.PT_FILE_PATH`), exports it to an ONNX model with a dynamic batch dimension, and verifies the export against PyTorch using ONNX Runtime. With `export.FP16` enabled, the model runs internally in FP16 while its inputs and outputs stay FP32.
+Reads the trained checkpoint (`experiment.PT_FILE_PATH`) and exports one ONNX model for each target to the paths in `export.TARGETS`. Each model has a dynamic batch dimension.
 
-### 6. Build a TensorRT engine
+| Target | Model method | Outputs |
+|---|---|---|
+| `signal_and_derivatives` | `forward` | `signal`, `dT1`, `dT2`, each `(batch, NTR, 2)` |
+| `signal` | `forward_signal` | `signal`, `(batch, NTR, 2)` |
+| `coefficients` | `forward_coefficients` | `coefficients`, `(batch, rank)`, the basis coefficients of the signal |
+
+All three models take the input `x`, `(batch, 3)`, which contains the physical parameters `[T1, T2, B1]`. A TensorRT engine calculates all the outputs of its model on each call. Thus, a separate model for each target lets a caller do only the work that it needs. The task uses ONNX Runtime to compare each export with the PyTorch model. It uses parameters sampled from the training domain of the checkpoint. If `export.FP16` is `true`, the models run internally in FP16, but their inputs and outputs stay FP32.
+
+### 6. Build the TensorRT engines
 
 ```bash
 uv run run.py build_engine
 ```
 
-Compiles the exported ONNX model into a serialized TensorRT engine with a dynamic batch size profile and verifies the engine against PyTorch. TensorRT networks are strongly typed, so the engine precision is inherited from the ONNX model. Requires a CUDA GPU; the engine is specific to the GPU architecture and TensorRT version it was built with.
+Compiles each exported ONNX model into a serialized TensorRT engine with a dynamic batch size profile. Then the task makes sure that each engine has exactly the inputs and outputs of its target, and compares the engine with PyTorch. TensorRT networks are strongly typed, so each engine gets its precision from the ONNX model. This task requires a CUDA GPU. An engine works only with the GPU architecture and the TensorRT version that built it.
+
+### 7. Export the model bundle
+
+```bash
+uv run run.py export_bundle
+```
+
+Writes the model bundle to `export.BUNDLE_DIR`: the three ONNX models of step 5, the RF tables of the training sequence, and `model_card.toml`. The card describes the model: its family and version, shapes, training domain, sequence and origin. Next to the bundle, the task writes the release file `neuralbloch-model-<family>-v<version>.tar.gz` (step 8).
+
+The task checks the checkpoint and the ONNX models before it writes. It stops if the repository has uncommitted changes, because the card records the commit. It also stops if the release of the family version exists (step 8), or if it cannot get the tags of `origin` to find out. To continue without `origin`, set `export.OFFLINE: true`. For the card fields, the checks and the version rules, refer to `scripts/export_bundle.py` and `config/export.yaml`.
+
+### 8. Publish a model release
+
+A model release is a GitHub release with the tag `model-<family>-v<version>` and one file: the release file of step 7. To publish a model, do these steps:
+
+1. Set `MODEL_FAMILY` and `MODEL_VERSION` in `config/export.yaml`. Then commit and push.
+2. Do steps 5 to 7. Keep the sha256 and the `gh release create` command that step 7 prints.
+3. Create the release with this command, or in the GitHub web interface. In the web interface, create the tag at the commit that the card records, not at `main`. Attach the release file. Publish a pre-release version (`-beta.1`) as a pre-release. Do not mark other versions as latest.
+4. Make sure that the sha256 of the published file is the printed sha256.
+
+CAUTION: Do not change a published file, because users can pin its sha256. To correct a model, publish a new version.
 
 ## Configuration
 
