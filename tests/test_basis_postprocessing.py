@@ -8,7 +8,7 @@ import torch
 from scripts.orthogonalize_basis import load_checkpoint
 from scripts.orthogonalize_basis import postprocess_basis
 from src.basis import orthogonalize_shared_basis
-from src.basis import representative_coefficients
+from src.basis import representative_coeffs
 from src.basis import truncate_shared_basis
 from src.basis import worst_relative_output_difference
 from src.model import FCModel
@@ -56,7 +56,7 @@ class BasisPostprocessingTest(unittest.TestCase):
         smaller = truncate_shared_basis(ordered, MODEL_CONFIG, DATA_CONFIG, 2)
         self.assertEqual(smaller.U_signal[0].weight.shape, (10, 2))
         with torch.no_grad():
-            coefficients = representative_coefficients(ordered, self.held_out)
+            coefficients = representative_coeffs(ordered, self.held_out)
             expected = tuple(
                 (value[:, :2] @ basis[:, :2].T).unflatten(-1, (5, 2))
                 for value in coefficients

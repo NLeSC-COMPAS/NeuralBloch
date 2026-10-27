@@ -278,22 +278,24 @@ class FCModel(nn.Module):
                 be finite and strictly positive.
 
         Returns:
-            m: Predicted signal with shape ``(batch, NTR, 2)``.
-            dm_dT1: T1 derivative with shape ``(batch, NTR, 2)``.
-            dm_dT2: T2 derivative with shape ``(batch, NTR, 2)``.
+            signal: Predicted signal with shape ``(batch, NTR, 2)``.
+            dT1: T1 derivative with shape ``(batch, NTR, 2)``.
+            dT2: T2 derivative with shape ``(batch, NTR, 2)``.
         """
         if self.derivative_mode == "derived":
             network_input, tangent_T1, tangent_T2 = (
                 self.input_transform.forward_with_tangents(x)
             )
-            signal, dT1, dT2 = self.subnet_signal.forward_with_tangents(
-                network_input, tangent_T1, tangent_T2
+            coeffs_signal, coeffs_dT1, coeffs_dT2 = (
+                self.subnet_signal.forward_with_tangents(
+                    network_input, tangent_T1, tangent_T2
+                )
             )
             # A single rank-R decoder is shared by the signal and both exact
             # coefficient derivatives. Total deployed basis rank is therefore R.
-            m = self.U_signal(signal)
-            dm_dT1 = self.U_signal(dT1)
-            dm_dT2 = self.U_signal(dT2)
+            signal = self.U_signal(coeffs_signal)
+            dT1 = self.U_signal(coeffs_dT1)
+            dT2 = self.U_signal(coeffs_dT2)
         else:
             network_input = self.input_transform(x)
             if (
@@ -303,14 +305,14 @@ class FCModel(nn.Module):
                 or self.U_dT2 is None
             ):
                 raise RuntimeError("Direct derivative heads were not initialized")
-            signal = self.subnet_signal(network_input)
-            dT1 = self.subnet_dT1(network_input)
-            dT2 = self.subnet_dT2(network_input)
-            m = self.U_signal(signal)
-            dm_dT1 = self.U_dT1(dT1)
-            dm_dT2 = self.U_dT2(dT2)
+            coeffs_signal = self.subnet_signal(network_input)
+            coeffs_dT1 = self.subnet_dT1(network_input)
+            coeffs_dT2 = self.subnet_dT2(network_input)
+            signal = self.U_signal(coeffs_signal)
+            dT1 = self.U_dT1(coeffs_dT1)
+            dT2 = self.U_dT2(coeffs_dT2)
 
-        return m, dm_dT1, dm_dT2
+        return signal, dT1, dT2
 
     def forward_signal(self, x: torch.Tensor) -> torch.Tensor:
         """Predict the signal without evaluating the derivative sub-networks.
