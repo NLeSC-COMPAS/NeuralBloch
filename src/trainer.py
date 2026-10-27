@@ -35,9 +35,9 @@ class Trainer:
         self.config = config
 
         # Optimizer
-        compile_train_step = config["training"].get("COMPILE_TRAIN_STEP", False)
+        compile_train_step = config["training"]["COMPILE_TRAIN_STEP"]
         compile_train_step = compile_train_step and self.device.startswith("cuda")
-        initial_learning_rate = float(config["training"].get("LEARNING_RATE", 1e-3))
+        initial_learning_rate = float(config["training"]["LEARNING_RATE"])
         if compile_train_step:
             # A device-resident learning rate prevents torch.compile from
             # specializing and recompiling the Adam step after every scheduler
@@ -60,7 +60,7 @@ class Trainer:
         # Learning rate scheduler
         self.scheduler: LRScheduler
 
-        validate_every = config["training"].get("VALIDATE_EVERY", 1)
+        validate_every = config["training"]["VALIDATE_EVERY"]
         if validate_every <= 0:
             raise ValueError("training.VALIDATE_EVERY must be positive")
 
@@ -121,7 +121,7 @@ class Trainer:
         # checkpoint, so that export_bundle can check the tables of a bundle
         rf_tables = rf_sha256(self.config["data"])
         n_epochs = self.config["training"]["N_EPOCHS"]
-        validate_every = self.config["training"].get("VALIDATE_EVERY", 1)
+        validate_every = self.config["training"]["VALIDATE_EVERY"]
         training_started = time.perf_counter()
         train_loader = initial_train_loader
 

@@ -35,7 +35,7 @@ end
 
 function generate_data(config; for_training)
 
-    derivative_method = get(config["data"], "DERIVATIVE_METHOD", "forward_sensitivity")
+    derivative_method = config["data"]["DERIVATIVE_METHOD"]
     derivative_method in ("forward_sensitivity", "finite_difference") || error(
         "data.DERIVATIVE_METHOD must be 'forward_sensitivity' or 'finite_difference'; " *
         "found $derivative_method"
@@ -183,7 +183,7 @@ function save_dataset(config)
     # Store all quantities required for training/testing.
     h5open(filename, "w") do f
         attributes(f)["blochsimulators_version"] = string(pkgversion(BlochSimulators))
-        attributes(f)["derivative_method"] = get(config["data"], "DERIVATIVE_METHOD", "forward_sensitivity")
+        attributes(f)["derivative_method"] = config["data"]["DERIVATIVE_METHOD"]
         attributes(f)["derivative_parameters"] = "T1,T2"
 
         write(f, "T1", data.T1)
