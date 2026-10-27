@@ -163,8 +163,8 @@ def require_configs(checkpoint: Mapping[str, Any], path: str | Path) -> None:
 
     The card describes the model in the checkpoint. Thus, all fields must come
     from the training configuration of the model. Older checkpoints do not
-    contain this configuration. For these checkpoints, ``model_from_checkpoint``
-    uses the configuration in ``config/``, which can describe a different model.
+    contain this configuration. This check gives a clearer error than the
+    ``KeyError`` of ``model_from_checkpoint``.
 
     Args:
         checkpoint: The loaded checkpoint.
@@ -177,9 +177,7 @@ def require_configs(checkpoint: Mapping[str, Any], path: str | Path) -> None:
     if missing:
         raise ValueError(
             f"{path} does not store {' and '.join(missing)}, so the model card "
-            "cannot come from it. For an old checkpoint without its training "
-            "configuration, the card would describe config/, which can belong to "
-            "a different model. Train the model again, or add its training "
+            "cannot come from it. Train the model again, or add its training "
             "configuration to the checkpoint yourself "
             "(checkpoint['model_config'] = ..., checkpoint['data_config'] = ..., "
             "torch.save(checkpoint, path))."
@@ -822,7 +820,7 @@ def export_bundle(config: dict[str, Any]) -> None:
     # Check the configurations before the model is made from them
     checkpoint = load_checkpoint(config, "cpu")
     require_configs(checkpoint, checkpoint_path)
-    model = model_from_checkpoint(checkpoint, config, "cpu")
+    model = model_from_checkpoint(checkpoint, "cpu")
 
     family = export_config["MODEL_FAMILY"]
     version = check_version(export_config["MODEL_VERSION"])
@@ -865,7 +863,7 @@ def export_bundle(config: dict[str, Any]) -> None:
         require_checkpoint(onnx_path, checkpoint_sha256, checkpoint_path)
     precision = onnx_precision(list(onnx_paths.values()))
     x = sample_parameters(
-        training_domain(config, checkpoint), export_config["N_VERIFY_SAMPLES"]
+        training_domain(checkpoint), export_config["N_VERIFY_SAMPLES"]
     )
     for target, onnx_path in onnx_paths.items():
         verify_onnx(model, target, onnx_path, x, precision)

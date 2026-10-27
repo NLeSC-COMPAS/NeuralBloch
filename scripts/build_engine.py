@@ -63,7 +63,7 @@ def build_engine(config: dict[str, Any]) -> None:
     # Load the PyTorch float32 reference and sample parameters from its training domain
     model, checkpoint = load_model(config, "cuda")
     x = sample_parameters(
-        training_domain(config, checkpoint), export_config["N_VERIFY_SAMPLES"]
+        training_domain(checkpoint), export_config["N_VERIFY_SAMPLES"]
     ).to("cuda")
 
     # TensorRT networks are strongly typed, so each engine has the precision
