@@ -17,8 +17,8 @@ activation: "relu"
 
 # --- Always required (signal network) ---
 
-# Latent representation size of the signal.
-# In "derived" mode, this value is the total basis rank, which all outputs share.
+# Number of basis coefficients of the signal: the rank of the signal decoder.
+# In "derived" mode, all three outputs share this decoder, so this is the total rank.
 NB_signal: 16
 
 # Number of neurons in each hidden layer.
@@ -30,7 +30,7 @@ num_layers_signal: 4
 # --- Required only when derivative_mode is "direct" ---
 # When derivative_mode is "derived", the model ignores these keys. You can remove them.
 
-# Latent representation size for each derivative.
+# Number of basis coefficients of each derivative: the rank of its decoder.
 NB_dT1: 32
 NB_dT2: 32
 
