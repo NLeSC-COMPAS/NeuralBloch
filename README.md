@@ -39,7 +39,7 @@ Forward sensitivity requires BlochSimulators v0.10 or newer. It is now as fast
 as finite differences, needs no step-size choice, and gives derivatives exact
 up to floating-point error rather than a finite-difference approximation.
 
-For a shared-basis model (`model.derivative_mode: forward`), setting
+For a shared-basis model (`model.derivative_mode: derived`), setting
 `model.basis_initialization: joint_pca` initializes its decoder from the
 leading singular vectors of row-normalized signal and derivative targets.
 These span the rank-limited subspace with the smallest squared projection

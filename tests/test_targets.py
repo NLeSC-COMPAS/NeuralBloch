@@ -23,8 +23,8 @@ from src.model import FCModel
 
 NTR = 5
 
-SEPARATE_CONFIG = {
-    "derivative_mode": "separate",
+DIRECT_CONFIG = {
+    "derivative_mode": "direct",
     "NB_signal": 3,
     "NB_dT1": 2,
     "NB_dT2": 2,
@@ -36,8 +36,8 @@ SEPARATE_CONFIG = {
     "num_layers_dT2": 2,
 }
 
-FORWARD_CONFIG = {
-    "derivative_mode": "forward",
+DERIVED_CONFIG = {
+    "derivative_mode": "derived",
     "activation": "gelu",
     "NB_signal": 3,
     "hidden_size_signal": 4,
@@ -52,7 +52,7 @@ SIZES = {
     "signal": (NTR, 2),
     "dT1": (NTR, 2),
     "dT2": (NTR, 2),
-    "coefficients": (SEPARATE_CONFIG["NB_signal"],),
+    "coefficients": (DIRECT_CONFIG["NB_signal"],),
 }
 
 
@@ -66,7 +66,7 @@ class TargetModelTest(unittest.TestCase):
 
     def test_target_model_is_its_method_bitwise(self) -> None:
         torch.manual_seed(0)
-        for config in (SEPARATE_CONFIG, FORWARD_CONFIG):
+        for config in (DIRECT_CONFIG, DERIVED_CONFIG):
             model = FCModel(NTR, config).eval()
             with torch.no_grad():
                 methods = {
@@ -84,8 +84,8 @@ class TargetModelTest(unittest.TestCase):
                         self.assertTrue(torch.equal(output, reference))
 
     def test_output_shapes(self) -> None:
-        model = FCModel(NTR, SEPARATE_CONFIG).eval()
-        self.assertEqual(model.rank, SEPARATE_CONFIG["NB_signal"])
+        model = FCModel(NTR, DIRECT_CONFIG).eval()
+        self.assertEqual(model.rank, DIRECT_CONFIG["NB_signal"])
         for name, target in TARGETS.items():
             with torch.no_grad():
                 outputs = TargetModel(model, name)(X)
@@ -95,7 +95,7 @@ class TargetModelTest(unittest.TestCase):
 
     def test_fp16_runs_in_half_behind_an_fp32_interface(self) -> None:
         torch.manual_seed(0)
-        model = FCModel(NTR, SEPARATE_CONFIG).eval()
+        model = FCModel(NTR, DIRECT_CONFIG).eval()
         half = TargetModel(model, "signal_and_derivatives", fp16=True)
         self.assertTrue(all(p.dtype == torch.float16 for p in half.parameters()))
         # The wrapper converts a copy, so the model stays FP32
@@ -186,7 +186,7 @@ class ExportTest(unittest.TestCase):
 
     def test_each_target_exports_exactly_its_outputs(self) -> None:
         torch.manual_seed(0)
-        model = FCModel(NTR, SEPARATE_CONFIG).eval()
+        model = FCModel(NTR, DIRECT_CONFIG).eval()
         with tempfile.TemporaryDirectory() as tmp:
             for name, target in TARGETS.items():
                 with self.subTest(target=name):
@@ -208,7 +208,7 @@ class ExportTest(unittest.TestCase):
                         self.assertEqual(dim, batch)
 
     def test_fp16_export_keeps_fp32_inputs_and_outputs(self) -> None:
-        model = FCModel(NTR, SEPARATE_CONFIG).eval()
+        model = FCModel(NTR, DIRECT_CONFIG).eval()
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "signal.onnx"
             export_target(model, "signal", path, example=X[:2], opset=18, fp16=True)
@@ -221,7 +221,7 @@ class ExportTest(unittest.TestCase):
 class VerifyTest(unittest.TestCase):
     def test_an_exported_model_gives_the_pytorch_values(self) -> None:
         torch.manual_seed(0)
-        model = FCModel(NTR, SEPARATE_CONFIG).eval()
+        model = FCModel(NTR, DIRECT_CONFIG).eval()
         with tempfile.TemporaryDirectory() as tmp:
             for name in TARGETS:
                 with self.subTest(target=name):
@@ -233,9 +233,9 @@ class VerifyTest(unittest.TestCase):
 
     def test_a_model_from_other_weights_deviates(self) -> None:
         torch.manual_seed(0)
-        exported = FCModel(NTR, SEPARATE_CONFIG).eval()
+        exported = FCModel(NTR, DIRECT_CONFIG).eval()
         torch.manual_seed(1)
-        other = FCModel(NTR, SEPARATE_CONFIG).eval()
+        other = FCModel(NTR, DIRECT_CONFIG).eval()
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "signal.onnx"
             export_target(exported, "signal", path, example=X[:2], opset=18)
@@ -244,7 +244,7 @@ class VerifyTest(unittest.TestCase):
 
     def test_outputs_need_the_pytorch_shape_and_finite_values(self) -> None:
         torch.manual_seed(0)
-        model = FCModel(NTR, SEPARATE_CONFIG).eval()
+        model = FCModel(NTR, DIRECT_CONFIG).eval()
         with torch.no_grad():
             (signal,) = TargetModel(model, "signal")(X)
         signal = signal.numpy()
@@ -283,7 +283,7 @@ class StagedTest(unittest.TestCase):
 class CheckpointStampTest(unittest.TestCase):
     def test_a_model_records_its_checkpoint(self) -> None:
         torch.manual_seed(0)
-        model = FCModel(NTR, SEPARATE_CONFIG).eval()
+        model = FCModel(NTR, DIRECT_CONFIG).eval()
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "signal.onnx"
             export_target(model, "signal", path, example=X[:2], opset=18)
