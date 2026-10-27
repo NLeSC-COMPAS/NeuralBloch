@@ -15,6 +15,19 @@ derivative_mode: "direct"
 # "relu" is only valid when derivative_mode is "direct".
 activation: "relu"
 
+# Scale the network inputs [log(T1), log(T2), B1] to [-1, 1] with the parameter
+# ranges in data.yaml (T1_lower to B1_upper). If false, the sub-networks get
+# [log(T1), log(T2), B1] without scaling.
+normalize_inputs: false
+
+# How the signal decoder is initialized before training.
+#   "learned":   random initialization.
+#   "joint_pca": the leading singular vectors of the row-normalized signal, dT1
+#                and dT2 targets of the first training set. This mode needs
+#                derivative_mode "derived".
+# In both modes, training updates the decoder.
+basis_initialization: "learned"
+
 # --- Always required (signal network) ---
 
 # Number of basis coefficients of the signal: the rank of the signal decoder.
