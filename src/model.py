@@ -174,8 +174,8 @@ class InputTransform(nn.Module):
 class FCModel(nn.Module):
     """Fully connected surrogate model.
 
-    In ``separate`` mode, three independent sub-networks predict the signal and
-    its T1/T2 derivatives. In ``forward`` mode, one smooth signal network is
+    In ``direct`` mode, three independent sub-networks predict the signal and
+    its T1/T2 derivatives. In ``derived`` mode, one smooth signal network is
     differentiated by forward sensitivity and all three outputs therefore use
     exactly the same decoder basis.
 
@@ -200,16 +200,16 @@ class FCModel(nn.Module):
         super().__init__()
 
         activation = config.get("activation", "relu")
-        self.derivative_mode = config.get("derivative_mode", "separate")
+        self.derivative_mode = config.get("derivative_mode", "direct")
 
-        if self.derivative_mode not in {"separate", "forward"}:
+        if self.derivative_mode not in {"direct", "derived"}:
             raise ValueError(
-                "model.derivative_mode must be 'separate' or 'forward', got "
+                "model.derivative_mode must be 'direct' or 'derived', got "
                 f"{self.derivative_mode!r}"
             )
-        if self.derivative_mode == "forward" and activation == "relu":
+        if self.derivative_mode == "derived" and activation == "relu":
             raise ValueError(
-                "model.activation must be smooth when derivative_mode='forward'"
+                "model.activation must be smooth when derivative_mode='derived'"
             )
 
         self.NTR = NTR
@@ -243,7 +243,7 @@ class FCModel(nn.Module):
         self.subnet_dT1: SubNetwork | None = None
         self.subnet_dT2: SubNetwork | None = None
 
-        if self.derivative_mode == "separate":
+        if self.derivative_mode == "direct":
             self.U_dT1 = nn.Sequential(
                 nn.Linear(config["NB_dT1"], 2 * NTR, bias=False),
                 nn.Unflatten(-1, (NTR, 2)),
@@ -282,7 +282,7 @@ class FCModel(nn.Module):
             dm_dT1: T1 derivative with shape ``(batch, NTR, 2)``.
             dm_dT2: T2 derivative with shape ``(batch, NTR, 2)``.
         """
-        if self.derivative_mode == "forward":
+        if self.derivative_mode == "derived":
             network_input, tangent_T1, tangent_T2 = (
                 self.input_transform.forward_with_tangents(x)
             )
@@ -302,7 +302,7 @@ class FCModel(nn.Module):
                 or self.U_dT1 is None
                 or self.U_dT2 is None
             ):
-                raise RuntimeError("Separate derivative heads were not initialized")
+                raise RuntimeError("Direct derivative heads were not initialized")
             signal = self.subnet_signal(network_input)
             dT1 = self.subnet_dT1(network_input)
             dT2 = self.subnet_dT2(network_input)
@@ -337,8 +337,8 @@ class FCModel(nn.Module):
         signal: ``forward_coefficients(x) @ U_signal[0].weight.T``, unflattened
         to ``(batch, NTR, 2)``, reproduces ``forward_signal(x)`` exactly.
 
-        In ``forward`` mode, this basis is shared by the signal and both
-        derivatives. In ``separate`` mode, it is the signal basis only.
+        In ``derived`` mode, this basis is shared by the signal and both
+        derivatives. In ``direct`` mode, it is the signal basis only.
 
         Input:
             x: Physical tissue parameters ``[T1, T2, B1]``. T1 and T2 must

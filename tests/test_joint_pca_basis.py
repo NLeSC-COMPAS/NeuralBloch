@@ -13,7 +13,7 @@ class JointPCABasisTest(unittest.TestCase):
         rank = 2
         config = {
             "activation": "gelu",
-            "derivative_mode": "forward",
+            "derivative_mode": "derived",
             "NB_signal": rank,
             "hidden_size_signal": 8,
             "num_layers_signal": 2,

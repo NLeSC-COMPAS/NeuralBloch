@@ -47,8 +47,8 @@ def postprocess_basis(
         raise ValueError("A truncated output path would overwrite the input checkpoint")
 
     model, checkpoint = load_checkpoint(checkpoint_path, device)
-    if model.derivative_mode != "forward":
-        raise ValueError("Basis postprocessing requires derivative_mode='forward'")
+    if model.derivative_mode != "derived":
+        raise ValueError("Basis postprocessing requires derivative_mode='derived'")
     full_rank = checkpoint["model_config"]["NB_signal"]
     if any(rank > full_rank for rank in ranks):
         raise ValueError(f"--truncate ranks must not exceed full rank {full_rank}")

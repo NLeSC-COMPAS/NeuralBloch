@@ -26,8 +26,8 @@ def orthogonalize_shared_basis(model: FCModel, params: torch.Tensor) -> None:
     floating-point rounding. The ordering uses the supplied representative
     physical parameters and allows meaningful truncation afterward.
     """
-    if model.derivative_mode != "forward":
-        raise ValueError("Basis reordering requires derivative_mode='forward'")
+    if model.derivative_mode != "derived":
+        raise ValueError("Basis reordering requires derivative_mode='derived'")
     if params.ndim != 2 or params.shape[0] == 0 or params.shape[1] != 3:
         raise ValueError("params must have shape (n_samples, 3) with n_samples > 0")
 
@@ -77,8 +77,8 @@ def truncate_shared_basis(
     Call after ``orthogonalize_shared_basis``. Truncation changes predictions;
     the full-rank basis rewrite itself does not.
     """
-    if model.derivative_mode != "forward":
-        raise ValueError("Basis truncation requires derivative_mode='forward'")
+    if model.derivative_mode != "derived":
+        raise ValueError("Basis truncation requires derivative_mode='derived'")
     full_rank = model.rank
     if not 0 < rank <= full_rank:
         raise ValueError(f"rank must be in (0, {full_rank}], got {rank}")
