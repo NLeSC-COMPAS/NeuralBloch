@@ -84,10 +84,7 @@ def generate_val_loader(
     dT1_split = complex_to_real_imag(dT1)
     dT2_split = complex_to_real_imag(dT2)
 
-    batchsize = config["training"].get(
-        "VALIDATION_BATCH_SIZE",
-        config["training"]["TRAIN_BATCH_SIZE"],
-    )
+    batchsize = config["training"]["VALIDATION_BATCH_SIZE"]
 
     val_loader = make_loader(
         params, sig_split, dT1_split, dT2_split, batchsize, device, shuffle=False

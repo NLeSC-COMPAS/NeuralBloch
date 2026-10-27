@@ -14,6 +14,7 @@ class JointPCABasisTest(unittest.TestCase):
         config = {
             "activation": "gelu",
             "derivative_mode": "derived",
+            "normalize_inputs": False,
             "NB_signal": rank,
             "hidden_size_signal": 8,
             "num_layers_signal": 2,

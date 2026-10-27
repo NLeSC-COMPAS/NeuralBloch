@@ -15,6 +15,9 @@ from src.utils import sample_parameters
 
 
 MODEL_CONFIG = {
+    "derivative_mode": "direct",
+    "activation": "relu",
+    "normalize_inputs": False,
     "NB_signal": 2,
     "NB_dT1": 2,
     "NB_dT2": 2,
