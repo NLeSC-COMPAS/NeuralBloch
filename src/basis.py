@@ -5,7 +5,7 @@ import torch
 from src.model import FCModel
 
 
-def representative_coefficients(
+def representative_coeffs(
     model: FCModel, params: torch.Tensor
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Return signal and derivative coefficients before the shared decoder."""
@@ -43,10 +43,10 @@ def orthogonalize_shared_basis(model: FCModel, params: torch.Tensor) -> None:
         raise ValueError("The decoder rank must not exceed its output dimension")
     orthonormal_raw, upper_triangular = torch.linalg.qr(weight, mode="reduced")
 
-    signal, dT1, dT2 = representative_coefficients(model, params)
+    coeffs_signal, coeffs_dT1, coeffs_dT2 = representative_coeffs(model, params)
     rank = upper_triangular.shape[0]
     covariance = torch.zeros((rank, rank), dtype=weight.dtype, device=weight.device)
-    for coefficients in (signal, dT1, dT2):
+    for coefficients in (coeffs_signal, coeffs_dT1, coeffs_dT2):
         rotated = coefficients @ upper_triangular.T
         rotated = rotated / torch.linalg.vector_norm(
             rotated, dim=1, keepdim=True
