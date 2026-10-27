@@ -199,8 +199,8 @@ class FCModel(nn.Module):
     ) -> None:
         super().__init__()
 
-        activation = config.get("activation", "relu")
-        self.derivative_mode = config.get("derivative_mode", "direct")
+        activation = config["activation"]
+        self.derivative_mode = config["derivative_mode"]
 
         if self.derivative_mode not in {"direct", "derived"}:
             raise ValueError(
@@ -219,7 +219,7 @@ class FCModel(nn.Module):
 
         # Physical [T1, T2, B1] -> internal [log(T1), log(T2), B1] coordinates
         self.input_transform = InputTransform(
-            config.get("normalize_inputs", False),
+            config["normalize_inputs"],
             data_config,
         )
 

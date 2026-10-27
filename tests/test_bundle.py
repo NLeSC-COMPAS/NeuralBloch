@@ -531,6 +531,8 @@ class ExportBundleTest(unittest.TestCase):
     NTR = 5
     MODEL_CONFIG = {
         "derivative_mode": "direct",
+        "activation": "relu",
+        "normalize_inputs": False,
         "NB_signal": 3,
         "NB_dT1": 2,
         "NB_dT2": 2,

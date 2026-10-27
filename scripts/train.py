@@ -61,7 +61,7 @@ def train(config: dict[str, Any]) -> None:
 
     initial_train_loader = None
     basis_initialization_seconds = 0.0
-    basis_mode = config["model"].get("basis_initialization", "learned")
+    basis_mode = config["model"]["basis_initialization"]
     if basis_mode == "joint_pca":
         if model.derivative_mode != "derived":
             raise ValueError(

@@ -25,6 +25,8 @@ NTR = 5
 
 DIRECT_CONFIG = {
     "derivative_mode": "direct",
+    "activation": "relu",
+    "normalize_inputs": False,
     "NB_signal": 3,
     "NB_dT1": 2,
     "NB_dT2": 2,
@@ -39,6 +41,7 @@ DIRECT_CONFIG = {
 DERIVED_CONFIG = {
     "derivative_mode": "derived",
     "activation": "gelu",
+    "normalize_inputs": False,
     "NB_signal": 3,
     "hidden_size_signal": 4,
     "num_layers_signal": 3,
