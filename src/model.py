@@ -199,7 +199,6 @@ class FCModel(nn.Module):
     ) -> None:
         super().__init__()
 
-        input_dim = config["input_dim"]
         activation = config.get("activation", "relu")
         self.derivative_mode = config.get("derivative_mode", "separate")
 
@@ -232,7 +231,7 @@ class FCModel(nn.Module):
 
         # Sub-network for the signal
         self.subnet_signal = SubNetwork(
-            input_dim=input_dim,
+            input_dim=INPUT_DIM,
             output_dim=config["NB_signal"],
             hidden_size=config["hidden_size_signal"],
             num_layers=config["num_layers_signal"],
@@ -254,14 +253,14 @@ class FCModel(nn.Module):
                 nn.Unflatten(-1, (NTR, 2)),
             )
             self.subnet_dT1 = SubNetwork(
-                input_dim=input_dim,
+                input_dim=INPUT_DIM,
                 output_dim=config["NB_dT1"],
                 hidden_size=config["hidden_size_dT1"],
                 num_layers=config["num_layers_dT1"],
                 activation=activation,
             )
             self.subnet_dT2 = SubNetwork(
-                input_dim=input_dim,
+                input_dim=INPUT_DIM,
                 output_dim=config["NB_dT2"],
                 hidden_size=config["hidden_size_dT2"],
                 num_layers=config["num_layers_dT2"],
