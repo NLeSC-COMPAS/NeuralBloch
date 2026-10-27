@@ -52,15 +52,13 @@ SIZES = {
     "signal": (NTR, 2),
     "dT1": (NTR, 2),
     "dT2": (NTR, 2),
-    "coefficients": (DIRECT_CONFIG["NB_signal"],),
+    "coeffs": (DIRECT_CONFIG["NB_signal"],),
 }
 
 
 class TargetModelTest(unittest.TestCase):
     def test_targets_are_fcmodel_methods(self) -> None:
-        self.assertEqual(
-            list(TARGETS), ["signal_and_derivatives", "signal", "coefficients"]
-        )
+        self.assertEqual(list(TARGETS), ["signal_and_derivs", "signal", "coeffs"])
         for target in TARGETS.values():
             self.assertTrue(callable(getattr(FCModel, target.method)))
 
@@ -70,9 +68,9 @@ class TargetModelTest(unittest.TestCase):
             model = FCModel(NTR, config).eval()
             with torch.no_grad():
                 methods = {
-                    "signal_and_derivatives": model(X),
+                    "signal_and_derivs": model(X),
                     "signal": (model.forward_signal(X),),
-                    "coefficients": (model.forward_coefficients(X),),
+                    "coeffs": (model.forward_coeffs(X),),
                 }
             for name, expected in methods.items():
                 with self.subTest(mode=config["derivative_mode"], target=name):
@@ -96,7 +94,7 @@ class TargetModelTest(unittest.TestCase):
     def test_fp16_runs_in_half_behind_an_fp32_interface(self) -> None:
         torch.manual_seed(0)
         model = FCModel(NTR, DIRECT_CONFIG).eval()
-        half = TargetModel(model, "signal_and_derivatives", fp16=True)
+        half = TargetModel(model, "signal_and_derivs", fp16=True)
         self.assertTrue(all(p.dtype == torch.float16 for p in half.parameters()))
         # The wrapper converts a copy, so the model stays FP32
         self.assertTrue(all(p.dtype == torch.float32 for p in model.parameters()))
@@ -118,8 +116,8 @@ class TargetPathsTest(unittest.TestCase):
         self.assertEqual(list(paths), list(TARGETS))
         self.assertEqual(paths["signal"], (Path("signal.onnx"), Path("signal.e")))
 
-        del targets["coefficients"]
-        with self.assertRaisesRegex(ValueError, "it names signal_and_derivatives"):
+        del targets["coeffs"]
+        with self.assertRaisesRegex(ValueError, "it names signal_and_derivs"):
             target_paths({"TARGETS": targets})
         with self.assertRaisesRegex(ValueError, "it names none"):
             target_paths({"ONNX_FILE_PATH": "outputs/model.onnx"})
@@ -130,14 +128,14 @@ class TargetPathsTest(unittest.TestCase):
             for name in TARGETS
         }
         # For example, a copied entry that keeps the ONNX file of another target
-        targets["coefficients"]["ONNX_FILE_PATH"] = "./signal_and_derivatives.onnx"
+        targets["coeffs"]["ONNX_FILE_PATH"] = "./signal_and_derivs.onnx"
         with self.assertRaisesRegex(
             ValueError,
-            "coefficients.ONNX_FILE_PATH and signal_and_derivatives.ONNX_FILE_PATH "
+            "coeffs.ONNX_FILE_PATH and signal_and_derivs.ONNX_FILE_PATH "
             "are the same file",
         ):
             target_paths({"TARGETS": targets})
-        targets["coefficients"]["ONNX_FILE_PATH"] = "signal.e"
+        targets["coeffs"]["ONNX_FILE_PATH"] = "signal.e"
         with self.assertRaisesRegex(ValueError, "and signal.ENGINE_FILE_PATH"):
             target_paths({"TARGETS": targets})
 

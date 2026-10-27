@@ -313,7 +313,7 @@ class BundleTest(unittest.TestCase):
             sorted([CARD, "rf_data", *self.files]),
         )
         self.assertEqual(
-            (self.bundle / "model.onnx").read_bytes(), b"signal_and_derivatives"
+            (self.bundle / "model.onnx").read_bytes(), b"signal_and_derivs"
         )
 
     def test_a_new_bundle_replaces_the_old_one_whole(self) -> None:
