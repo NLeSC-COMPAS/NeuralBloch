@@ -77,7 +77,7 @@ def load_model(
         The model (``model_from_checkpoint``) and the checkpoint.
     """
     checkpoint = load_checkpoint(config, device)
-    return model_from_checkpoint(checkpoint, config, device), checkpoint
+    return model_from_checkpoint(checkpoint, device), checkpoint
 
 
 def load_checkpoint(config: dict[str, Any], device: str) -> dict[str, Any]:
@@ -89,24 +89,17 @@ def load_checkpoint(config: dict[str, Any], device: str) -> dict[str, Any]:
     return checkpoint
 
 
-def model_from_checkpoint(
-    checkpoint: dict[str, Any],
-    config: dict[str, Any],
-    device: str,
-) -> "FCModel":
+def model_from_checkpoint(checkpoint: dict[str, Any], device: str) -> "FCModel":
     """Create the model of a checkpoint and load its saved weights.
 
-    The model architecture comes from the configurations in the checkpoint.
-    Old checkpoints do not contain them. For these checkpoints, the function
-    uses the configurations in ``config``.
+    The model comes from the configuration in the checkpoint, not from
+    ``config/``.
     """
     from src.model import FCModel
 
     NTR = checkpoint["NTR"]
 
-    model_config = checkpoint.get("model_config", config["model"])
-    data_config = checkpoint.get("data_config", config["data"])
-    model = FCModel(NTR, model_config, data_config)
+    model = FCModel(NTR, checkpoint["model_config"], checkpoint["data_config"])
     model.load_state_dict(checkpoint["model_state"])
     model.to(device)
     model.eval()

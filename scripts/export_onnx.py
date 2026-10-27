@@ -104,7 +104,7 @@ def export_onnx(config: dict[str, Any]) -> None:
     precision = "FP16" if fp16 else "FP32"
 
     x = sample_parameters(
-        training_domain(config, checkpoint), export_config["N_VERIFY_SAMPLES"]
+        training_domain(checkpoint), export_config["N_VERIFY_SAMPLES"]
     )
 
     checkpoint_sha256 = file_sha256(config["experiment"]["PT_FILE_PATH"])
@@ -260,25 +260,19 @@ def require_exported(paths: dict[str, tuple[Path, Path]]) -> None:
             )
 
 
-def training_domain(
-    config: dict[str, Any],
-    checkpoint: dict[str, Any],
-) -> dict[str, Any]:
+def training_domain(checkpoint: dict[str, Any]) -> dict[str, Any]:
     """Return the configuration from which to sample the verification parameters.
 
     Checkpoints contain the data configuration of their training. Thus, the
-    verification samples the training domain of the model. Old checkpoints do
-    not contain this configuration. For these checkpoints, the function uses
-    ``config/data.yaml``.
+    verification samples the training domain of the model.
 
     Args:
-        config: Full configuration dictionary.
         checkpoint: The checkpoint the model was loaded from.
 
     Returns:
         A configuration ``sample_parameters`` accepts.
     """
-    return {"data": checkpoint.get("data_config", config["data"])}
+    return {"data": checkpoint["data_config"]}
 
 
 def export_target(
