@@ -1,19 +1,24 @@
-# How the model gets the T1/T2 derivatives.
-#   "separate": independent sub-networks predict the signal, dT1 and dT2.
-#               This mode needs all keys below, including the *_dT1 / *_dT2 keys.
-#   "forward":  forward sensitivity differentiates one signal network, so all
-#               three outputs use the same signal decoder. This mode needs a
-#               smooth activation (not "relu"). It ignores the *_dT1 / *_dT2 keys.
-derivative_mode: "separate"
+# How the model gets dT1 and dT2, the T1/T2 derivatives of the signal.
+#   "direct":  Three independent sub-networks predict the signal, dT1 and dT2,
+#              and each output has its own decoder. Training makes dT1 and dT2
+#              approximate the true derivatives, but they are not the
+#              derivatives of the predicted signal.
+#              This mode needs all keys below, including the *_dT1 / *_dT2 keys.
+#   "derived": One sub-network predicts the signal. dT1 and dT2 are the exact
+#              T1/T2 derivatives of the predicted signal, which forward
+#              sensitivity calculates. All three outputs use the signal decoder.
+#              This mode needs a smooth activation (not "relu"). It ignores the
+#              *_dT1 / *_dT2 keys.
+derivative_mode: "direct"
 
 # Hidden-layer activation: "relu", "silu", "gelu", "tanh", or "softplus".
-# "relu" is only valid when derivative_mode is "separate".
+# "relu" is only valid when derivative_mode is "direct".
 activation: "relu"
 
 # --- Always required (signal network) ---
 
 # Latent representation size of the signal.
-# In "forward" mode, this value is the total basis rank, which all outputs share.
+# In "derived" mode, this value is the total basis rank, which all outputs share.
 NB_signal: 16
 
 # Number of neurons in each hidden layer.
@@ -22,8 +27,8 @@ hidden_size_signal: 64
 # Number of fully connected layers.
 num_layers_signal: 4
 
-# --- Required only when derivative_mode is "separate" ---
-# When derivative_mode is "forward", the model ignores these keys. You can remove them.
+# --- Required only when derivative_mode is "direct" ---
+# When derivative_mode is "derived", the model ignores these keys. You can remove them.
 
 # Latent representation size for each derivative.
 NB_dT1: 32

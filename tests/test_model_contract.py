@@ -90,7 +90,7 @@ class ModelContractTest(unittest.TestCase):
         # space, so they consume the coefficients and the decoder matrix
         # separately. This pins the factorization they rely on: coefficients
         # times the decoder, unflattened, must be the signal.
-        config = {**MODEL_CONFIG, "derivative_mode": "forward", "activation": "gelu"}
+        config = {**MODEL_CONFIG, "derivative_mode": "derived", "activation": "gelu"}
         model = FCModel(5, config).eval()
         x = torch.tensor([[0.8, 0.07, 1.0], [1.2, 0.1, 0.9]])
 
@@ -104,10 +104,10 @@ class ModelContractTest(unittest.TestCase):
         reconstructed = (coefficients @ decoder.T).unflatten(-1, (model.NTR, 2))
         torch.testing.assert_close(reconstructed, signal)
 
-    def test_forward_coefficients_reproduce_signal_in_separate_mode(self) -> None:
-        # Separate derivative heads have their own bases, but the signal still
-        # factors into coefficients and its signal decoder.
-        model = FCModel(5, {**MODEL_CONFIG, "derivative_mode": "separate"}).eval()
+    def test_forward_coefficients_reproduce_signal_in_direct_mode(self) -> None:
+        # In direct mode, the derivative heads have their own bases, but the signal
+        # still factors into coefficients and its signal decoder.
+        model = FCModel(5, {**MODEL_CONFIG, "derivative_mode": "direct"}).eval()
         x = torch.tensor([[0.8, 0.07, 1.0], [1.2, 0.1, 0.9]])
 
         with torch.no_grad():
@@ -124,7 +124,7 @@ class ModelContractTest(unittest.TestCase):
         # (2*NTR, rank) matrix. Row 2t is the real part at time t and row 2t+1
         # the imaginary part -- NOT a [all real; all imag] block layout. Getting
         # this wrong is silent: the shapes still match and the numbers are junk.
-        config = {**MODEL_CONFIG, "derivative_mode": "forward", "activation": "gelu"}
+        config = {**MODEL_CONFIG, "derivative_mode": "derived", "activation": "gelu"}
         model = FCModel(5, config).eval()
         decoder = model.U_signal[0].weight.detach()
         basis = torch.complex(decoder[0::2, :], decoder[1::2, :])
@@ -145,7 +145,7 @@ class ModelContractTest(unittest.TestCase):
             config = {
                 **MODEL_CONFIG,
                 "activation": activation,
-                "derivative_mode": "forward",
+                "derivative_mode": "derived",
                 "normalize_inputs": True,
             }
             model = FCModel(5, config, data_config).eval()
@@ -167,11 +167,11 @@ class ModelContractTest(unittest.TestCase):
             torch.testing.assert_close(dT1, expected_dT1, rtol=2e-5, atol=2e-6)
             torch.testing.assert_close(dT2, expected_dT2, rtol=2e-5, atol=2e-6)
 
-    def test_forward_mode_uses_one_basis_and_no_derivative_networks(self) -> None:
+    def test_derived_mode_uses_one_basis_and_no_derivative_networks(self) -> None:
         config = {
             **MODEL_CONFIG,
             "activation": "silu",
-            "derivative_mode": "forward",
+            "derivative_mode": "derived",
         }
         model = FCModel(5, config)
 
@@ -184,7 +184,7 @@ class ModelContractTest(unittest.TestCase):
         config = {
             **MODEL_CONFIG,
             "activation": "gelu",
-            "derivative_mode": "forward",
+            "derivative_mode": "derived",
         }
         model = FCModel(5, config)
         x = torch.tensor([[0.8, 0.07, 1.0], [1.2, 0.1, 0.9]])

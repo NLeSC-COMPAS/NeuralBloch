@@ -63,8 +63,10 @@ def train(config: dict[str, Any]) -> None:
     basis_initialization_seconds = 0.0
     basis_mode = config["model"].get("basis_initialization", "learned")
     if basis_mode == "joint_pca":
-        if model.derivative_mode != "forward":
-            raise ValueError("joint_pca basis initialization requires forward mode")
+        if model.derivative_mode != "derived":
+            raise ValueError(
+                "joint_pca basis initialization requires derivative_mode='derived'"
+            )
         started = time.perf_counter()
         initial_train_loader = generate_train_loader(config)
         initialize_joint_pca_basis(model, initial_train_loader)
