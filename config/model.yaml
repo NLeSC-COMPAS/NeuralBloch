@@ -1,7 +1,3 @@
-# Number of input parameters to the surrogate model
-# Input: [T1, T2, B1]
-input_dim: 3
-
 # How the model gets the T1/T2 derivatives.
 #   "separate": independent sub-networks predict the signal, dT1 and dT2.
 #               This mode needs all keys below, including the *_dT1 / *_dT2 keys.

@@ -15,7 +15,6 @@ from src.model import FCModel
 
 
 MODEL_CONFIG = {
-    "input_dim": 3,
     "activation": "gelu",
     "derivative_mode": "forward",
     "NB_signal": 4,

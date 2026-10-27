@@ -24,7 +24,6 @@ from src.model import FCModel
 NTR = 5
 
 SEPARATE_CONFIG = {
-    "input_dim": 3,
     "derivative_mode": "separate",
     "NB_signal": 3,
     "NB_dT1": 2,
@@ -38,7 +37,6 @@ SEPARATE_CONFIG = {
 }
 
 FORWARD_CONFIG = {
-    "input_dim": 3,
     "derivative_mode": "forward",
     "activation": "gelu",
     "NB_signal": 3,

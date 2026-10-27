@@ -5,6 +5,10 @@ import torch.nn as nn
 from torch.nn import functional
 
 
+# The public model input is always [T1, T2, B1]
+INPUT_DIM = 3
+
+
 def make_activation(name: str) -> nn.Module:
     """Create a hidden-layer activation by name."""
     if name == "relu":
@@ -116,7 +120,6 @@ class InputTransform(nn.Module):
 
     def __init__(
         self,
-        input_dim: int,
         normalize: bool,
         data_config: dict[str, Any] | None,
     ) -> None:
@@ -141,8 +144,8 @@ class InputTransform(nn.Module):
             offset = 0.5 * (lower + upper)
             scale = 2.0 / (upper - lower)
         else:
-            offset = torch.zeros(input_dim)
-            scale = torch.ones(input_dim)
+            offset = torch.zeros(INPUT_DIM)
+            scale = torch.ones(INPUT_DIM)
 
         # Derived configuration follows the model's device but does not need
         # to make checkpoints larger or incompatible.
@@ -196,7 +199,6 @@ class FCModel(nn.Module):
     ) -> None:
         super().__init__()
 
-        input_dim = config["input_dim"]
         activation = config.get("activation", "relu")
         self.derivative_mode = config.get("derivative_mode", "separate")
 
@@ -217,7 +219,6 @@ class FCModel(nn.Module):
 
         # Physical [T1, T2, B1] -> internal [log(T1), log(T2), B1] coordinates
         self.input_transform = InputTransform(
-            input_dim,
             config.get("normalize_inputs", False),
             data_config,
         )
@@ -230,7 +231,7 @@ class FCModel(nn.Module):
 
         # Sub-network for the signal
         self.subnet_signal = SubNetwork(
-            input_dim=input_dim,
+            input_dim=INPUT_DIM,
             output_dim=config["NB_signal"],
             hidden_size=config["hidden_size_signal"],
             num_layers=config["num_layers_signal"],
@@ -252,14 +253,14 @@ class FCModel(nn.Module):
                 nn.Unflatten(-1, (NTR, 2)),
             )
             self.subnet_dT1 = SubNetwork(
-                input_dim=input_dim,
+                input_dim=INPUT_DIM,
                 output_dim=config["NB_dT1"],
                 hidden_size=config["hidden_size_dT1"],
                 num_layers=config["num_layers_dT1"],
                 activation=activation,
             )
             self.subnet_dT2 = SubNetwork(
-                input_dim=input_dim,
+                input_dim=INPUT_DIM,
                 output_dim=config["NB_dT2"],
                 hidden_size=config["hidden_size_dT2"],
                 num_layers=config["num_layers_dT2"],
