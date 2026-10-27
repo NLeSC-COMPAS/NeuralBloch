@@ -530,7 +530,6 @@ class ExportBundleTest(unittest.TestCase):
 
     NTR = 5
     MODEL_CONFIG = {
-        "input_dim": 3,
         "derivative_mode": "separate",
         "NB_signal": 3,
         "NB_dT1": 2,

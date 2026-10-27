@@ -12,7 +12,6 @@ class JointPCABasisTest(unittest.TestCase):
         n_tr = 4
         rank = 2
         config = {
-            "input_dim": 3,
             "activation": "gelu",
             "derivative_mode": "forward",
             "NB_signal": rank,
