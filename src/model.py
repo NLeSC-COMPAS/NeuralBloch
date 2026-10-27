@@ -214,7 +214,7 @@ class FCModel(nn.Module):
 
         self.NTR = NTR
         # Signal basis coefficients per sample: the width of
-        # forward_coefficients and the rank of U_signal
+        # forward_coeffs and the rank of U_signal
         self.rank: int = config["NB_signal"]
 
         # Physical [T1, T2, B1] -> internal [log(T1), log(T2), B1] coordinates
@@ -328,13 +328,13 @@ class FCModel(nn.Module):
         """
         return self.U_signal(self.subnet_signal(self.input_transform(x)))
 
-    def forward_coefficients(self, x: torch.Tensor) -> torch.Tensor:
+    def forward_coeffs(self, x: torch.Tensor) -> torch.Tensor:
         """Predict signal coefficients, stopping before the signal decoder.
 
         This is ``forward_signal`` without the final projection through
         ``U_signal``. A low-rank reconstruction applies that basis itself, in
         image space, so it wants the coefficients rather than the decoded
-        signal: ``forward_coefficients(x) @ U_signal[0].weight.T``, unflattened
+        signal: ``forward_coeffs(x) @ U_signal[0].weight.T``, unflattened
         to ``(batch, NTR, 2)``, reproduces ``forward_signal(x)`` exactly.
 
         In ``derived`` mode, this basis is shared by the signal and both

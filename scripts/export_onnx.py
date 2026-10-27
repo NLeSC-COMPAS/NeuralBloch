@@ -43,11 +43,9 @@ class Target:
 # call. Thus, a separate model for each target lets a caller do only the work
 # that it needs.
 TARGETS: dict[str, Target] = {
-    "signal_and_derivatives": Target("forward", ("signal", "dT1", "dT2"), "model.onnx"),
+    "signal_and_derivs": Target("forward", ("signal", "dT1", "dT2"), "model.onnx"),
     "signal": Target("forward_signal", ("signal",), "model_signal.onnx"),
-    "coefficients": Target(
-        "forward_coefficients", ("coefficients",), "model_coefficients.onnx"
-    ),
+    "coeffs": Target("forward_coeffs", ("coeffs",), "model_coeffs.onnx"),
 }
 
 

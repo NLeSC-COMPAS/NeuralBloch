@@ -164,9 +164,9 @@ Reads the trained checkpoint (`experiment.PT_FILE_PATH`) and exports one ONNX mo
 
 | Target | Model method | Outputs |
 |---|---|---|
-| `signal_and_derivatives` | `forward` | `signal`, `dT1`, `dT2`, each `(batch, NTR, 2)` |
+| `signal_and_derivs` | `forward` | `signal`, `dT1`, `dT2`, each `(batch, NTR, 2)` |
 | `signal` | `forward_signal` | `signal`, `(batch, NTR, 2)` |
-| `coefficients` | `forward_coefficients` | `coefficients`, `(batch, rank)`, the basis coefficients of the signal |
+| `coeffs` | `forward_coeffs` | `coeffs`, `(batch, rank)`, the basis coefficients of the signal |
 
 All three models take the input `x`, `(batch, 3)`, which contains the physical parameters `[T1, T2, B1]`. A TensorRT engine calculates all the outputs of its model on each call. Thus, a separate model for each target lets a caller do only the work that it needs. The task uses ONNX Runtime to compare each export with the PyTorch model. It uses parameters sampled from the training domain of the checkpoint. If `export.FP16` is `true`, the models run internally in FP16, but their inputs and outputs stay FP32.
 

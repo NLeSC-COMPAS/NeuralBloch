@@ -85,7 +85,7 @@ class ModelContractTest(unittest.TestCase):
         # with forward, so the two paths may never diverge.
         self.assertTrue(torch.equal(signal_only, full[0]))
 
-    def test_forward_coefficients_reproduce_the_signal_through_the_basis(self) -> None:
+    def test_forward_coeffs_reproduce_the_signal_through_the_basis(self) -> None:
         # The low-rank MR-STAT operators apply the basis themselves, in image
         # space, so they consume the coefficients and the decoder matrix
         # separately. This pins the factorization they rely on: coefficients
@@ -95,7 +95,7 @@ class ModelContractTest(unittest.TestCase):
         x = torch.tensor([[0.8, 0.07, 1.0], [1.2, 0.1, 0.9]])
 
         with torch.no_grad():
-            coefficients = model.forward_coefficients(x)
+            coefficients = model.forward_coeffs(x)
             signal = model.forward_signal(x)
 
         self.assertEqual(coefficients.shape, (2, config["NB_signal"]))
@@ -104,14 +104,14 @@ class ModelContractTest(unittest.TestCase):
         reconstructed = (coefficients @ decoder.T).unflatten(-1, (model.NTR, 2))
         torch.testing.assert_close(reconstructed, signal)
 
-    def test_forward_coefficients_reproduce_signal_in_direct_mode(self) -> None:
+    def test_forward_coeffs_reproduce_signal_in_direct_mode(self) -> None:
         # In direct mode, the derivative heads have their own bases, but the signal
         # still factors into coefficients and its signal decoder.
         model = FCModel(5, {**MODEL_CONFIG, "derivative_mode": "direct"}).eval()
         x = torch.tensor([[0.8, 0.07, 1.0], [1.2, 0.1, 0.9]])
 
         with torch.no_grad():
-            coefficients = model.forward_coefficients(x)
+            coefficients = model.forward_coeffs(x)
             signal = model.forward_signal(x)
 
         reconstructed = (coefficients @ model.U_signal[0].weight.T).unflatten(
@@ -132,7 +132,7 @@ class ModelContractTest(unittest.TestCase):
 
         x = torch.tensor([[0.8, 0.07, 1.0], [1.2, 0.1, 0.9]])
         with torch.no_grad():
-            coefficients = model.forward_coefficients(x)
+            coefficients = model.forward_coeffs(x)
             signal = model.forward_signal(x)
         expected = torch.view_as_complex(signal.contiguous())
         torch.testing.assert_close(coefficients.to(basis.dtype) @ basis.T, expected)
