@@ -3,10 +3,12 @@
 # test_inference) read the copy in the checkpoint. A change in this file has
 # no effect on a trained model. To use the change, train again.
 
-# Number of samples for dataset from which validation and test set will be generated
+# Approximate size of the parameter grid of the validation and test datasets.
+# The grid has round(cbrt(N_SAMPLES))^3 points; points with T2 >= T1 are removed.
 N_SAMPLES: 40000
 
-# Derivative generation: "forward_sensitivity" (default) or "finite_difference".
+# BlochSimulators method for the T1 and T2 derivatives.
+# Options: "forward_sensitivity", "finite_difference".
 DERIVATIVE_METHOD: "forward_sensitivity"
 
 # FISP3D Sequence related settings
