@@ -39,6 +39,26 @@ Type checking is handled by [ty](https://docs.astral.sh/ty/), configured under `
 uv run ty check
 ```
 
+## Tests
+
+The tests use [pytest](https://docs.pytest.org/). The pytest configuration is in the `[tool.pytest]` table of `pyproject.toml`.
+
+To run the tests, use these commands:
+
+```bash
+uv run pytest                        # run all the tests
+uv run pytest tests/test_bundle.py   # run the tests in one file
+uv run pytest -k rf_table            # run the tests that have "rf_table" in their names
+uv run pytest -x                     # stop after the first test that fails
+uv run pytest --lf                   # run only the tests that failed the last time
+```
+
+Before the first test, pytest starts Julia, because `data/data_loading.py` imports `juliacall`. If TensorRT is not available, pytest does not run the batch profile tests.
+
+The git hooks and CI do not run the tests. Run the tests before you open a pull request.
+
+Write new tests as pytest functions. Do not write them as `unittest.TestCase` classes.
+
 ## Git hooks
 
 Git hooks are managed with [prek](https://prek.j178.dev/). The hooks are defined in `prek.toml`. Install them once per clone:
