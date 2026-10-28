@@ -52,6 +52,7 @@ select = [
     "I", # isort
     "W", # pycodestyle (warning)
     "N", # pep8-naming
+    "PT", # flake8-pytest-style
 ]
 
 ignore = [
