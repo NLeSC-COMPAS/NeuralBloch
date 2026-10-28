@@ -1,4 +1,6 @@
 SEED: 42
+
+# Torch device. If CUDA is not available, "cpu" is used.
 DEVICE: "cuda"
 
 # Generated datasets will be saved on these locations
@@ -8,4 +10,5 @@ DATASET_FOR_TESTING_PATH: "data/datasets/dataset_for_testing.h5"
 
 # Training output will be saved on these locations
 PT_FILE_PATH: "outputs/model.pt"
+# TensorBoard writes its logs in this directory.
 LOG_FILE_PATH: "outputs/log_file"
