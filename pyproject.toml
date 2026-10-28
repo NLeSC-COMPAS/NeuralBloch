@@ -28,9 +28,17 @@ explicit = true
 [dependency-groups]
 dev = [
     "prek>=0.4.11",
+    "pytest>=9",
     "ruff>=0.16.1",
     "ty>=0.0.66",
 ]
+
+[tool.pytest]
+testpaths = ["tests"]
+# The tests import `scripts`, `src` and `data` from the repository root.
+pythonpath = ["."]
+addopts = ["-ra"]
+strict = true
 
 [tool.ruff]
 line-length = 88
@@ -44,6 +52,7 @@ select = [
     "I", # isort
     "W", # pycodestyle (warning)
     "N", # pep8-naming
+    "PT", # flake8-pytest-style
 ]
 
 ignore = [
