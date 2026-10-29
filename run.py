@@ -15,7 +15,6 @@ def main() -> None:
             "test_accuracy",
             "test_inference",
             "export_onnx",
-            "build_engine",
             "export_bundle",
         ],
     )
@@ -72,12 +71,6 @@ def main() -> None:
         from scripts.export_onnx import export_onnx
 
         export_onnx(config)
-
-    # Build a TensorRT engine from each exported ONNX model
-    elif args.task == "build_engine":
-        from scripts.build_engine import build_engine
-
-        build_engine(config)
 
     # Write the model bundle that NeuralBloch.jl reads
     elif args.task == "export_bundle":

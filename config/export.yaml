@@ -30,13 +30,6 @@ OPSET_VERSION: 18
 # setting.
 FP16: false
 
-# Dynamic batch size profile of the TensorRT engines.
-# Each engine accepts all batch sizes in [MIN_BATCH_SIZE, MAX_BATCH_SIZE].
-# TensorRT tunes the kernels of each engine for OPT_BATCH_SIZE.
-MIN_BATCH_SIZE: 10000
-OPT_BATCH_SIZE: 14400
-MAX_BATCH_SIZE: 40000
-
 # Number of samples used to verify exported models against PyTorch
 N_VERIFY_SAMPLES: 14400
 
