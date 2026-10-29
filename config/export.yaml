@@ -1,23 +1,17 @@
-# Locations of the exported models. Each target has one ONNX model and one
-# TensorRT engine (TARGETS in scripts/export_onnx.py). Each target is a method of
-# the model:
+# Locations of the exported models. Each target has one ONNX model (TARGETS in
+# scripts/export_onnx.py). Each target is a method of the model:
 #   signal_and_derivs  forward: the signal and its T1/T2 derivatives
 #   signal             forward_signal: only the signal
 #   coeffs             forward_coeffs: the basis coefficients of the signal
 # An engine calculates all outputs of its model on each call. Thus, a separate
 # model for each target lets a caller do only the work that it needs.
-# signal_and_derivs keeps the original file names, because the bootstrap.sh
-# script of MRSTAT.jl copies these files.
 TARGETS:
   signal_and_derivs:
     ONNX_FILE_PATH: "outputs/model.onnx"
-    ENGINE_FILE_PATH: "outputs/model.engine"
   signal:
     ONNX_FILE_PATH: "outputs/model_signal.onnx"
-    ENGINE_FILE_PATH: "outputs/model_signal.engine"
   coeffs:
     ONNX_FILE_PATH: "outputs/model_coeffs.onnx"
-    ENGINE_FILE_PATH: "outputs/model_coeffs.engine"
 
 # ONNX opset version used for export
 OPSET_VERSION: 18

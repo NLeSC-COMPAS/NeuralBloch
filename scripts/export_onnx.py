@@ -109,7 +109,7 @@ def export_onnx(config: dict[str, Any]) -> None:
 
     checkpoint_sha256 = file_sha256(config["experiment"]["PT_FILE_PATH"])
 
-    for target, (onnx_path, _) in paths.items():
+    for target, onnx_path in paths.items():
         with staged(onnx_path) as staged_path:
             # A batch size > 1 is sufficient to trace the model
             export_target(
@@ -206,14 +206,14 @@ def require_checkpoint(
         )
 
 
-def target_paths(export_config: dict[str, Any]) -> dict[str, tuple[Path, Path]]:
-    """Return the ONNX and engine paths of each target from ``export.TARGETS``.
+def target_paths(export_config: dict[str, Any]) -> dict[str, Path]:
+    """Return the ONNX path of each target from ``export.TARGETS``.
 
     Args:
         export_config: The ``export`` configuration.
 
     Returns:
-        ``(onnx_path, engine_path)`` per target, in ``TARGETS`` order.
+        The ONNX path of each target, in ``TARGETS`` order.
 
     Raises:
         ValueError: If ``export.TARGETS`` does not name all targets and only
@@ -225,35 +225,28 @@ def target_paths(export_config: dict[str, Any]) -> dict[str, tuple[Path, Path]]:
             f"export.TARGETS must name the targets {', '.join(TARGETS)}; "
             f"it names {', '.join(configured) or 'none'}"
         )
-    paths = {
-        target: (
-            Path(configured[target]["ONNX_FILE_PATH"]),
-            Path(configured[target]["ENGINE_FILE_PATH"]),
-        )
-        for target in TARGETS
-    }
+    paths = {target: Path(configured[target]["ONNX_FILE_PATH"]) for target in TARGETS}
     # Each export writes its file, so two exports to one file keep only the last
     seen: dict[Path, str] = {}
-    for target, target_files in paths.items():
-        for key, path in zip(("ONNX_FILE_PATH", "ENGINE_FILE_PATH"), target_files):
-            name = f"{target}.{key}"
-            if (other := seen.setdefault(path.resolve(), name)) != name:
-                raise ValueError(
-                    f"export.TARGETS {name} and {other} are the same file, {path}"
-                )
+    for target, path in paths.items():
+        name = f"{target}.ONNX_FILE_PATH"
+        if (other := seen.setdefault(path.resolve(), name)) != name:
+            raise ValueError(
+                f"export.TARGETS {name} and {other} are the same file, {path}"
+            )
     return paths
 
 
-def require_exported(paths: dict[str, tuple[Path, Path]]) -> None:
+def require_exported(paths: dict[str, Path]) -> None:
     """Raise an error if an ONNX model from ``export_onnx`` is missing.
 
     Args:
-        paths: The targets' paths (``target_paths``).
+        paths: The ONNX path of each target (``target_paths``).
 
     Raises:
         FileNotFoundError: If a target's ONNX model is missing.
     """
-    for onnx_path, _ in paths.values():
+    for onnx_path in paths.values():
         if not onnx_path.exists():
             raise FileNotFoundError(
                 f"{onnx_path} not found. Run `uv run run.py export_onnx` first."
