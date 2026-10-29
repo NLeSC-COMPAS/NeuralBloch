@@ -13,7 +13,6 @@ dependencies = [
     "onnxscript>=0.7.1",
     "pyyaml>=6.0.3",
     "tensorboard>=2.21.0",
-    "tensorrt>=11.2.1.2",
     "torch==2.13.0",
 ]
 
@@ -121,6 +120,4 @@ possibly-unresolved-reference = "warn"
 [tool.ty.analysis]
 # `juliacall.Main` is a live handle on the Julia runtime, populated at import
 # time, so there is no static definition for it to resolve.
-# `tensorrt` re-exports the compiled `tensorrt_bindings` package at import
-# time, so its members cannot be resolved statically either.
-replace-imports-with-any = ["juliacall", "tensorrt"]
+replace-imports-with-any = ["juliacall"]
