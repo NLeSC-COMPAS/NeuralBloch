@@ -53,7 +53,7 @@ uv run pytest -x                     # stop after the first test that fails
 uv run pytest --lf                   # run only the tests that failed the last time
 ```
 
-Before the first test, pytest starts Julia, because `data/data_loading.py` imports `juliacall`. If TensorRT is not available, pytest does not run the batch profile tests.
+Before the first test, pytest starts Julia, because `data/data_loading.py` imports `juliacall`.
 
 The git hooks and CI do not run the tests. Run the tests before you open a pull request.
 

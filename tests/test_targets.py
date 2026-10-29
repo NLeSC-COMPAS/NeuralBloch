@@ -1,4 +1,3 @@
-from collections.abc import Callable
 from pathlib import Path
 import numpy as np
 import onnx
@@ -62,14 +61,6 @@ TARGET_OUTPUTS = [
     (name, output) for name, target in TARGETS.items() for output in target.outputs
 ]
 
-# A batch profile in the correct order
-BATCH_SIZES = {
-    "MIN_BATCH_SIZE": 10,
-    "OPT_BATCH_SIZE": 20,
-    "MAX_BATCH_SIZE": 30,
-    "N_VERIFY_SAMPLES": 30,
-}
-
 
 def test_targets_are_fcmodel_methods() -> None:
     assert list(TARGETS) == ["signal_and_derivs", "signal", "coeffs"]
@@ -126,13 +117,10 @@ def test_fp16_runs_in_half_behind_an_fp32_interface() -> None:
 
 
 def test_every_target_needs_its_paths() -> None:
-    targets = {
-        name: {"ONNX_FILE_PATH": f"{name}.onnx", "ENGINE_FILE_PATH": f"{name}.e"}
-        for name in TARGETS
-    }
+    targets = {name: {"ONNX_FILE_PATH": f"{name}.onnx"} for name in TARGETS}
     paths = target_paths({"TARGETS": targets})
     assert list(paths) == list(TARGETS)
-    assert paths["signal"] == (Path("signal.onnx"), Path("signal.e"))
+    assert paths["signal"] == Path("signal.onnx")
 
     del targets["coeffs"]
     with pytest.raises(ValueError, match="it names signal_and_derivs"):
@@ -142,10 +130,7 @@ def test_every_target_needs_its_paths() -> None:
 
 
 def test_each_path_is_a_different_file() -> None:
-    targets = {
-        name: {"ONNX_FILE_PATH": f"{name}.onnx", "ENGINE_FILE_PATH": f"{name}.e"}
-        for name in TARGETS
-    }
+    targets = {name: {"ONNX_FILE_PATH": f"{name}.onnx"} for name in TARGETS}
     # For example, a copied entry that keeps the ONNX file of another target
     targets["coeffs"]["ONNX_FILE_PATH"] = "./signal_and_derivs.onnx"
     with pytest.raises(
@@ -154,41 +139,6 @@ def test_each_path_is_a_different_file() -> None:
         "are the same file",
     ):
         target_paths({"TARGETS": targets})
-    targets["coeffs"]["ONNX_FILE_PATH"] = "signal.e"
-    with pytest.raises(ValueError, match="and signal.ENGINE_FILE_PATH"):
-        target_paths({"TARGETS": targets})
-
-
-@pytest.fixture
-def check_batch_profile() -> Callable[[dict[str, int]], None]:
-    """Return check_batch_profile, or skip the test if TensorRT is not available."""
-    pytest.importorskip("tensorrt", reason="needs TensorRT")
-    from scripts.build_engine import check_batch_profile
-
-    return check_batch_profile
-
-
-def test_batch_sizes_in_order_are_accepted(
-    check_batch_profile: Callable[[dict[str, int]], None],
-) -> None:
-    check_batch_profile(BATCH_SIZES)
-
-
-@pytest.mark.parametrize(
-    ("key", "value"),
-    [
-        ("OPT_BATCH_SIZE", 31),
-        ("OPT_BATCH_SIZE", 9),
-        ("N_VERIFY_SAMPLES", 40),
-        ("N_VERIFY_SAMPLES", 5),
-        ("MIN_BATCH_SIZE", 0),
-    ],
-)
-def test_batch_sizes_out_of_order_are_refused(
-    check_batch_profile: Callable[[dict[str, int]], None], key: str, value: int
-) -> None:
-    with pytest.raises(ValueError, match="batch size range"):
-        check_batch_profile({**BATCH_SIZES, key: value})
 
 
 def assert_tensor(

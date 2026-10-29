@@ -27,8 +27,7 @@ class Target:
     Attributes:
         method: The ``FCModel`` method that the target runs.
         outputs: The names of its outputs, in the order that the method returns
-            them. The ONNX model and the TensorRT engine use these names for
-            their outputs.
+            them. The ONNX model uses these names for its outputs.
         bundle_file: The name of its ONNX model in the model bundle.
     """
 
@@ -38,10 +37,9 @@ class Target:
 
 
 # The data that a caller can get from the surrogate. The keys are the names that
-# NeuralBloch.jl uses for these data. Each target has its own ONNX model and its
-# own TensorRT engine. An engine calculates all outputs of its model on each
-# call. Thus, a separate model for each target lets a caller do only the work
-# that it needs.
+# NeuralBloch.jl uses for these data. Each target has its own ONNX model. A model
+# calculates all its outputs on each call. Thus, a separate model for each target
+# lets a caller do only the work that it needs.
 TARGETS: dict[str, Target] = {
     "signal_and_derivs": Target("forward", ("signal", "dT1", "dT2"), "model.onnx"),
     "signal": Target("forward_signal", ("signal",), "model_signal.onnx"),
@@ -57,9 +55,10 @@ class TargetModel(nn.Module):
     The outputs are always a tuple, in the output order of the target.
 
     With ``fp16``, the model runs in half precision behind an FP32 interface.
-    The wrapper casts the inputs to FP16 and the outputs back to FP32. TensorRT
-    engines get their precision from the ONNX model. Thus, an export of this
-    wrapper gives an FP16 engine, and the input and output dtypes do not change.
+    The wrapper casts the inputs to FP16 and the outputs back to FP32.
+    NeuralBloch.jl builds TensorRT engines from the ONNX models, and an engine
+    gets its precision from the ONNX model. Thus, an export of this wrapper
+    gives an FP16 engine, and the input and output dtypes do not change.
     In this mode, the wrapper holds an FP16 copy of the model and does not
     change ``model``.
     """
@@ -109,7 +108,7 @@ def export_onnx(config: dict[str, Any]) -> None:
 
     checkpoint_sha256 = file_sha256(config["experiment"]["PT_FILE_PATH"])
 
-    for target, (onnx_path, _) in paths.items():
+    for target, onnx_path in paths.items():
         with staged(onnx_path) as staged_path:
             # A batch size > 1 is sufficient to trace the model
             export_target(
@@ -155,8 +154,8 @@ def staged(path: Path) -> Iterator[Path]:
 
 
 # The key of the ONNX metadata that gives the sha256 of the checkpoint file that
-# the model was exported from. build_engine and export_bundle use it to find ONNX
-# models from a different checkpoint.
+# the model was exported from. export_bundle uses it to find ONNX models from a
+# different checkpoint.
 CHECKPOINT_KEY = "neuralbloch.checkpoint_sha256"
 
 
@@ -206,14 +205,14 @@ def require_checkpoint(
         )
 
 
-def target_paths(export_config: dict[str, Any]) -> dict[str, tuple[Path, Path]]:
-    """Return the ONNX and engine paths of each target from ``export.TARGETS``.
+def target_paths(export_config: dict[str, Any]) -> dict[str, Path]:
+    """Return the ONNX path of each target from ``export.TARGETS``.
 
     Args:
         export_config: The ``export`` configuration.
 
     Returns:
-        ``(onnx_path, engine_path)`` per target, in ``TARGETS`` order.
+        The ONNX path of each target, in ``TARGETS`` order.
 
     Raises:
         ValueError: If ``export.TARGETS`` does not name all targets and only
@@ -225,35 +224,28 @@ def target_paths(export_config: dict[str, Any]) -> dict[str, tuple[Path, Path]]:
             f"export.TARGETS must name the targets {', '.join(TARGETS)}; "
             f"it names {', '.join(configured) or 'none'}"
         )
-    paths = {
-        target: (
-            Path(configured[target]["ONNX_FILE_PATH"]),
-            Path(configured[target]["ENGINE_FILE_PATH"]),
-        )
-        for target in TARGETS
-    }
+    paths = {target: Path(configured[target]["ONNX_FILE_PATH"]) for target in TARGETS}
     # Each export writes its file, so two exports to one file keep only the last
     seen: dict[Path, str] = {}
-    for target, target_files in paths.items():
-        for key, path in zip(("ONNX_FILE_PATH", "ENGINE_FILE_PATH"), target_files):
-            name = f"{target}.{key}"
-            if (other := seen.setdefault(path.resolve(), name)) != name:
-                raise ValueError(
-                    f"export.TARGETS {name} and {other} are the same file, {path}"
-                )
+    for target, path in paths.items():
+        name = f"{target}.ONNX_FILE_PATH"
+        if (other := seen.setdefault(path.resolve(), name)) != name:
+            raise ValueError(
+                f"export.TARGETS {name} and {other} are the same file, {path}"
+            )
     return paths
 
 
-def require_exported(paths: dict[str, tuple[Path, Path]]) -> None:
+def require_exported(paths: dict[str, Path]) -> None:
     """Raise an error if an ONNX model from ``export_onnx`` is missing.
 
     Args:
-        paths: The targets' paths (``target_paths``).
+        paths: The ONNX path of each target (``target_paths``).
 
     Raises:
         FileNotFoundError: If a target's ONNX model is missing.
     """
-    for onnx_path, _ in paths.values():
+    for onnx_path in paths.values():
         if not onnx_path.exists():
             raise FileNotFoundError(
                 f"{onnx_path} not found. Run `uv run run.py export_onnx` first."

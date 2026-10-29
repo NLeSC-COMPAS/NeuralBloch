@@ -626,11 +626,7 @@ def export(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ExportSetup:
         "data": {},
         "export": {
             "TARGETS": {
-                target: {
-                    "ONNX_FILE_PATH": str(path),
-                    "ENGINE_FILE_PATH": str(path.with_suffix(".engine")),
-                }
-                for target, path in onnx.items()
+                target: {"ONNX_FILE_PATH": str(path)} for target, path in onnx.items()
             },
             "N_VERIFY_SAMPLES": 8,
             "BUNDLE_DIR": str(bundle),

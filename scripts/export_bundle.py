@@ -855,9 +855,8 @@ def export_bundle(config: dict[str, Any]) -> None:
 
     # The ONNX models must come from this checkpoint. Check the checkpoint that
     # export_onnx recorded in each model, then compare each model with it.
-    paths = target_paths(export_config)
-    require_exported(paths)
-    onnx_paths = {target: onnx_path for target, (onnx_path, _) in paths.items()}
+    onnx_paths = target_paths(export_config)
+    require_exported(onnx_paths)
     checkpoint_sha256 = file_sha256(checkpoint_path)
     for onnx_path in onnx_paths.values():
         require_checkpoint(onnx_path, checkpoint_sha256, checkpoint_path)
