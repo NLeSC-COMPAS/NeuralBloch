@@ -1,7 +1,7 @@
 # Training reads this file and saves a copy in the checkpoint. The tasks after
-# training (export_onnx, build_engine, export_bundle, test_accuracy and
-# test_inference) read the copy in the checkpoint. A change in this file has
-# no effect on a trained model. To use the change, train again.
+# training (export_onnx, export_bundle, test_accuracy and test_inference) read
+# the copy in the checkpoint. A change in this file has no effect on a trained
+# model. To use the change, train again.
 
 # How the model gets dT1 and dT2, the T1/T2 derivatives of the signal.
 #   "direct":  Three independent sub-networks predict the signal, dT1 and dT2,

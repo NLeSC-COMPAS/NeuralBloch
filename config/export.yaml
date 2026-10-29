@@ -3,8 +3,8 @@
 #   signal_and_derivs  forward: the signal and its T1/T2 derivatives
 #   signal             forward_signal: only the signal
 #   coeffs             forward_coeffs: the basis coefficients of the signal
-# An engine calculates all outputs of its model on each call. Thus, a separate
-# model for each target lets a caller do only the work that it needs.
+# A model calculates all its outputs on each call. Thus, a separate model for
+# each target lets a caller do only the work that it needs.
 TARGETS:
   signal_and_derivs:
     ONNX_FILE_PATH: "outputs/model.onnx"
@@ -17,11 +17,11 @@ TARGETS:
 OPSET_VERSION: 18
 
 # Export the model with FP16 precision (model inputs and outputs stay FP32).
-# TensorRT engines inherit their precision from the ONNX model (TensorRT
-# networks are strongly typed), so this yields an FP16 engine that trades a
-# small accuracy cost for inference speed.
-# Re-run `export_onnx`, `build_engine` and `export_bundle` after changing this
-# setting.
+# NeuralBloch.jl builds TensorRT engines from the ONNX models. An engine
+# inherits its precision from the ONNX model (TensorRT networks are strongly
+# typed), so this yields an FP16 engine that trades a small accuracy cost for
+# inference speed.
+# Re-run `export_onnx` and `export_bundle` after changing this setting.
 FP16: false
 
 # Number of samples used to verify exported models against PyTorch

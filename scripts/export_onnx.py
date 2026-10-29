@@ -27,8 +27,7 @@ class Target:
     Attributes:
         method: The ``FCModel`` method that the target runs.
         outputs: The names of its outputs, in the order that the method returns
-            them. The ONNX model and the TensorRT engine use these names for
-            their outputs.
+            them. The ONNX model uses these names for its outputs.
         bundle_file: The name of its ONNX model in the model bundle.
     """
 
@@ -38,10 +37,9 @@ class Target:
 
 
 # The data that a caller can get from the surrogate. The keys are the names that
-# NeuralBloch.jl uses for these data. Each target has its own ONNX model and its
-# own TensorRT engine. An engine calculates all outputs of its model on each
-# call. Thus, a separate model for each target lets a caller do only the work
-# that it needs.
+# NeuralBloch.jl uses for these data. Each target has its own ONNX model. A model
+# calculates all its outputs on each call. Thus, a separate model for each target
+# lets a caller do only the work that it needs.
 TARGETS: dict[str, Target] = {
     "signal_and_derivs": Target("forward", ("signal", "dT1", "dT2"), "model.onnx"),
     "signal": Target("forward_signal", ("signal",), "model_signal.onnx"),
@@ -57,9 +55,10 @@ class TargetModel(nn.Module):
     The outputs are always a tuple, in the output order of the target.
 
     With ``fp16``, the model runs in half precision behind an FP32 interface.
-    The wrapper casts the inputs to FP16 and the outputs back to FP32. TensorRT
-    engines get their precision from the ONNX model. Thus, an export of this
-    wrapper gives an FP16 engine, and the input and output dtypes do not change.
+    The wrapper casts the inputs to FP16 and the outputs back to FP32.
+    NeuralBloch.jl builds TensorRT engines from the ONNX models, and an engine
+    gets its precision from the ONNX model. Thus, an export of this wrapper
+    gives an FP16 engine, and the input and output dtypes do not change.
     In this mode, the wrapper holds an FP16 copy of the model and does not
     change ``model``.
     """
@@ -155,8 +154,8 @@ def staged(path: Path) -> Iterator[Path]:
 
 
 # The key of the ONNX metadata that gives the sha256 of the checkpoint file that
-# the model was exported from. build_engine and export_bundle use it to find ONNX
-# models from a different checkpoint.
+# the model was exported from. export_bundle uses it to find ONNX models from a
+# different checkpoint.
 CHECKPOINT_KEY = "neuralbloch.checkpoint_sha256"
 
 

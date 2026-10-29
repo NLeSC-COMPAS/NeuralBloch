@@ -1,7 +1,7 @@
 # Training reads this file and saves a copy in the checkpoint. The tasks after
-# training (export_onnx, build_engine, export_bundle, test_accuracy and
-# test_inference) read the copy in the checkpoint. A change in this file has
-# no effect on a trained model. To use the change, train again.
+# training (export_onnx, export_bundle, test_accuracy and test_inference) read
+# the copy in the checkpoint. A change in this file has no effect on a trained
+# model. To use the change, train again.
 
 # Approximate size of the parameter grid of the validation and test datasets.
 # The grid has round(cbrt(N_SAMPLES))^3 points; points with T2 >= T1 are removed.
