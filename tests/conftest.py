@@ -164,3 +164,20 @@ def make_model() -> Callable[..., FCModel]:
         return FCModel(NTR, config, data_config)
 
     return make
+
+
+@pytest.fixture
+def rank4_config(derived_config: dict[str, Any]) -> dict[str, Any]:
+    """A derived model of rank 4, for the tests of the shared basis."""
+    return {**derived_config, "NB_signal": 4, "hidden_size_signal": 8}
+
+
+@pytest.fixture
+def rank4_model(
+    rank4_config: dict[str, Any],
+    data_config: dict[str, Any],
+    make_model: Callable[..., FCModel],
+) -> FCModel:
+    """The model of rank4_config, with the weights of seed 42."""
+    torch.manual_seed(42)
+    return make_model(5, rank4_config, data_config).eval()

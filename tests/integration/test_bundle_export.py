@@ -28,7 +28,6 @@ NTR = 5
 class ExportSetup:
     """A small checkpoint, its ONNX models and the configuration of the export."""
 
-    data_config: dict[str, Any]
     checkpoint: Path
     onnx: dict[str, Path]
     bundle: Path
@@ -80,7 +79,7 @@ def export(
     ):
         monkeypatch.setattr(f"scripts.export_bundle.{name}", Mock(return_value=value))
     write_checkpoint(checkpoint, model, direct_config, data_config, epoch=7)
-    setup = ExportSetup(data_config, checkpoint, onnx, bundle, config, tarball)
+    setup = ExportSetup(checkpoint, onnx, bundle, config, tarball)
     stamp_onnx_models(setup)
     return setup
 
@@ -89,6 +88,14 @@ def stamp_onnx_models(setup: ExportSetup) -> None:
     """Record the sha256 of the checkpoint in the ONNX model of each target."""
     for path in setup.onnx.values():
         stamp_checkpoint(path, file_sha256(setup.checkpoint))
+
+
+def drop_from_checkpoint(setup: ExportSetup, key: str) -> None:
+    """Delete ``key`` from the checkpoint, and stamp the ONNX models again."""
+    checkpoint = torch.load(setup.checkpoint)
+    del checkpoint[key]
+    torch.save(checkpoint, setup.checkpoint)
+    stamp_onnx_models(setup)
 
 
 def test_the_bundle_and_its_release_file_describe_the_checkpoint(
@@ -125,10 +132,7 @@ def test_the_warnings_come_again_after_the_release_command(
     export: ExportSetup, capsys: pytest.CaptureFixture[str]
 ) -> None:
     # A checkpoint from before the checkpoints recorded the RF tables
-    checkpoint = torch.load(export.checkpoint)
-    del checkpoint["rf_sha256"]
-    torch.save(checkpoint, export.checkpoint)
-    stamp_onnx_models(export)
+    drop_from_checkpoint(export, "rf_sha256")
     export_bundle(export.config)
     printed = capsys.readouterr().out
     command = printed.index("gh release create")
@@ -153,9 +157,7 @@ def test_a_checkpoint_without_its_configuration_is_refused(
 ) -> None:
     # The model of config/ can have a different architecture, so the
     # export must not make the model before it checks the checkpoint
-    checkpoint = torch.load(export.checkpoint)
-    del checkpoint["model_config"]
-    torch.save(checkpoint, export.checkpoint)
+    drop_from_checkpoint(export, "model_config")
     assert_refused(export, "does not store model_config")
 
 
@@ -165,9 +167,9 @@ def test_a_family_with_another_rank_is_refused(export: ExportSetup) -> None:
 
 
 def test_rf_tables_changed_after_the_training_are_refused(
-    export: ExportSetup,
+    export: ExportSetup, data_config: dict[str, Any]
 ) -> None:
-    path = Path(export.data_config["RF_PHASE_FILE"])
+    path = Path(data_config["RF_PHASE_FILE"])
     path.write_text(path.read_text().replace("0.5", "9.5"))
     assert_refused(export, "is not the RF table of the training")
 
