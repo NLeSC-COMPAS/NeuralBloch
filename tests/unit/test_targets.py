@@ -1,4 +1,7 @@
+from collections.abc import Callable
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 import numpy as np
 import onnx
 import pytest
@@ -8,58 +11,39 @@ from onnx import numpy_helper
 from scripts.export_onnx import TARGETS
 from scripts.export_onnx import TargetModel
 from scripts.export_onnx import check_outputs
-from scripts.export_onnx import export_target
-from scripts.export_onnx import onnx_checkpoint
 from scripts.export_onnx import onnx_precision
-from scripts.export_onnx import require_checkpoint
 from scripts.export_onnx import staged
-from scripts.export_onnx import stamp_checkpoint
 from scripts.export_onnx import target_paths
-from scripts.export_onnx import verify_onnx
 from src.model import FCModel
 
 
 NTR = 5
 
-DIRECT_CONFIG = {
-    "derivative_mode": "direct",
-    "activation": "relu",
-    "normalize_inputs": False,
-    "NB_signal": 3,
-    "NB_dT1": 2,
-    "NB_dT2": 2,
-    "hidden_size_signal": 4,
-    "hidden_size_dT1": 4,
-    "hidden_size_dT2": 4,
-    "num_layers_signal": 2,
-    "num_layers_dT1": 2,
-    "num_layers_dT2": 2,
-}
-
-DERIVED_CONFIG = {
-    "derivative_mode": "derived",
-    "activation": "gelu",
-    "normalize_inputs": False,
-    "NB_signal": 3,
-    "hidden_size_signal": 4,
-    "num_layers_signal": 3,
-}
-
 X = torch.tensor([[0.8, 0.07, 1.0], [1.2, 0.1, 0.9], [2.0, 0.3, 1.1]])
-
-# The shape of each output after the batch dimension. NeuralBloch.jl uses these
-# shapes to check the engines.
-SIZES = {
-    "signal": (NTR, 2),
-    "dT1": (NTR, 2),
-    "dT2": (NTR, 2),
-    "coeffs": (DIRECT_CONFIG["NB_signal"],),
-}
 
 # Each output of each target
 TARGET_OUTPUTS = [
     (name, output) for name, target in TARGETS.items() for output in target.outputs
 ]
+
+
+def sizes(config: Mapping[str, Any]) -> dict[str, tuple[int, ...]]:
+    """Return the shape of each output after the batch dimension.
+
+    NeuralBloch.jl uses these shapes to check the engines.
+    """
+    return {
+        "signal": (NTR, 2),
+        "dT1": (NTR, 2),
+        "dT2": (NTR, 2),
+        "coeffs": (config["NB_signal"],),
+    }
+
+
+@pytest.fixture(params=["direct", "derived"])
+def config(request: pytest.FixtureRequest) -> dict[str, Any]:
+    """Each of the two model configurations of conftest.py."""
+    return request.getfixturevalue(f"{request.param}_config")
 
 
 def test_targets_are_fcmodel_methods() -> None:
@@ -69,14 +53,11 @@ def test_targets_are_fcmodel_methods() -> None:
 
 
 @pytest.mark.parametrize("name", list(TARGETS))
-@pytest.mark.parametrize(
-    "config", [DIRECT_CONFIG, DERIVED_CONFIG], ids=["direct", "derived"]
-)
 def test_target_model_is_its_method_bitwise(
-    config: dict[str, object], name: str
+    config: dict[str, Any], make_model: Callable[..., FCModel], name: str
 ) -> None:
     torch.manual_seed(0)
-    model = FCModel(NTR, config).eval()
+    model = make_model(NTR, config).eval()
     methods = {
         "signal_and_derivs": lambda: model(X),
         "signal": lambda: (model.forward_signal(X),),
@@ -92,18 +73,25 @@ def test_target_model_is_its_method_bitwise(
 
 
 @pytest.mark.parametrize(("name", "output_name"), TARGET_OUTPUTS)
-def test_output_shapes(name: str, output_name: str) -> None:
-    model = FCModel(NTR, DIRECT_CONFIG).eval()
-    assert model.rank == DIRECT_CONFIG["NB_signal"]
+def test_output_shapes(
+    direct_config: dict[str, Any],
+    make_model: Callable[..., FCModel],
+    name: str,
+    output_name: str,
+) -> None:
+    model = make_model(NTR, direct_config).eval()
+    assert model.rank == direct_config["NB_signal"]
     with torch.no_grad():
         outputs = TargetModel(model, name)(X)
     output = dict(zip(TARGETS[name].outputs, outputs, strict=True))[output_name]
-    assert tuple(output.shape) == (len(X), *SIZES[output_name])
+    assert tuple(output.shape) == (len(X), *sizes(direct_config)[output_name])
 
 
-def test_fp16_runs_in_half_behind_an_fp32_interface() -> None:
+def test_fp16_runs_in_half_behind_an_fp32_interface(
+    direct_config: dict[str, Any], make_model: Callable[..., FCModel]
+) -> None:
     torch.manual_seed(0)
-    model = FCModel(NTR, DIRECT_CONFIG).eval()
+    model = make_model(NTR, direct_config).eval()
     half = TargetModel(model, "signal_and_derivs", fp16=True)
     assert all(p.dtype == torch.float16 for p in half.parameters())
     # The wrapper converts a copy, so the model stays FP32
@@ -141,76 +129,11 @@ def test_each_path_is_a_different_file() -> None:
         target_paths({"TARGETS": targets})
 
 
-def assert_tensor(
-    value: onnx.ValueInfoProto,
-    name: str,
-    sizes: tuple[int, ...],
-) -> str:
-    """Check a graph input or output and return the name of its batch dimension."""
-    assert value.name == name
-    tensor = value.type.tensor_type
-    assert tensor.elem_type == onnx.TensorProto.FLOAT, name
-    dims = tensor.shape.dim
-    assert len(dims) == 1 + len(sizes), name
-    # The batch dimension is symbolic: the model takes any batch size
-    assert dims[0].dim_param, name
-    assert tuple(d.dim_value for d in dims[1:]) == sizes, name
-    return dims[0].dim_param
-
-
-@pytest.mark.parametrize("name", list(TARGETS))
-def test_each_target_exports_exactly_its_outputs(name: str, tmp_path: Path) -> None:
+def test_outputs_need_the_pytorch_shape_and_finite_values(
+    direct_config: dict[str, Any], make_model: Callable[..., FCModel]
+) -> None:
     torch.manual_seed(0)
-    model = FCModel(NTR, DIRECT_CONFIG).eval()
-    path = tmp_path / f"{name}.onnx"
-    export_target(model, name, path, example=X[:2], opset=18)
-    onnx_model = onnx.load(str(path))
-    onnx.checker.check_model(onnx_model)
-    graph = onnx_model.graph
-
-    assert len(graph.input) == 1
-    batch = assert_tensor(graph.input[0], "x", (3,))
-    assert [o.name for o in graph.output] == list(TARGETS[name].outputs)
-    for output in graph.output:
-        dim = assert_tensor(output, output.name, SIZES[output.name])
-        assert dim == batch
-
-
-def test_fp16_export_keeps_fp32_inputs_and_outputs(tmp_path: Path) -> None:
-    model = FCModel(NTR, DIRECT_CONFIG).eval()
-    path = tmp_path / "signal.onnx"
-    export_target(model, "signal", path, example=X[:2], opset=18, fp16=True)
-    graph = onnx.load(str(path)).graph
-    assert_tensor(graph.input[0], "x", (3,))
-    assert_tensor(graph.output[0], "signal", SIZES["signal"])
-    assert onnx_precision([path]) == "FP16"
-
-
-@pytest.mark.parametrize("name", list(TARGETS))
-def test_an_exported_model_gives_the_pytorch_values(name: str, tmp_path: Path) -> None:
-    torch.manual_seed(0)
-    model = FCModel(NTR, DIRECT_CONFIG).eval()
-    path = tmp_path / f"{name}.onnx"
-    # Trace with batch 2 and verify with batch 3, so that the
-    # batch dimension is dynamic in the values too
-    export_target(model, name, path, example=X[:2], opset=18)
-    verify_onnx(model, name, path, X, "FP32")
-
-
-def test_a_model_from_other_weights_deviates(tmp_path: Path) -> None:
-    torch.manual_seed(0)
-    exported = FCModel(NTR, DIRECT_CONFIG).eval()
-    torch.manual_seed(1)
-    other = FCModel(NTR, DIRECT_CONFIG).eval()
-    path = tmp_path / "signal.onnx"
-    export_target(exported, "signal", path, example=X[:2], opset=18)
-    with pytest.raises(RuntimeError, match="deviate"):
-        verify_onnx(other, "signal", path, X, "FP32")
-
-
-def test_outputs_need_the_pytorch_shape_and_finite_values() -> None:
-    torch.manual_seed(0)
-    model = FCModel(NTR, DIRECT_CONFIG).eval()
+    model = make_model(NTR, direct_config).eval()
     with torch.no_grad():
         (signal,) = TargetModel(model, "signal")(X)
     signal = signal.numpy()
@@ -243,26 +166,6 @@ def test_a_file_replaces_the_old_file_only_after_its_check(tmp_path: Path) -> No
     assert path.read_bytes() == b"new"
     assert path.stat().st_mode & 0o777 == 0o644
     assert list(tmp_path.iterdir()) == [path]
-
-
-def test_a_model_records_its_checkpoint(tmp_path: Path) -> None:
-    torch.manual_seed(0)
-    model = FCModel(NTR, DIRECT_CONFIG).eval()
-    path = tmp_path / "signal.onnx"
-    export_target(model, "signal", path, example=X[:2], opset=18)
-    assert onnx_checkpoint(path) is None
-    with pytest.raises(ValueError, match="does not record its checkpoint"):
-        require_checkpoint(path, "a" * 64, "model.pt")
-
-    stamp_checkpoint(path, "a" * 64)
-    stamp_checkpoint(path, "b" * 64)
-    assert onnx_checkpoint(path) == "b" * 64
-    onnx_model = onnx.load(str(path))
-    onnx.checker.check_model(onnx_model)
-    assert len(onnx_model.metadata_props) == 1
-    require_checkpoint(path, "b" * 64, "model.pt")
-    with pytest.raises(ValueError, match="from a different checkpoint"):
-        require_checkpoint(path, "a" * 64, "model.pt")
 
 
 def test_precision_is_read_from_the_weights(tmp_path: Path) -> None:

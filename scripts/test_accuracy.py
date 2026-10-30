@@ -1,8 +1,7 @@
 from typing import Any
-import numpy as np
-import numpy.typing as npt
 import torch
 from data.data_loading import load_data_from_h5_file
+from src.metrics import nrmse
 from src.utils import complex_to_real_imag
 from src.utils import get_device
 from src.utils import load_model
@@ -50,22 +49,3 @@ def test_accuracy(config: dict[str, Any]) -> None:
     print(f"  Signal NRMSE : {nrmse_sig.mean():.3f}% ± {nrmse_sig.std():.3f}%")
     print(f"  dT1    NRMSE : {nrmse_dT1.mean():.3f}% ± {nrmse_dT1.std():.3f}%")
     print(f"  dT2    NRMSE : {nrmse_dT2.mean():.3f}% ± {nrmse_dT2.std():.3f}%")
-
-
-def nrmse(
-    pred: npt.NDArray[np.float32],
-    true: npt.NDArray[np.float32],
-) -> npt.NDArray[np.float32]:
-    """Compute the per-sample normalized RMSE as a percentage.
-
-    Args:
-        pred: Predicted values, shape ``(N, ...)``.
-        true: Ground-truth values with the same shape as ``pred``.
-
-    Returns:
-        An array of per-sample NRMSE values in percent.
-    """
-    reduce_axes = tuple(range(1, pred.ndim))
-    rmse = np.sqrt(np.mean((pred - true) ** 2, axis=reduce_axes))
-    scale = np.sqrt(np.mean(true**2, axis=reduce_axes)) + 1e-12
-    return 100.0 * rmse / scale
