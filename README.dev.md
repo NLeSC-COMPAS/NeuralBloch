@@ -81,7 +81,7 @@ The coverage settings are in the `[tool.coverage]` tables of `pyproject.toml`. T
 
 The tests do not start Julia. The import of `juliacall` starts Julia, so only `run.py` imports it at module level; the other modules import it in the functions that run Julia. A test checks this. In a test without the marker `julia`, an import of `juliacall` raises `ImportError`, so that the test cannot start Julia by mistake.
 
-The git hooks and CI do not run the tests. Run the tests before you open a pull request.
+CI runs the tests (see [Continuous integration](#continuous-integration)). The git hooks do not run them.
 
 Write new tests as pytest functions. Do not write them as `unittest.TestCase` classes.
 
@@ -117,3 +117,5 @@ uv run prek run --all-files --stage pre-push
 ## Continuous integration
 
 `.github/workflows/lint.yml` runs the same hooks on every push to `main` and on every pull request, via the [`j178/prek-action`](https://github.com/j178/prek-action) action. Because CI and local commits share `prek.toml`, the two cannot drift.
+
+`.github/workflows/test.yml` runs `uv run pytest --cov` on every push to `main` and on every pull request: the unit and integration tests, but not the tests with the markers `julia` and `gpu`. The job fails when a test fails or when the coverage is below the floor (`--cov-fail-under` in `test.yml`). Raise the floor when new tests raise the coverage.
