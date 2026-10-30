@@ -4,7 +4,6 @@ import h5py
 import numpy as np
 import numpy.typing as npt
 import torch
-from juliacall import Main as jl
 from src.utils import complex_to_real_imag
 from src.utils import get_device
 
@@ -107,6 +106,10 @@ def generate_train_loader(
     Returns:
         A batch loader over the freshly simulated data.
     """
+    # Import juliacall only here: the import starts Julia, and the other
+    # functions of this module do not need it. run.py imports it first.
+    from juliacall import Main as jl
+
     device = get_device(config)
 
     # Generate a fresh batch of Bloch simulations in Julia

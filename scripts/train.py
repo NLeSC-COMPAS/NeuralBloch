@@ -1,7 +1,6 @@
 import time
 from typing import Any
 import torch
-from juliacall import Main as jl
 from data.data_loading import TensorBatchLoader
 from data.data_loading import generate_train_loader
 from data.data_loading import generate_val_loader
@@ -56,7 +55,10 @@ def train(config: dict[str, Any]) -> None:
     # Initialize the model
     model = FCModel(NTR, config["model"], config["data"])
 
-    # Load Julia data generation functions (used for online training data)
+    # Load Julia data generation functions (used for online training data).
+    # Import juliacall only here, because the import starts Julia.
+    from juliacall import Main as jl
+
     jl.include("data/data_generation.jl")
 
     initial_train_loader = None

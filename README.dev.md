@@ -61,7 +61,7 @@ uv run pytest --cov   # the coverage of each file, and the lines that no test ru
 
 The coverage settings are in the `[tool.coverage]` tables of `pyproject.toml`. The coverage includes the branches, and the report also shows the files that no test imports.
 
-Before the first test, pytest starts Julia, because `data/data_loading.py` imports `juliacall`.
+The tests do not start Julia. The import of `juliacall` starts Julia, so only `run.py` imports it at module level; the other modules import it in the functions that run Julia. A test checks this.
 
 The git hooks and CI do not run the tests. Run the tests before you open a pull request.
 
