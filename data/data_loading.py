@@ -77,9 +77,24 @@ def generate_val_loader(
     """
     device = get_device(config)
 
-    params, signal, dT1, dT2, _, NTR = load_data_from_h5_file(
-        config["experiment"]["DATASET_FOR_VALIDATION_PATH"]
-    )
+    path = config["experiment"]["DATASET_FOR_VALIDATION_PATH"]
+    params, signal, dT1, dT2, _, NTR = load_data_from_h5_file(path)
+
+    # A value that is not finite gives a validation loss that is not finite,
+    # the error of a training that diverges. Refuse it here, where the file is
+    # known
+    for name, values in (
+        ("T1, T2 or B1", params),
+        ("signal", signal),
+        ("deriv_T1", dT1),
+        ("deriv_T2", dT2),
+    ):
+        if not np.isfinite(values).all():
+            raise ValueError(
+                f"The validation dataset {path} "
+                f"(experiment.DATASET_FOR_VALIDATION_PATH) has values in {name} "
+                "that are not finite"
+            )
 
     # Stack complex-valued data into paired real and imaginary channels
     sig_split = complex_to_real_imag(signal)
