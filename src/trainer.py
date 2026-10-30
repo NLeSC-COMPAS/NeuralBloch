@@ -133,9 +133,10 @@ class Trainer:
         and saves the best performing model.
 
         Raises:
-            RuntimeError: If the training or the validation loss of an epoch
-                is not finite, or if no epoch was validated. The checkpoint of
-                the best earlier epoch, if any, stays on disk.
+            RuntimeError: If the training loss of an epoch, the weights after
+                it or its validation loss are not finite, or if no epoch was
+                validated. The checkpoint of the best earlier epoch, if any,
+                stays on disk.
         """
         best_val_loss = float("inf")
         best_epoch: int | None = None
@@ -178,6 +179,15 @@ class Trainer:
             if not math.isfinite(train_loss):
                 raise _not_finite_error(
                     f"The training loss of epoch {epoch} is {train_loss}, not finite",
+                    best_epoch,
+                    pt_file_path,
+                )
+            # The losses come from before each step, so the last step of an
+            # epoch can make the weights NaN with a finite training loss
+            if not self._weights_are_finite():
+                raise _not_finite_error(
+                    "The weights of the model are not finite after the training "
+                    f"of epoch {epoch}",
                     best_epoch,
                     pt_file_path,
                 )
@@ -274,6 +284,12 @@ class Trainer:
         print(f"Loaded best model from epoch {checkpoint['epoch']}")
 
         self.writer.close()
+
+    def _weights_are_finite(self) -> bool:
+        """Return whether all parameters of the model are finite."""
+        # One synchronization for all parameters, not one for each
+        finite = [parameter.isfinite().all() for parameter in self.model.parameters()]
+        return bool(torch.stack(finite).all())
 
     def train_epoch(
         self,
