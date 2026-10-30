@@ -43,10 +43,11 @@ uv run ty check
 
 The tests use [pytest](https://docs.pytest.org/). The pytest configuration is in the `[tool.pytest]` table of `pyproject.toml`.
 
-The tests are in two directories:
+The tests are in three directories:
 
 - `tests/unit/`: each test checks one function or one class, with small inputs that the test makes. These tests take a few seconds.
 - `tests/integration/`: each test checks modules together through their real interfaces (a checkpoint, an ONNX file, an HDF5 file), a full task, or a real external component: `torch.onnx.export`, ONNX Runtime, git or the files of the repository.
+- `tests/julia/`: the tests that run the Julia data generation (`data/data_generation.jl`) with BlochSimulators on a CUDA GPU. They have the marker `julia`.
 
 The fixtures in `tests/conftest.py` make the configurations, the models, the checkpoints and the datasets of the tests. Use them in new tests, so that a change of the configuration or of the checkpoint format changes only `conftest.py`.
 
@@ -70,6 +71,8 @@ uv run pytest -m "julia or gpu"   # the tests of both markers
 ```
 
 A `-m` on the command line replaces the `-m "not julia and not gpu"` in `addopts`. pytest refuses a marker that `pyproject.toml` does not register.
+
+The Julia code reads the configuration keys by name, and only the tests of the marker `julia` run it. Run them after a change of the configuration keys. Each test runs Julia in a new Python process that imports `juliacall` before `torch`, as `run.py` does, and takes about a minute: the first simulation compiles the CUDA kernels. The first run in a new virtual environment also installs the Julia packages.
 
 To see which lines the tests run, add `--cov`:
 
