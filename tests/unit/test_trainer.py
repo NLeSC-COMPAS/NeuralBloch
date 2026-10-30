@@ -1,3 +1,4 @@
+import math
 from collections.abc import Callable
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -146,6 +147,23 @@ def record_training(
         return events
 
     return record
+
+
+@pytest.fixture
+def earlier_checkpoint(
+    config: dict[str, Any],
+    make_model: Callable[..., FCModel],
+    write_checkpoint: Callable[..., None],
+) -> Weights:
+    """Write a checkpoint of an earlier run at PT_FILE_PATH; return its weights.
+
+    The default PT_FILE_PATH is the same for each run.
+    """
+    torch.manual_seed(1)
+    model = make_model(5, config["model"], config["data"])
+    path = Path(config["experiment"]["PT_FILE_PATH"])
+    write_checkpoint(path, model, config["model"], config["data"], epoch=4242)
+    return model.state_dict()
 
 
 def test_the_data_are_generated_at_the_first_epoch_and_every_regen_every_epochs(
@@ -353,3 +371,70 @@ def test_a_compiled_train_step_is_not_used_on_cpu(
     trainer.train(synthetic_loader(10, 4))
 
     assert not same_weights(trainer.model.state_dict(), before)
+
+
+@pytest.mark.parametrize("loss", [math.nan, math.inf])
+def test_a_first_validation_loss_that_is_not_finite_stops_the_training(
+    loss: float,
+    config: dict[str, Any],
+    make_trainer: Callable[..., Trainer],
+    record_training: Callable[..., TrainingEvents],
+) -> None:
+    trainer = make_trainer(N_EPOCHS=3)
+    events = record_training(trainer, val_losses=[loss] * 3)
+
+    with pytest.raises(RuntimeError, match="not finite"):
+        trainer.train()
+
+    assert len(events.trained_on) == 1
+    assert not Path(config["experiment"]["PT_FILE_PATH"]).exists()
+
+
+def test_a_nan_after_a_finite_validation_loss_keeps_the_checkpoint(
+    config: dict[str, Any],
+    make_trainer: Callable[..., Trainer],
+    record_training: Callable[..., TrainingEvents],
+) -> None:
+    trainer = make_trainer(N_EPOCHS=3)
+    events = record_training(trainer, val_losses=[1.0, math.nan, 0.5])
+
+    # The message says where the checkpoint of this run is
+    with pytest.raises(RuntimeError, match=r"not finite\. The checkpoint of epoch 1"):
+        trainer.train()
+
+    assert len(events.trained_on) == 2
+    checkpoint = load_checkpoint(config, "cpu")
+    assert checkpoint["epoch"] == 1
+    assert same_weights(checkpoint["model_state"], events.weights[1])
+
+
+def test_a_checkpoint_of_an_earlier_run_is_not_loaded_after_a_nan(
+    config: dict[str, Any],
+    earlier_checkpoint: Weights,
+    make_trainer: Callable[..., Trainer],
+    synthetic_loader: Callable[..., TensorBatchLoader],
+) -> None:
+    path = Path(config["experiment"]["PT_FILE_PATH"])
+    written = path.read_bytes()
+    x, signal, _, _ = synthetic_loader(8, 8).tensors
+    nan = torch.full_like(signal, math.nan)
+    trainer = make_trainer(TensorBatchLoader((x, nan, nan, nan), 8, shuffle=False))
+
+    with pytest.raises(RuntimeError, match="not finite"):
+        trainer.train(synthetic_loader(10, 4))
+
+    assert path.read_bytes() == written
+    assert not same_weights(trainer.model.state_dict(), earlier_checkpoint)
+
+
+def test_a_checkpoint_of_an_earlier_run_is_not_loaded_without_epochs(
+    earlier_checkpoint: Weights,
+    make_trainer: Callable[..., Trainer],
+    synthetic_loader: Callable[..., TensorBatchLoader],
+) -> None:
+    trainer = make_trainer(N_EPOCHS=0)
+
+    with pytest.raises(RuntimeError, match="saved no checkpoint"):
+        trainer.train(synthetic_loader(10, 4))
+
+    assert not same_weights(trainer.model.state_dict(), earlier_checkpoint)
