@@ -6,6 +6,7 @@ each test. Then a change of the configuration, of the FCModel signature or of
 the checkpoint format changes only this file of the tests.
 """
 
+import sys
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,18 @@ import torch
 from src.model import FCModel
 from src.utils import RF_TABLE_KEYS
 from src.utils import rf_sha256
+
+
+@pytest.fixture(autouse=True)
+def no_julia(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make an import of juliacall fail in each test without the marker julia.
+
+    The import starts Julia, and installs it at the first use. A test that
+    needs Julia must have the marker; another test can put a fake juliacall
+    module in sys.modules.
+    """
+    if request.node.get_closest_marker("julia") is None:
+        monkeypatch.setitem(sys.modules, "juliacall", None)
 
 
 @pytest.fixture

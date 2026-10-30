@@ -37,8 +37,13 @@ dev = [
 testpaths = ["tests"]
 # The tests import `scripts`, `src` and `data` from the repository root.
 pythonpath = ["."]
-addopts = ["-ra", "--import-mode=importlib"]
+# The tests that need Julia or a GPU run only on request (-m julia, -m gpu)
+addopts = ["-ra", "--import-mode=importlib", "-m", "not julia and not gpu"]
 strict = true
+markers = [
+    "julia: needs Julia and BlochSimulators (the simulations need a CUDA GPU)",
+    "gpu: needs a CUDA GPU",
+]
 
 [tool.coverage.run]
 source = ["src", "scripts", "data"]

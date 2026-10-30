@@ -53,13 +53,23 @@ The fixtures in `tests/conftest.py` make the configurations, the models, the che
 To run the tests, use these commands:
 
 ```bash
-uv run pytest                             # run all the tests
+uv run pytest                             # run all the tests without the markers julia and gpu
 uv run pytest tests/unit                  # run only the unit tests, during development
 uv run pytest tests/unit/test_bundle.py   # run the tests in one file
 uv run pytest -k rf_table                 # run the tests that have "rf_table" in their names
 uv run pytest -x                          # stop after the first test that fails
 uv run pytest --lf                        # run only the tests that failed the last time
 ```
+
+A test that needs Julia or a CUDA GPU has the marker `julia` or `gpu` (`@pytest.mark.julia`). `uv run pytest` does not run these tests. Run them on a machine with Julia and a GPU:
+
+```bash
+uv run pytest -m julia            # only the tests that need Julia and BlochSimulators
+uv run pytest -m gpu              # only the tests that need a CUDA GPU
+uv run pytest -m "julia or gpu"   # the tests of both markers
+```
+
+A `-m` on the command line replaces the `-m "not julia and not gpu"` in `addopts`. pytest refuses a marker that `pyproject.toml` does not register.
 
 To see which lines the tests run, add `--cov`:
 
@@ -69,7 +79,7 @@ uv run pytest --cov   # the coverage of each file, and the lines that no test ru
 
 The coverage settings are in the `[tool.coverage]` tables of `pyproject.toml`. The coverage includes the branches, and the report also shows the files that no test imports.
 
-The tests do not start Julia. The import of `juliacall` starts Julia, so only `run.py` imports it at module level; the other modules import it in the functions that run Julia. A test checks this.
+The tests do not start Julia. The import of `juliacall` starts Julia, so only `run.py` imports it at module level; the other modules import it in the functions that run Julia. A test checks this. In a test without the marker `julia`, an import of `juliacall` raises `ImportError`, so that the test cannot start Julia by mistake.
 
 The git hooks and CI do not run the tests. Run the tests before you open a pull request.
 
