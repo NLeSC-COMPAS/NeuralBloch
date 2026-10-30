@@ -1,4 +1,5 @@
 import math
+import re
 from collections.abc import Callable
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -90,14 +91,20 @@ def record_training(
     data. Each torch.save of the test is recorded, so write other files before
     the recording starts. With val_losses, the validations give these losses in
     this order and do not run the model: give one loss for each validation.
+    With train_losses, the epochs give these training losses in this order and
+    do not train the model: give one loss for each epoch. The three terms of
+    each epoch are then 0. The optimizer makes no step, so PyTorch warns when
+    the scheduler steps.
     """
 
     def record(
         trainer: Trainer,
         val_losses: list[float] | None = None,
+        train_losses: list[float] | None = None,
     ) -> TrainingEvents:
         events = TrainingEvents()
-        losses = None if val_losses is None else iter(val_losses)
+        val_iter = None if val_losses is None else iter(val_losses)
+        train_iter = None if train_losses is None else iter(train_losses)
 
         def epoch() -> int:
             return len(events.trained_on)
@@ -114,13 +121,15 @@ def record_training(
             loader: TensorBatchLoader,
         ) -> tuple[float, float, float, float]:
             events.trained_on.append(loader)
-            return train_epoch(loader)
+            if train_iter is None:
+                return train_epoch(loader)
+            return next(train_iter), 0.0, 0.0, 0.0
 
         validate = trainer.validate
 
         def recording_validate() -> float:
             events.weights[epoch()] = copy_weights(trainer.model)
-            return validate() if losses is None else next(losses)
+            return validate() if val_iter is None else next(val_iter)
 
         save = torch.save
 
@@ -373,7 +382,7 @@ def test_a_compiled_train_step_is_not_used_on_cpu(
     assert not same_weights(trainer.model.state_dict(), before)
 
 
-@pytest.mark.parametrize("loss", [math.nan, math.inf])
+@pytest.mark.parametrize("loss", [math.nan, math.inf, -math.inf])
 def test_a_first_validation_loss_that_is_not_finite_stops_the_training(
     loss: float,
     config: dict[str, Any],
@@ -383,7 +392,13 @@ def test_a_first_validation_loss_that_is_not_finite_stops_the_training(
     trainer = make_trainer(N_EPOCHS=3)
     events = record_training(trainer, val_losses=[loss] * 3)
 
-    with pytest.raises(RuntimeError, match="not finite"):
+    with pytest.raises(
+        RuntimeError,
+        match=re.escape(
+            f"The validation loss of epoch 1 is {loss}, not finite. "
+            "This run saved no checkpoint."
+        ),
+    ):
         trainer.train()
 
     assert len(events.trained_on) == 1
@@ -397,15 +412,82 @@ def test_a_nan_after_a_finite_validation_loss_keeps_the_checkpoint(
 ) -> None:
     trainer = make_trainer(N_EPOCHS=3)
     events = record_training(trainer, val_losses=[1.0, math.nan, 0.5])
+    path = config["experiment"]["PT_FILE_PATH"]
 
     # The message says where the checkpoint of this run is
-    with pytest.raises(RuntimeError, match=r"not finite\. The checkpoint of epoch 1"):
+    with pytest.raises(
+        RuntimeError,
+        match=re.escape(
+            "The validation loss of epoch 2 is nan, not finite. "
+            f"The checkpoint of epoch 1 is in {path}."
+        ),
+    ):
         trainer.train()
 
     assert len(events.trained_on) == 2
     checkpoint = load_checkpoint(config, "cpu")
     assert checkpoint["epoch"] == 1
     assert same_weights(checkpoint["model_state"], events.weights[1])
+
+
+def test_a_first_training_loss_that_is_not_finite_stops_the_training(
+    config: dict[str, Any],
+    make_trainer: Callable[..., Trainer],
+    record_training: Callable[..., TrainingEvents],
+    synthetic_loader: Callable[..., TensorBatchLoader],
+) -> None:
+    # NaN in the training data makes the weights NaN. The error must name the
+    # training, not the validation after it
+    trainer = make_trainer(N_EPOCHS=3)
+    events = record_training(trainer)
+    x, signal, _, _ = synthetic_loader(8, 4).tensors
+    nan = torch.full_like(signal, math.nan)
+
+    with pytest.raises(
+        RuntimeError,
+        match=re.escape(
+            "The training loss of epoch 1 is nan, not finite. "
+            "This run saved no checkpoint."
+        ),
+    ):
+        trainer.train(TensorBatchLoader((x, nan, nan, nan), 4, shuffle=False))
+
+    assert len(events.trained_on) == 1
+    assert events.weights == {}
+    assert not Path(config["experiment"]["PT_FILE_PATH"]).exists()
+
+
+@pytest.mark.parametrize("loss", [math.nan, math.inf, -math.inf])
+@pytest.mark.parametrize("bad_epoch", [2, 3])
+# With train_losses, the optimizer makes no step before the scheduler steps
+@pytest.mark.filterwarnings(r"ignore:Detected call of `lr_scheduler.step\(\)`")
+def test_a_training_loss_that_is_not_finite_stops_the_training_in_its_epoch(
+    bad_epoch: int,
+    loss: float,
+    config: dict[str, Any],
+    make_trainer: Callable[..., Trainer],
+    record_training: Callable[..., TrainingEvents],
+) -> None:
+    # Of epochs 1 to 3, only 1 and 3 are validated. A bad loss of epoch 2 does
+    # not wait for the validation of epoch 3, and one of epoch 3 stops before it
+    trainer = make_trainer(N_EPOCHS=5, VALIDATE_EVERY=3)
+    train_losses = [1.0] * 5
+    train_losses[bad_epoch - 1] = loss
+    events = record_training(trainer, train_losses=train_losses)
+    path = config["experiment"]["PT_FILE_PATH"]
+
+    with pytest.raises(
+        RuntimeError,
+        match=re.escape(
+            f"The training loss of epoch {bad_epoch} is {loss}, not finite. "
+            f"The checkpoint of epoch 1 is in {path}."
+        ),
+    ):
+        trainer.train()
+
+    assert len(events.trained_on) == bad_epoch
+    assert list(events.weights) == [1]
+    assert load_checkpoint(config, "cpu")["epoch"] == 1
 
 
 def test_a_checkpoint_of_an_earlier_run_is_not_loaded_after_a_nan(
