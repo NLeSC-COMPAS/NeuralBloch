@@ -147,6 +147,33 @@ def test_a_validation_dataset_with_values_that_are_not_finite_is_refused(
         generate_val_loader(config)
 
 
+@pytest.mark.parametrize(("column", "value"), [(0, 0.0), (1, -0.1)])
+def test_a_validation_dataset_with_t1_or_t2_that_are_not_positive_is_refused(
+    column: int,
+    value: float,
+    config: dict[str, Any],
+    validation_arrays: dict[str, np.ndarray],
+    write_dataset: Callable[..., None],
+    tmp_path: Path,
+) -> None:
+    # The model takes the logarithm of T1 and T2: these finite values give a
+    # NaN validation loss
+    path = tmp_path / "validation.h5"
+    validation_arrays["params"][4, column] = value
+    write_dataset(path, **validation_arrays)
+    config["experiment"]["DATASET_FOR_VALIDATION_PATH"] = str(path)
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            f"The validation dataset {path} "
+            "(experiment.DATASET_FOR_VALIDATION_PATH) has values of T1 or T2 "
+            "that are not positive: 1 of 6 samples, the first is sample 4"
+        ),
+    ):
+        generate_val_loader(config)
+
+
 def test_finite_julia_data_are_loaded(
     config: dict[str, Any],
     julia_batch: SimpleNamespace,
