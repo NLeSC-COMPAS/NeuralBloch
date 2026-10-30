@@ -573,26 +573,13 @@ def test_the_release_command() -> None:
 
 
 NTR = 5
-MODEL_CONFIG = {
-    "derivative_mode": "direct",
-    "activation": "relu",
-    "normalize_inputs": False,
-    "NB_signal": 3,
-    "NB_dT1": 2,
-    "NB_dT2": 2,
-    "hidden_size_signal": 4,
-    "hidden_size_dT1": 4,
-    "hidden_size_dT2": 4,
-    "num_layers_signal": 2,
-    "num_layers_dT1": 2,
-    "num_layers_dT2": 2,
-}
 
 
 @dataclass
 class ExportSetup:
     """A small checkpoint, its ONNX models and the configuration of the export."""
 
+    model_config: dict[str, Any]
     data_config: dict[str, Any]
     model: FCModel
     checkpoint: Path
@@ -603,7 +590,12 @@ class ExportSetup:
 
 
 @pytest.fixture
-def export(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ExportSetup:
+def export(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    direct_config: dict[str, Any],
+    make_model: Callable[..., FCModel],
+) -> ExportSetup:
     """export_bundle, from a small checkpoint to the bundle and its release file."""
     source = tmp_path / "src"
     source.mkdir()
@@ -613,7 +605,7 @@ def export(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ExportSetup:
         path.write_text("".join(f"{i}.5\n" for i in range(NTR)))
         data_config[data_key] = str(path)
     torch.manual_seed(0)
-    model = FCModel(NTR, MODEL_CONFIG, data_config).eval()
+    model = make_model(NTR, direct_config, data_config).eval()
     checkpoint = source / "model.pt"
     onnx = {t: source / spec.bundle_file for t, spec in TARGETS.items()}
     example = sample_parameters({"data": data_config}, 2)
@@ -643,7 +635,9 @@ def export(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ExportSetup:
         ("blochsimulators_facts", ("0.10.0", None)),
     ):
         monkeypatch.setattr(f"scripts.export_bundle.{name}", Mock(return_value=value))
-    setup = ExportSetup(data_config, model, checkpoint, onnx, bundle, config, tarball)
+    setup = ExportSetup(
+        direct_config, data_config, model, checkpoint, onnx, bundle, config, tarball
+    )
     save_checkpoint(setup, rf_recorded=True)
     return setup
 
@@ -654,7 +648,7 @@ def save_checkpoint(setup: ExportSetup, rf_recorded: bool) -> None:
         "model_state": setup.model.state_dict(),
         "epoch": 7,
         "NTR": NTR,
-        "model_config": MODEL_CONFIG,
+        "model_config": setup.model_config,
         "data_config": setup.data_config,
     }
     if rf_recorded:

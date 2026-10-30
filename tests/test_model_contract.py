@@ -1,5 +1,7 @@
 import math
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 import h5py
 import numpy as np
 import pytest
@@ -13,21 +15,6 @@ from src.utils import complex_to_real_imag
 from src.utils import sample_parameters
 
 
-MODEL_CONFIG = {
-    "derivative_mode": "direct",
-    "activation": "relu",
-    "normalize_inputs": False,
-    "NB_signal": 2,
-    "NB_dT1": 2,
-    "NB_dT2": 2,
-    "hidden_size_signal": 4,
-    "hidden_size_dT1": 4,
-    "hidden_size_dT2": 4,
-    "num_layers_signal": 2,
-    "num_layers_dT1": 2,
-    "num_layers_dT2": 2,
-}
-
 SAMPLING_CONFIG = {
     "data": {
         "T1_lower": 0.1,
@@ -40,8 +27,10 @@ SAMPLING_CONFIG = {
 }
 
 
-def test_model_logs_physical_parameters_and_returns_pairs() -> None:
-    model = FCModel(5, MODEL_CONFIG).eval()
+def test_model_logs_physical_parameters_and_returns_pairs(
+    direct_config: dict[str, Any], make_model: Callable[..., FCModel]
+) -> None:
+    model = make_model(5, direct_config).eval()
     captured_inputs: list[torch.Tensor] = []
 
     def capture_input(
@@ -74,8 +63,10 @@ def test_model_logs_physical_parameters_and_returns_pairs() -> None:
         assert complex_output.shape == (2, 5)
 
 
-def test_forward_signal_matches_full_forward() -> None:
-    model = FCModel(5, MODEL_CONFIG).eval()
+def test_forward_signal_matches_full_forward(
+    direct_config: dict[str, Any], make_model: Callable[..., FCModel]
+) -> None:
+    model = make_model(5, direct_config).eval()
     x = torch.tensor([[0.8, 0.07, 1.0], [1.2, 0.1, 0.9]])
 
     with torch.no_grad():
@@ -88,30 +79,33 @@ def test_forward_signal_matches_full_forward() -> None:
     assert torch.equal(signal_only, full[0])
 
 
-def test_forward_coeffs_reproduce_the_signal_through_the_basis() -> None:
+def test_forward_coeffs_reproduce_the_signal_through_the_basis(
+    derived_config: dict[str, Any], make_model: Callable[..., FCModel]
+) -> None:
     # The low-rank MR-STAT operators apply the basis themselves, in image
     # space, so they consume the coefficients and the decoder matrix
     # separately. This pins the factorization they rely on: coefficients
     # times the decoder, unflattened, must be the signal.
-    config = {**MODEL_CONFIG, "derivative_mode": "derived", "activation": "gelu"}
-    model = FCModel(5, config).eval()
+    model = make_model(5, derived_config).eval()
     x = torch.tensor([[0.8, 0.07, 1.0], [1.2, 0.1, 0.9]])
 
     with torch.no_grad():
         coefficients = model.forward_coeffs(x)
         signal = model.forward_signal(x)
 
-    assert coefficients.shape == (2, config["NB_signal"])
+    assert coefficients.shape == (2, derived_config["NB_signal"])
     decoder = model.U_signal[0].weight
-    assert decoder.shape == (2 * model.NTR, config["NB_signal"])
+    assert decoder.shape == (2 * model.NTR, derived_config["NB_signal"])
     reconstructed = (coefficients @ decoder.T).unflatten(-1, (model.NTR, 2))
     torch.testing.assert_close(reconstructed, signal)
 
 
-def test_forward_coeffs_reproduce_signal_in_direct_mode() -> None:
+def test_forward_coeffs_reproduce_signal_in_direct_mode(
+    direct_config: dict[str, Any], make_model: Callable[..., FCModel]
+) -> None:
     # In direct mode, the derivative heads have their own bases, but the signal
     # still factors into coefficients and its signal decoder.
-    model = FCModel(5, {**MODEL_CONFIG, "derivative_mode": "direct"}).eval()
+    model = make_model(5, direct_config).eval()
     x = torch.tensor([[0.8, 0.07, 1.0], [1.2, 0.1, 0.9]])
 
     with torch.no_grad():
@@ -124,16 +118,17 @@ def test_forward_coeffs_reproduce_signal_in_direct_mode() -> None:
     torch.testing.assert_close(reconstructed, signal)
 
 
-def test_decoder_rows_interleave_real_and_imaginary_parts() -> None:
+def test_decoder_rows_interleave_real_and_imaginary_parts(
+    derived_config: dict[str, Any], make_model: Callable[..., FCModel]
+) -> None:
     # The Julia side rebuilds a complex (NTR, rank) basis from this real
     # (2*NTR, rank) matrix. Row 2t is the real part at time t and row 2t+1
     # the imaginary part -- NOT a [all real; all imag] block layout. Getting
     # this wrong is silent: the shapes still match and the numbers are junk.
-    config = {**MODEL_CONFIG, "derivative_mode": "derived", "activation": "gelu"}
-    model = FCModel(5, config).eval()
+    model = make_model(5, derived_config).eval()
     decoder = model.U_signal[0].weight.detach()
     basis = torch.complex(decoder[0::2, :], decoder[1::2, :])
-    assert basis.shape == (model.NTR, config["NB_signal"])
+    assert basis.shape == (model.NTR, derived_config["NB_signal"])
 
     x = torch.tensor([[0.8, 0.07, 1.0], [1.2, 0.1, 0.9]])
     with torch.no_grad():
@@ -143,18 +138,19 @@ def test_decoder_rows_interleave_real_and_imaginary_parts() -> None:
     torch.testing.assert_close(coefficients.to(basis.dtype) @ basis.T, expected)
 
 
-def test_forward_sensitivity_matches_pytorch_jvp_in_physical_units() -> None:
+def test_forward_sensitivity_matches_pytorch_jvp_in_physical_units(
+    derived_config: dict[str, Any], make_model: Callable[..., FCModel]
+) -> None:
     data_config = SAMPLING_CONFIG["data"]
     x = torch.tensor([[0.8, 0.07, 1.0], [1.2, 0.1, 0.9]])
 
     for activation in ("silu", "gelu", "tanh", "softplus"):
         config = {
-            **MODEL_CONFIG,
+            **derived_config,
             "activation": activation,
-            "derivative_mode": "derived",
             "normalize_inputs": True,
         }
-        model = FCModel(5, config, data_config).eval()
+        model = make_model(5, config, data_config).eval()
         signal, dT1, dT2 = model(x)
 
         tangent_T1 = torch.zeros_like(x)
@@ -174,13 +170,10 @@ def test_forward_sensitivity_matches_pytorch_jvp_in_physical_units() -> None:
         torch.testing.assert_close(dT2, expected_dT2, rtol=2e-5, atol=2e-6)
 
 
-def test_derived_mode_uses_one_basis_and_no_derivative_networks() -> None:
-    config = {
-        **MODEL_CONFIG,
-        "activation": "silu",
-        "derivative_mode": "derived",
-    }
-    model = FCModel(5, config)
+def test_derived_mode_uses_one_basis_and_no_derivative_networks(
+    derived_config: dict[str, Any], make_model: Callable[..., FCModel]
+) -> None:
+    model = make_model(5, derived_config)
 
     assert model.U_dT1 is None
     assert model.U_dT2 is None
@@ -188,13 +181,10 @@ def test_derived_mode_uses_one_basis_and_no_derivative_networks() -> None:
     assert model.subnet_dT2 is None
 
 
-def test_forward_sensitivity_loss_backpropagates_to_all_parameters() -> None:
-    config = {
-        **MODEL_CONFIG,
-        "activation": "gelu",
-        "derivative_mode": "derived",
-    }
-    model = FCModel(5, config)
+def test_forward_sensitivity_loss_backpropagates_to_all_parameters(
+    derived_config: dict[str, Any], make_model: Callable[..., FCModel]
+) -> None:
+    model = make_model(5, derived_config)
     x = torch.tensor([[0.8, 0.07, 1.0], [1.2, 0.1, 0.9]])
 
     loss = sum(output.square().mean() for output in model(x))
@@ -205,14 +195,18 @@ def test_forward_sensitivity_loss_backpropagates_to_all_parameters() -> None:
         assert torch.all(torch.isfinite(parameter.grad))
 
 
-def test_input_transform_adds_no_checkpoint_state() -> None:
-    model = FCModel(5, MODEL_CONFIG)
+def test_input_transform_adds_no_checkpoint_state(
+    direct_config: dict[str, Any], make_model: Callable[..., FCModel]
+) -> None:
+    model = make_model(5, direct_config)
     assert len(list(model.input_transform.parameters())) == 0
     assert not any(key.startswith("input_transform") for key in model.state_dict())
 
 
-def test_model_output_contract_supports_multiple_batch_sizes() -> None:
-    model = FCModel(5, MODEL_CONFIG).eval()
+def test_model_output_contract_supports_multiple_batch_sizes(
+    direct_config: dict[str, Any], make_model: Callable[..., FCModel]
+) -> None:
+    model = make_model(5, direct_config).eval()
 
     for batch_size in (1, 3, 8):
         x = torch.tensor([[0.8, 0.07, 1.0]]).repeat(batch_size, 1)
