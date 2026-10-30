@@ -37,7 +37,7 @@ dev = [
 testpaths = ["tests"]
 # The tests import `scripts`, `src` and `data` from the repository root.
 pythonpath = ["."]
-addopts = ["-ra"]
+addopts = ["-ra", "--import-mode=importlib"]
 strict = true
 
 [tool.coverage.run]

@@ -43,14 +43,22 @@ uv run ty check
 
 The tests use [pytest](https://docs.pytest.org/). The pytest configuration is in the `[tool.pytest]` table of `pyproject.toml`.
 
+The tests are in two directories:
+
+- `tests/unit/`: each test checks one function or one class, with small inputs that the test makes. These tests take a few seconds.
+- `tests/integration/`: each test checks modules together through their real interfaces (a checkpoint, an ONNX file, an HDF5 file), a full task, or a real external component: `torch.onnx.export`, ONNX Runtime, git or the files of the repository.
+
+The fixtures in `tests/conftest.py` make the configurations, the models, the checkpoints and the datasets of the tests. Use them in new tests, so that a change of the configuration or of the checkpoint format changes only `conftest.py`.
+
 To run the tests, use these commands:
 
 ```bash
-uv run pytest                        # run all the tests
-uv run pytest tests/test_bundle.py   # run the tests in one file
-uv run pytest -k rf_table            # run the tests that have "rf_table" in their names
-uv run pytest -x                     # stop after the first test that fails
-uv run pytest --lf                   # run only the tests that failed the last time
+uv run pytest                             # run all the tests
+uv run pytest tests/unit                  # run only the unit tests, during development
+uv run pytest tests/unit/test_bundle.py   # run the tests in one file
+uv run pytest -k rf_table                 # run the tests that have "rf_table" in their names
+uv run pytest -x                          # stop after the first test that fails
+uv run pytest --lf                        # run only the tests that failed the last time
 ```
 
 To see which lines the tests run, add `--cov`:
