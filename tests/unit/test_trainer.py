@@ -490,6 +490,46 @@ def test_a_training_loss_that_is_not_finite_stops_the_training_in_its_epoch(
     assert load_checkpoint(config, "cpu")["epoch"] == 1
 
 
+# With train_losses, the optimizer makes no step before the scheduler steps
+@pytest.mark.filterwarnings(r"ignore:Detected call of `lr_scheduler.step\(\)`")
+def test_weights_that_are_not_finite_after_an_epoch_stop_the_training(
+    config: dict[str, Any],
+    make_trainer: Callable[..., Trainer],
+    record_training: Callable[..., TrainingEvents],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The losses come from before each step. When the last step of epoch 2
+    # makes the weights NaN, the training loss of epoch 2 is finite, and the
+    # validation of epoch 2 would give the error of the validation
+    trainer = make_trainer(N_EPOCHS=3)
+    events = record_training(trainer, train_losses=[1.0, 1.0, 1.0])
+    train_epoch = trainer.train_epoch
+
+    def last_step_makes_nan(
+        loader: TensorBatchLoader,
+    ) -> tuple[float, float, float, float]:
+        losses = train_epoch(loader)
+        if len(events.trained_on) == 2:
+            with torch.no_grad():
+                next(trainer.model.parameters()).fill_(math.nan)
+        return losses
+
+    monkeypatch.setattr(trainer, "train_epoch", last_step_makes_nan)
+    path = config["experiment"]["PT_FILE_PATH"]
+
+    with pytest.raises(
+        RuntimeError,
+        match=re.escape(
+            "The weights of the model are not finite after the training of "
+            f"epoch 2. The checkpoint of epoch 1 is in {path}."
+        ),
+    ):
+        trainer.train()
+
+    assert list(events.weights) == [1]
+    assert load_checkpoint(config, "cpu")["epoch"] == 1
+
+
 def test_a_checkpoint_of_an_earlier_run_is_not_loaded_after_a_nan(
     config: dict[str, Any],
     earlier_checkpoint: Weights,
