@@ -28,6 +28,7 @@ explicit = true
 dev = [
     "prek>=0.4.11",
     "pytest>=9",
+    "pytest-cov>=7.1.0",
     "ruff>=0.16.1",
     "ty>=0.0.66",
 ]
@@ -38,6 +39,13 @@ testpaths = ["tests"]
 pythonpath = ["."]
 addopts = ["-ra"]
 strict = true
+
+[tool.coverage.run]
+source = ["src", "scripts", "data"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
 
 [tool.ruff]
 line-length = 88

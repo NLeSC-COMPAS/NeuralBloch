@@ -53,6 +53,14 @@ uv run pytest -x                     # stop after the first test that fails
 uv run pytest --lf                   # run only the tests that failed the last time
 ```
 
+To see which lines the tests run, add `--cov`:
+
+```bash
+uv run pytest --cov   # the coverage of each file, and the lines that no test runs
+```
+
+The coverage settings are in the `[tool.coverage]` tables of `pyproject.toml`. The coverage includes the branches, and the report also shows the files that no test imports.
+
 Before the first test, pytest starts Julia, because `data/data_loading.py` imports `juliacall`.
 
 The git hooks and CI do not run the tests. Run the tests before you open a pull request.
