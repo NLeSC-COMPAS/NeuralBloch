@@ -115,6 +115,7 @@ class Trainer:
         and saves the best performing model.
         """
         best_val_loss = float("inf")
+        best_epoch: int | None = None
 
         pt_file_path = self.config["experiment"]["PT_FILE_PATH"]
         # The training data come from the RF tables. Record their sha256 in the
@@ -161,6 +162,19 @@ class Trainer:
                 started = time.perf_counter()
                 val_loss = self.validate()
                 validation_time = time.perf_counter() - started
+                # NaN and inf are never below best_val_loss, and -inf would
+                # stop each later save. Stop at the first such loss: the
+                # checkpoint of the best earlier epoch stays on disk
+                if not math.isfinite(val_loss):
+                    saved = (
+                        f"The checkpoint of epoch {best_epoch} is in {pt_file_path}"
+                        if best_epoch is not None
+                        else "No checkpoint was saved"
+                    )
+                    raise RuntimeError(
+                        f"The validation loss of epoch {epoch} is {val_loss}, "
+                        f"not finite. {saved}."
+                    )
 
             # Update learning rate
             if isinstance(self.scheduler, optim.lr_scheduler.ReduceLROnPlateau):
@@ -172,6 +186,7 @@ class Trainer:
             # Save best model checkpoint only when validation was performed.
             if val_loss is not None and val_loss < best_val_loss:
                 best_val_loss = val_loss
+                best_epoch = epoch
                 torch.save(
                     {
                         "model_state": self.model.state_dict(),
@@ -208,6 +223,14 @@ class Trainer:
             self.writer.add_scalar("Time/Training", train_time, epoch)
             if should_validate:
                 self.writer.add_scalar("Time/Validation", validation_time, epoch)
+
+        # The end loads the checkpoint, so it must be a checkpoint of this run:
+        # a file of an earlier run can be at the same path
+        if best_epoch is None:
+            raise RuntimeError(
+                f"No epoch was validated, so this run saved no checkpoint in "
+                f"{pt_file_path}. Is training.N_EPOCHS positive?"
+            )
 
         elapsed = time.perf_counter() - training_started
         print(

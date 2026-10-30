@@ -23,4 +23,4 @@ jobs:
       # Runs the unit and integration tests, not the tests with the markers
       # julia and gpu. These tests cannot import juliacall, so Julia is not
       # installed. Raise the coverage floor when the coverage goes up.
-      - run: uv run pytest --cov --cov-fail-under=67
+      - run: uv run pytest --cov --cov-fail-under=78
