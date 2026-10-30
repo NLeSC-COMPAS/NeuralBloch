@@ -9,7 +9,10 @@ the checkpoint format changes only this file of the tests.
 import sys
 from collections.abc import Callable
 from pathlib import Path
+from types import ModuleType
+from types import SimpleNamespace
 from typing import Any
+from unittest.mock import Mock
 import h5py
 import numpy as np
 import numpy.typing as npt
@@ -180,6 +183,75 @@ def write_dataset() -> Callable[..., None]:
                 file.create_dataset(key, data=np.asarray(values, dtype=np.complex64))
 
     return write
+
+
+@pytest.fixture
+def julia_batch(
+    config: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> SimpleNamespace:
+    """Put a fake juliacall module in sys.modules; return its batch.
+
+    generate_data of the fake gives this batch: 6 samples with T1 > T2 and
+    NTR = 5, with the targets in the layout of the Julia arrays, (NTR, N). A
+    test can change the batch. include of the fake does nothing. config gets
+    ONLINE_BATCH_SIZE, a key of the Julia data generation.
+    """
+    rng = np.random.default_rng(0)
+    batch = SimpleNamespace(
+        T1=rng.uniform(1.0, 2.0, 6),
+        T2=rng.uniform(0.05, 0.5, 6),
+        B1=rng.uniform(0.5, 1.5, 6),
+        **{
+            key: rng.standard_normal((5, 6)) + 1j * rng.standard_normal((5, 6))
+            for key in ("signal", "dM_dT1", "dM_dT2")
+        },
+    )
+    juliacall = ModuleType("juliacall")
+    juliacall.__dict__["Main"] = SimpleNamespace(
+        include=lambda path: None,
+        generate_data=lambda config, for_training: batch,
+    )
+    monkeypatch.setitem(sys.modules, "juliacall", juliacall)
+    config["training"]["ONLINE_BATCH_SIZE"] = 2
+    return batch
+
+
+@pytest.fixture
+def export_config(tmp_path: Path) -> dict[str, Any]:
+    """The export configuration of config/export.yaml, for the models of NTR 5.
+
+    The ONNX models and the bundle are in tmp_path. The family is of rank 3,
+    the rank of direct_config.
+    """
+    return {
+        "TARGETS": {
+            target: {"ONNX_FILE_PATH": str(tmp_path / "onnx" / spec.bundle_file)}
+            for target, spec in TARGETS.items()
+        },
+        "OPSET_VERSION": 18,
+        "FP16": False,
+        "N_VERIFY_SAMPLES": 8,
+        "BUNDLE_DIR": str(tmp_path / "out" / "bundle"),
+        "MODEL_FAMILY": "fisp5-rank3",
+        "MODEL_VERSION": "0.1.0",
+        "OFFLINE": False,
+    }
+
+
+@pytest.fixture
+def offline_export(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Replace the steps of export_bundle that run git and Julia.
+
+    The commit is "a" * 40, the release does not exist, and BlochSimulators is
+    0.10.0.
+    """
+    for name, value in (
+        ("clean_commit", "a" * 40),
+        ("require_unreleased", None),
+        ("blochsimulators_facts", ("0.10.0", None)),
+    ):
+        monkeypatch.setattr(f"scripts.export_bundle.{name}", Mock(return_value=value))
 
 
 @pytest.fixture(scope="session")

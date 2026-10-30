@@ -1,9 +1,7 @@
 import math
 import re
-import sys
 from collections.abc import Callable
 from pathlib import Path
-from types import ModuleType
 from types import SimpleNamespace
 from typing import Any
 import numpy as np
@@ -25,37 +23,6 @@ def validation_arrays() -> dict[str, np.ndarray]:
             for key in ("signal", "dT1", "dT2")
         },
     }
-
-
-@pytest.fixture
-def julia_batch(
-    config: dict[str, Any],
-    monkeypatch: pytest.MonkeyPatch,
-) -> SimpleNamespace:
-    """Put a fake juliacall module in sys.modules; return its batch.
-
-    generate_data of the fake gives this batch: 6 samples with T1 > T2 and
-    NTR = 5, with the targets in the layout of the Julia arrays, (NTR, N). A
-    test can change the batch. config gets ONLINE_BATCH_SIZE, a key of the
-    Julia data generation.
-    """
-    rng = np.random.default_rng(0)
-    batch = SimpleNamespace(
-        T1=rng.uniform(1.0, 2.0, 6),
-        T2=rng.uniform(0.05, 0.5, 6),
-        B1=rng.uniform(0.5, 1.5, 6),
-        **{
-            key: rng.standard_normal((5, 6)) + 1j * rng.standard_normal((5, 6))
-            for key in ("signal", "dM_dT1", "dM_dT2")
-        },
-    )
-    juliacall = ModuleType("juliacall")
-    juliacall.__dict__["Main"] = SimpleNamespace(
-        generate_data=lambda config, for_training: batch
-    )
-    monkeypatch.setitem(sys.modules, "juliacall", juliacall)
-    config["training"]["ONLINE_BATCH_SIZE"] = 2
-    return batch
 
 
 def test_a_loader_without_samples_is_refused() -> None:
