@@ -194,7 +194,8 @@ def julia_batch(
 
     generate_data of the fake gives this batch: 6 samples with T1 > T2 and
     NTR = 5, with the targets in the layout of the Julia arrays, (NTR, N). A
-    test can change the batch. include of the fake does nothing. config gets
+    test can change the batch. generate_data and include of the fake are
+    Mocks, so a test can check their calls; include does nothing. config gets
     ONLINE_BATCH_SIZE, a key of the Julia data generation.
     """
     rng = np.random.default_rng(0)
@@ -209,8 +210,8 @@ def julia_batch(
     )
     juliacall = ModuleType("juliacall")
     juliacall.__dict__["Main"] = SimpleNamespace(
-        include=lambda path: None,
-        generate_data=lambda config, for_training: batch,
+        include=Mock(return_value=None),
+        generate_data=Mock(return_value=batch),
     )
     monkeypatch.setitem(sys.modules, "juliacall", juliacall)
     config["training"]["ONLINE_BATCH_SIZE"] = 2
