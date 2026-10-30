@@ -1,3 +1,4 @@
+import shutil
 from collections.abc import Callable
 from collections.abc import Mapping
 from pathlib import Path
@@ -52,16 +53,9 @@ def assert_tensor(
 
 @pytest.mark.parametrize("name", list(TARGETS))
 def test_each_target_exports_exactly_its_outputs(
-    direct_config: dict[str, Any],
-    make_model: Callable[..., FCModel],
-    name: str,
-    tmp_path: Path,
+    direct_config: dict[str, Any], onnx_models: dict[str, Path], name: str
 ) -> None:
-    torch.manual_seed(0)
-    model = make_model(NTR, direct_config).eval()
-    path = tmp_path / f"{name}.onnx"
-    export_target(model, name, path, example=X[:2], opset=18)
-    onnx_model = onnx.load(str(path))
+    onnx_model = onnx.load(str(onnx_models[name]))
     onnx.checker.check_model(onnx_model)
     graph = onnx_model.graph
 
@@ -87,40 +81,28 @@ def test_fp16_export_keeps_fp32_inputs_and_outputs(
 
 @pytest.mark.parametrize("name", list(TARGETS))
 def test_an_exported_model_gives_the_pytorch_values(
-    direct_config: dict[str, Any],
-    make_model: Callable[..., FCModel],
-    name: str,
-    tmp_path: Path,
+    exported_model: FCModel, onnx_models: dict[str, Path], name: str
 ) -> None:
-    torch.manual_seed(0)
-    model = make_model(NTR, direct_config).eval()
-    path = tmp_path / f"{name}.onnx"
-    # Trace with batch 2 and verify with batch 3, so that the
-    # batch dimension is dynamic in the values too
-    export_target(model, name, path, example=X[:2], opset=18)
-    verify_onnx(model, name, path, X, "FP32")
+    # The export traced the model with batch 2. Verify with batch 3, so
+    # that the batch dimension is dynamic in the values too
+    verify_onnx(exported_model, name, onnx_models[name], X, "FP32")
 
 
 def test_a_model_from_other_weights_deviates(
-    direct_config: dict[str, Any], make_model: Callable[..., FCModel], tmp_path: Path
+    direct_config: dict[str, Any],
+    make_model: Callable[..., FCModel],
+    onnx_models: dict[str, Path],
 ) -> None:
-    torch.manual_seed(0)
-    exported = make_model(NTR, direct_config).eval()
     torch.manual_seed(1)
     other = make_model(NTR, direct_config).eval()
-    path = tmp_path / "signal.onnx"
-    export_target(exported, "signal", path, example=X[:2], opset=18)
     with pytest.raises(RuntimeError, match="deviate"):
-        verify_onnx(other, "signal", path, X, "FP32")
+        verify_onnx(other, "signal", onnx_models["signal"], X, "FP32")
 
 
 def test_a_model_records_its_checkpoint(
-    direct_config: dict[str, Any], make_model: Callable[..., FCModel], tmp_path: Path
+    onnx_models: dict[str, Path], tmp_path: Path
 ) -> None:
-    torch.manual_seed(0)
-    model = make_model(NTR, direct_config).eval()
-    path = tmp_path / "signal.onnx"
-    export_target(model, "signal", path, example=X[:2], opset=18)
+    path = Path(shutil.copy(onnx_models["signal"], tmp_path))
     assert onnx_checkpoint(path) is None
     with pytest.raises(ValueError, match="does not record its checkpoint"):
         require_checkpoint(path, "a" * 64, "model.pt")

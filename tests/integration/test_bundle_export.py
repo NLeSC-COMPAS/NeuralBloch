@@ -1,3 +1,4 @@
+import shutil
 import tarfile
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -14,11 +15,8 @@ from scripts.export_bundle import git
 from scripts.export_bundle import rf_table_length
 from scripts.export_bundle import tarball_name
 from scripts.export_bundle import write_tarball
-from scripts.export_onnx import TARGETS
-from scripts.export_onnx import export_target
 from scripts.export_onnx import stamp_checkpoint
 from src.model import FCModel
-from src.utils import sample_parameters
 
 
 NTR = 5
@@ -41,19 +39,16 @@ def export(
     monkeypatch: pytest.MonkeyPatch,
     direct_config: dict[str, Any],
     data_config: dict[str, Any],
-    make_model: Callable[..., FCModel],
+    exported_model: FCModel,
+    onnx_models: dict[str, Path],
     write_checkpoint: Callable[..., None],
 ) -> ExportSetup:
     """export_bundle, from a small checkpoint to the bundle and its release file."""
     source = tmp_path / "src"
     source.mkdir()
-    torch.manual_seed(0)
-    model = make_model(NTR, direct_config, data_config).eval()
     checkpoint = source / "model.pt"
-    onnx = {t: source / spec.bundle_file for t, spec in TARGETS.items()}
-    example = sample_parameters({"data": data_config}, 2)
-    for target, path in onnx.items():
-        export_target(model, target, path, example=example, opset=18)
+    # A copy, because the tests stamp and change the ONNX models
+    onnx = {t: Path(shutil.copy(path, source)) for t, path in onnx_models.items()}
     bundle = tmp_path / "out" / "bundle"
     config = {
         "experiment": {"PT_FILE_PATH": str(checkpoint)},
@@ -78,7 +73,7 @@ def export(
         ("blochsimulators_facts", ("0.10.0", None)),
     ):
         monkeypatch.setattr(f"scripts.export_bundle.{name}", Mock(return_value=value))
-    write_checkpoint(checkpoint, model, direct_config, data_config, epoch=7)
+    write_checkpoint(checkpoint, exported_model, direct_config, data_config, epoch=7)
     setup = ExportSetup(checkpoint, onnx, bundle, config, tarball)
     stamp_onnx_models(setup)
     return setup

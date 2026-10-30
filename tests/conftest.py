@@ -15,6 +15,8 @@ import numpy as np
 import numpy.typing as npt
 import pytest
 import torch
+from scripts.export_onnx import TARGETS
+from scripts.export_onnx import export_target
 from src.model import FCModel
 from src.utils import RF_TABLE_KEYS
 from src.utils import rf_sha256
@@ -120,9 +122,12 @@ def write_dataset() -> Callable[..., None]:
     return write
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def direct_config() -> dict[str, Any]:
-    """A small model that has its own networks for dT1 and dT2."""
+    """A small model that has its own networks for dT1 and dT2.
+
+    onnx_models needs it, so all tests share this dict: do not change it.
+    """
     return {
         "derivative_mode": "direct",
         "activation": "relu",
@@ -152,7 +157,7 @@ def derived_config() -> dict[str, Any]:
     }
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def make_model() -> Callable[..., FCModel]:
     """Return a function that makes an FCModel from a model configuration."""
 
@@ -181,3 +186,33 @@ def rank4_model(
     """The model of rank4_config, with the weights of seed 42."""
     torch.manual_seed(42)
     return make_model(5, rank4_config, data_config).eval()
+
+
+@pytest.fixture(scope="session")
+def exported_model(
+    direct_config: dict[str, Any], make_model: Callable[..., FCModel]
+) -> FCModel:
+    """The direct model with the weights of seed 0 that onnx_models exports.
+
+    All tests share this model: do not change it.
+    """
+    torch.manual_seed(0)
+    return make_model(5, direct_config).eval()
+
+
+@pytest.fixture(scope="session")
+def onnx_models(
+    exported_model: FCModel, tmp_path_factory: pytest.TempPathFactory
+) -> dict[str, Path]:
+    """The ONNX model of each target of exported_model.
+
+    An export takes about a second, so all tests share these files. Copy a
+    file before a test changes it.
+    """
+    directory = tmp_path_factory.mktemp("onnx")
+    # A batch of 2 is enough to trace the model
+    example = torch.tensor([[0.8, 0.07, 1.0], [1.2, 0.1, 0.9]])
+    paths = {target: directory / spec.bundle_file for target, spec in TARGETS.items()}
+    for target, path in paths.items():
+        export_target(exported_model, target, path, example=example, opset=18)
+    return paths
