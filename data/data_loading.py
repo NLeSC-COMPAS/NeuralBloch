@@ -33,6 +33,9 @@ class TensorBatchLoader:
         n_samples = tensors[0].shape[0]
         if any(tensor.shape[0] != n_samples for tensor in tensors):
             raise ValueError("All tensors must contain the same number of samples")
+        # Without samples, an epoch has no step and its mean loss is 0 / 0
+        if n_samples == 0:
+            raise ValueError("The tensors must contain at least one sample")
 
         self.tensors = tensors
         self.batch_size = batch_size
