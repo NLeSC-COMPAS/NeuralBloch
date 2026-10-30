@@ -2,7 +2,6 @@ import copy
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
-import h5py
 import numpy as np
 import pytest
 import torch
@@ -15,14 +14,6 @@ from src.basis import worst_relative_output_difference
 from src.model import FCModel
 
 
-DATA_CONFIG = {
-    "T1_lower": 0.1,
-    "T1_upper": 5.0,
-    "T2_lower": 0.01,
-    "T2_upper": 2.0,
-    "B1_lower": 0.8,
-    "B1_upper": 1.2,
-}
 FIT_PARAMS = torch.tensor(
     [[0.4, 0.04, 0.8], [0.8, 0.07, 1.0], [1.2, 0.1, 0.9], [2.0, 0.2, 1.1]]
 )
@@ -36,13 +27,17 @@ def model_config(derived_config: dict[str, Any]) -> dict[str, Any]:
 
 
 @pytest.fixture
-def model(model_config: dict[str, Any], make_model: Callable[..., FCModel]) -> FCModel:
+def model(
+    model_config: dict[str, Any],
+    data_config: dict[str, Any],
+    make_model: Callable[..., FCModel],
+) -> FCModel:
     torch.manual_seed(42)
-    return make_model(5, model_config, DATA_CONFIG).eval()
+    return make_model(5, model_config, data_config).eval()
 
 
 def test_ordering_preserves_full_rank_and_truncation_uses_first_columns(
-    model_config: dict[str, Any], model: FCModel
+    model_config: dict[str, Any], data_config: dict[str, Any], model: FCModel
 ) -> None:
     ordered = copy.deepcopy(model)
     orthogonalize_shared_basis(ordered, FIT_PARAMS)
@@ -51,7 +46,7 @@ def test_ordering_preserves_full_rank_and_truncation_uses_first_columns(
     basis = ordered.U_signal[0].weight.detach()
     torch.testing.assert_close(basis.T @ basis, torch.eye(4), rtol=1e-5, atol=1e-5)
 
-    smaller = truncate_shared_basis(ordered, model_config, DATA_CONFIG, 2)
+    smaller = truncate_shared_basis(ordered, model_config, data_config, 2)
     assert smaller.U_signal[0].weight.shape == (10, 2)
     with torch.no_grad():
         coefficients = representative_coeffs(ordered, HELD_OUT)
@@ -65,27 +60,20 @@ def test_ordering_preserves_full_rank_and_truncation_uses_first_columns(
 
 
 def test_command_writes_new_checkpoints_and_keeps_input(
-    model_config: dict[str, Any], model: FCModel, tmp_path: Path
+    model_config: dict[str, Any],
+    data_config: dict[str, Any],
+    model: FCModel,
+    write_checkpoint: Callable[..., None],
+    write_dataset: Callable[..., None],
+    tmp_path: Path,
 ) -> None:
     checkpoint_path = tmp_path / "trained.pt"
     dataset_path = tmp_path / "validation.h5"
     output_path = tmp_path / "ordered.pt"
-    checkpoint = {
-        "NTR": 5,
-        "epoch": 10,
-        "model_config": model_config,
-        "data_config": DATA_CONFIG,
-        "model_state": model.state_dict(),
-    }
-    torch.save(checkpoint, checkpoint_path)
+    write_checkpoint(checkpoint_path, model, model_config, data_config, epoch=10)
     original_bytes = checkpoint_path.read_bytes()
-    params = FIT_PARAMS.numpy()
-    with h5py.File(dataset_path, "w") as dataset:
-        for index, key in enumerate(("T1", "T2", "B1")):
-            dataset[key] = params[:, index]
-        zeros = np.zeros((len(params), 5), dtype=np.complex64)
-        for key in ("signal", "deriv_T1", "deriv_T2"):
-            dataset[key] = zeros
+    zeros = np.zeros((len(FIT_PARAMS), 5), dtype=np.complex64)
+    write_dataset(dataset_path, FIT_PARAMS.numpy(), zeros, zeros, zeros)
 
     written = postprocess_basis(checkpoint_path, dataset_path, output_path, [2], "cpu")
     assert written == [output_path, tmp_path / "ordered_r2.pt"]

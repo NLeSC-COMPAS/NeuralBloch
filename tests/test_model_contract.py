@@ -2,7 +2,6 @@ import math
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
-import h5py
 import numpy as np
 import pytest
 import torch
@@ -13,18 +12,6 @@ from src.metrics import nrmse
 from src.model import FCModel
 from src.utils import complex_to_real_imag
 from src.utils import sample_parameters
-
-
-SAMPLING_CONFIG = {
-    "data": {
-        "T1_lower": 0.1,
-        "T1_upper": 5.0,
-        "T2_lower": 0.01,
-        "T2_upper": 2.0,
-        "B1_lower": 0.8,
-        "B1_upper": 1.2,
-    }
-}
 
 
 def test_model_logs_physical_parameters_and_returns_pairs(
@@ -139,9 +126,10 @@ def test_decoder_rows_interleave_real_and_imaginary_parts(
 
 
 def test_forward_sensitivity_matches_pytorch_jvp_in_physical_units(
-    derived_config: dict[str, Any], make_model: Callable[..., FCModel]
+    derived_config: dict[str, Any],
+    data_config: dict[str, Any],
+    make_model: Callable[..., FCModel],
 ) -> None:
-    data_config = SAMPLING_CONFIG["data"]
     x = torch.tensor([[0.8, 0.07, 1.0], [1.2, 0.1, 0.9]])
 
     for activation in ("silu", "gelu", "tanh", "softplus"):
@@ -233,7 +221,7 @@ def test_complex_conversion_pairs_real_and_imaginary_values() -> None:
 
 
 def test_h5_loader_preserves_physical_parameters_and_target_shape(
-    tmp_path: Path,
+    write_dataset: Callable[..., None], tmp_path: Path
 ) -> None:
     T1 = np.array([0.8, 1.2], dtype=np.float32)
     T2 = np.array([0.07, 0.1], dtype=np.float32)
@@ -244,13 +232,7 @@ def test_h5_loader_preserves_physical_parameters_and_target_shape(
     )
 
     path = tmp_path / "data.h5"
-    with h5py.File(path, "w") as file:
-        file.create_dataset("T1", data=T1)
-        file.create_dataset("T2", data=T2)
-        file.create_dataset("B1", data=B1)
-        file.create_dataset("signal", data=signal)
-        file.create_dataset("deriv_T1", data=signal)
-        file.create_dataset("deriv_T2", data=signal)
+    write_dataset(path, np.stack((T1, T2, B1), axis=1), signal, signal, signal)
 
     params, loaded_signal, dT1, dT2, n_samples, NTR = load_data_from_h5_file(str(path))
 
@@ -275,27 +257,23 @@ def test_h5_loader_preserves_physical_parameters_and_target_shape(
     assert dT2_batch.shape == (2, 2, 2)
 
 
-def test_parameter_sampling_is_physical_and_log_uniform() -> None:
+def test_parameter_sampling_is_physical_and_log_uniform(
+    data_config: dict[str, Any],
+) -> None:
     torch.manual_seed(42)
-    samples = sample_parameters(SAMPLING_CONFIG, 20_000)
+    samples = sample_parameters({"data": data_config}, 20_000)
 
     assert samples.shape == (20_000, 3)
-    for column, lower, upper in (
-        (0, 0.1, 5.0),
-        (1, 0.01, 2.0),
-        (2, 0.8, 1.2),
-    ):
-        assert torch.all(samples[:, column] >= lower)
-        assert torch.all(samples[:, column] <= upper)
+    for column, name in enumerate(("T1", "T2", "B1")):
+        assert torch.all(samples[:, column] >= data_config[f"{name}_lower"])
+        assert torch.all(samples[:, column] <= data_config[f"{name}_upper"])
 
-    expected_log_T1_mean = (math.log(0.1) + math.log(5.0)) / 2
-    expected_log_T2_mean = (math.log(0.01) + math.log(2.0)) / 2
-    assert torch.log(samples[:, 0]).mean().item() == pytest.approx(
-        expected_log_T1_mean, abs=0.03
-    )
-    assert torch.log(samples[:, 1]).mean().item() == pytest.approx(
-        expected_log_T2_mean, abs=0.03
-    )
+    for column, name in enumerate(("T1", "T2")):
+        lower = math.log(data_config[f"{name}_lower"])
+        upper = math.log(data_config[f"{name}_upper"])
+        assert torch.log(samples[:, column]).mean().item() == pytest.approx(
+            (lower + upper) / 2, abs=0.03
+        )
 
 
 def test_metrics_reduce_over_all_non_batch_dimensions() -> None:

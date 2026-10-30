@@ -579,9 +579,7 @@ NTR = 5
 class ExportSetup:
     """A small checkpoint, its ONNX models and the configuration of the export."""
 
-    model_config: dict[str, Any]
     data_config: dict[str, Any]
-    model: FCModel
     checkpoint: Path
     onnx: dict[str, Path]
     bundle: Path
@@ -594,16 +592,13 @@ def export(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     direct_config: dict[str, Any],
+    data_config: dict[str, Any],
     make_model: Callable[..., FCModel],
+    write_checkpoint: Callable[..., None],
 ) -> ExportSetup:
     """export_bundle, from a small checkpoint to the bundle and its release file."""
     source = tmp_path / "src"
     source.mkdir()
-    data_config = dict(DATA_CONFIG)
-    for name, data_key, _ in RF_FILES.values():
-        path = source / Path(name).name
-        path.write_text("".join(f"{i}.5\n" for i in range(NTR)))
-        data_config[data_key] = str(path)
     torch.manual_seed(0)
     model = make_model(NTR, direct_config, data_config).eval()
     checkpoint = source / "model.pt"
@@ -635,25 +630,14 @@ def export(
         ("blochsimulators_facts", ("0.10.0", None)),
     ):
         monkeypatch.setattr(f"scripts.export_bundle.{name}", Mock(return_value=value))
-    setup = ExportSetup(
-        direct_config, data_config, model, checkpoint, onnx, bundle, config, tarball
-    )
-    save_checkpoint(setup, rf_recorded=True)
+    write_checkpoint(checkpoint, model, direct_config, data_config, epoch=7)
+    setup = ExportSetup(data_config, checkpoint, onnx, bundle, config, tarball)
+    stamp_onnx_models(setup)
     return setup
 
 
-def save_checkpoint(setup: ExportSetup, rf_recorded: bool) -> None:
-    """Save the checkpoint, then record its sha256 in the ONNX model of each target."""
-    checkpoint = {
-        "model_state": setup.model.state_dict(),
-        "epoch": 7,
-        "NTR": NTR,
-        "model_config": setup.model_config,
-        "data_config": setup.data_config,
-    }
-    if rf_recorded:
-        checkpoint["rf_sha256"] = rf_sha256(setup.data_config)
-    torch.save(checkpoint, setup.checkpoint)
+def stamp_onnx_models(setup: ExportSetup) -> None:
+    """Record the sha256 of the checkpoint in the ONNX model of each target."""
     for path in setup.onnx.values():
         stamp_checkpoint(path, file_sha256(setup.checkpoint))
 
@@ -691,7 +675,11 @@ def test_the_bundle_and_its_release_file_describe_the_checkpoint(
 def test_the_warnings_come_again_after_the_release_command(
     export: ExportSetup, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    save_checkpoint(export, rf_recorded=False)
+    # A checkpoint from before the checkpoints recorded the RF tables
+    checkpoint = torch.load(export.checkpoint)
+    del checkpoint["rf_sha256"]
+    torch.save(checkpoint, export.checkpoint)
+    stamp_onnx_models(export)
     export_bundle(export.config)
     printed = capsys.readouterr().out
     command = printed.index("gh release create")
