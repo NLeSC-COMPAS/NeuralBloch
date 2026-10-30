@@ -15,11 +15,13 @@ import numpy as np
 import numpy.typing as npt
 import pytest
 import torch
+from data.data_loading import TensorBatchLoader
 from scripts.export_onnx import TARGETS
 from scripts.export_onnx import export_target
 from src.model import FCModel
 from src.utils import RF_TABLE_KEYS
 from src.utils import rf_sha256
+from src.utils import sample_parameters
 
 
 @pytest.fixture(autouse=True)
@@ -67,6 +69,64 @@ def data_config(tmp_path: Path) -> dict[str, Any]:
         "B1_lower": 0.5,
         "B1_upper": 1.5,
     }
+
+
+@pytest.fixture
+def config(
+    tmp_path: Path,
+    data_config: dict[str, Any],
+    direct_config: dict[str, Any],
+) -> dict[str, Any]:
+    """The configuration of a short training on CPU.
+
+    It has the sections experiment, training, data (data_config) and model
+    (direct_config), with the keys that Trainer reads and the batch sizes of
+    the loaders. It does not have the keys of the Julia data generation. The
+    outputs are in tmp_path. A test can change the values of this dict: the
+    dicts of the other fixtures do not change.
+    """
+    return {
+        "experiment": {
+            "DEVICE": "cpu",
+            "PT_FILE_PATH": str(tmp_path / "model.pt"),
+            "LOG_FILE_PATH": str(tmp_path / "log"),
+        },
+        "training": {
+            "N_EPOCHS": 2,
+            "TRAIN_BATCH_SIZE": 4,
+            "LEARNING_RATE": 1e-3,
+            "VALIDATION_BATCH_SIZE": 8,
+            "VALIDATE_EVERY": 1,
+            "COMPILE_TRAIN_STEP": False,
+            "LR_SCHEDULER": "cosine",
+            "LOSS_FUNCTION": "nmae",
+            "REGEN_EVERY": 100,
+        },
+        "data": dict(data_config),
+        "model": dict(direct_config),
+    }
+
+
+@pytest.fixture
+def synthetic_loader(data_config: dict[str, Any]) -> Callable[..., TensorBatchLoader]:
+    """Return a function that makes a TensorBatchLoader of random data.
+
+    The inputs are parameters in the ranges of data_config, and the signal and
+    the two derivatives are random (N, 5, 2) tensors, as for NTR = 5. The data
+    come from the global torch generator: seed it to get the same data.
+    """
+
+    def make(
+        n_samples: int,
+        batch_size: int,
+        *,
+        shuffle: bool = False,
+    ) -> TensorBatchLoader:
+        params = sample_parameters({"data": data_config}, n_samples)
+        targets = (torch.randn(n_samples, 5, 2) for _ in range(3))
+        return TensorBatchLoader((params, *targets), batch_size, shuffle=shuffle)
+
+    return make
 
 
 @pytest.fixture
