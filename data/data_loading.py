@@ -71,10 +71,11 @@ def check_dataset(
     *,
     empty_hint: str = "",
 ) -> None:
-    """Refuse a dataset without samples or with values that are not finite.
+    """Refuse a dataset that gives a NaN loss.
 
-    The loss of such a dataset is NaN, the error of a training that diverges.
-    These errors name the dataset instead. Check the float32 arrays that the
+    A dataset without samples, with values that are not finite, or with T1 or
+    T2 that are not positive gives a NaN loss, the error of a training that
+    diverges. These errors name the dataset instead. Check the float32 arrays that the
     model gets: a larger value of the file can become inf in float32.
 
     Args:
@@ -86,8 +87,9 @@ def check_dataset(
             dataset can be empty.
 
     Raises:
-        ValueError: If the dataset has no samples, or values that are not
-            finite. The error gives the number of bad samples, and the first.
+        ValueError: If the dataset has no samples, values that are not
+            finite, or T1 or T2 that are not positive. The error gives the
+            number of bad samples, and the first.
     """
     if len(params) == 0:
         raise ValueError(f"{source} has no samples. {empty_hint}".rstrip())
@@ -99,6 +101,16 @@ def check_dataset(
                 f"{source} has values that are not finite in {name}: "
                 f"{_describe_bad_samples(params, bad)}"
             )
+
+    # The model takes the logarithm of T1 and T2. After the check above, no
+    # value is NaN, for which a comparison is always False
+    bad = ~(params[:, :2] > 0).all(axis=1)
+    if bad.any():
+        raise ValueError(
+            f"{source} has values of T1 or T2 that are not positive: "
+            f"{_describe_bad_samples(params, bad)}. The model takes their "
+            "logarithm"
+        )
 
 
 def _describe_bad_samples(
