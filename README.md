@@ -79,6 +79,7 @@ Contains the core implementation.
 - **basis.py** – post-training shared-basis ordering and rank truncation
 - **trainer.py** – training loop, validation, checkpointing, and logging
 - **loss.py** – loss function definitions
+- **metrics.py** – accuracy metrics (NRMSE)
 - **utils.py** – helper functions (device selection, model loading, random seeds, etc.)
 - **config.py** – configuration file loader
 

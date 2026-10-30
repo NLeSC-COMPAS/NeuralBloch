@@ -6,8 +6,8 @@ import pytest
 import torch
 from data.data_loading import load_data_from_h5_file
 from data.data_loading import make_loader
-from scripts.test_accuracy import nrmse
 from src.loss import nmae_loss
+from src.metrics import nrmse
 from src.model import FCModel
 from src.utils import complex_to_real_imag
 from src.utils import sample_parameters
