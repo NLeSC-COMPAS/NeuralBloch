@@ -235,7 +235,7 @@ def test_a_validation_dataset_with_t1_or_t2_that_are_not_positive_is_refused(
 
 def test_finite_julia_data_are_loaded(
     config: dict[str, Any],
-    julia_batch: SimpleNamespace,
+    julia_batch_mock: SimpleNamespace,
 ) -> None:
     loader = generate_train_loader(config)
 
@@ -244,7 +244,7 @@ def test_finite_julia_data_are_loaded(
 
 def test_the_julia_arrays_become_the_samples_of_the_training_loader(
     config: dict[str, Any],
-    julia_batch: SimpleNamespace,
+    julia_batch_mock: SimpleNamespace,
 ) -> None:
     loader = generate_train_loader(config)
 
@@ -254,14 +254,14 @@ def test_the_julia_arrays_become_the_samples_of_the_training_loader(
     params, *targets = (tensor.numpy() for tensor in loader.tensors)
     np.testing.assert_array_equal(
         params,
-        np.column_stack([julia_batch.T1, julia_batch.T2, julia_batch.B1]).astype(
-            np.float32
-        ),
+        np.column_stack(
+            [julia_batch_mock.T1, julia_batch_mock.T2, julia_batch_mock.B1]
+        ).astype(np.float32),
     )
     # The Julia arrays are (NTR, N): sample i, readout t of a target is
     # [real, imag] of the array at [t, i]
     for target, key in zip(targets, ("signal", "dM_dT1", "dM_dT2"), strict=True):
-        values = getattr(julia_batch, key).astype(np.complex64).T
+        values = getattr(julia_batch_mock, key).astype(np.complex64).T
         np.testing.assert_array_equal(
             target, np.stack([values.real, values.imag], axis=-1)
         )
@@ -271,12 +271,12 @@ def test_the_julia_arrays_become_the_samples_of_the_training_loader(
 
 def test_julia_data_without_samples_are_refused(
     config: dict[str, Any],
-    julia_batch: SimpleNamespace,
+    julia_batch_mock: SimpleNamespace,
 ) -> None:
     # The filter T1 > T2 of data/data_generation.jl can remove all samples
-    julia_batch.T1 = julia_batch.T2 = julia_batch.B1 = np.zeros(0)
+    julia_batch_mock.T1 = julia_batch_mock.T2 = julia_batch_mock.B1 = np.zeros(0)
     for key in ("signal", "dM_dT1", "dM_dT2"):
-        setattr(julia_batch, key, np.zeros((5, 0), dtype=np.complex64))
+        setattr(julia_batch_mock, key, np.zeros((5, 0), dtype=np.complex64))
 
     with pytest.raises(
         ValueError,
@@ -302,10 +302,10 @@ def test_julia_data_with_values_that_are_not_finite_are_refused(
     key: str,
     name: str,
     config: dict[str, Any],
-    julia_batch: SimpleNamespace,
+    julia_batch_mock: SimpleNamespace,
 ) -> None:
     # Without the check, they give the error of a training that diverges
-    getattr(julia_batch, key)[..., 3] = math.nan  # sample 3
+    getattr(julia_batch_mock, key)[..., 3] = math.nan  # sample 3
 
     with pytest.raises(
         ValueError,

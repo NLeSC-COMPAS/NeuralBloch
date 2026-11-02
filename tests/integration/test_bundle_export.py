@@ -41,11 +41,11 @@ def export(
     exported_model: FCModel,
     onnx_models: dict[str, Path],
     write_checkpoint: Callable[..., None],
-    offline_export: None,
+    git_and_julia_in_export_mock: None,
 ) -> ExportSetup:
     """export_bundle, from a small checkpoint to the bundle and its release file.
 
-    git and Julia are not part of these tests (offline_export).
+    git and Julia are mocks in these tests (git_and_julia_in_export_mock).
     """
     source = tmp_path / "src"
     source.mkdir()

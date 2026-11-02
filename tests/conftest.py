@@ -32,8 +32,8 @@ def no_julia(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) ->
     """Make an import of juliacall fail in each test without the marker julia.
 
     The import starts Julia, and installs it at the first use. A test that
-    needs Julia must have the marker; another test can put a fake juliacall
-    module in sys.modules.
+    needs Julia must have the marker; another test can replace juliacall with
+    a mock (julia_batch_mock).
     """
     if request.node.get_closest_marker("julia") is None:
         monkeypatch.setitem(sys.modules, "juliacall", None)
@@ -186,17 +186,17 @@ def write_dataset() -> Callable[..., None]:
 
 
 @pytest.fixture
-def julia_batch(
+def julia_batch_mock(
     config: dict[str, Any],
     monkeypatch: pytest.MonkeyPatch,
 ) -> SimpleNamespace:
-    """Put a fake juliacall module in sys.modules; return its batch.
+    """Replace juliacall with a mock; return the batch of its generate_data.
 
-    generate_data of the fake gives this batch: 6 samples with T1 > T2 and
-    NTR = 5, with the targets in the layout of the Julia arrays, (NTR, N). A
-    test can change the batch. generate_data and include of the fake are
-    Mocks, so a test can check their calls; include does nothing. config gets
-    ONLINE_BATCH_SIZE, a key of the Julia data generation.
+    The mock module in sys.modules has a Main with two Mocks: generate_data
+    gives this batch, and include does nothing. A test can check their calls.
+    The batch has 6 samples with T1 > T2 and NTR = 5, with the targets in the
+    layout of the Julia arrays, (NTR, N). A test can change the batch. config
+    gets ONLINE_BATCH_SIZE, a key of the Julia data generation.
     """
     rng = np.random.default_rng(0)
     batch = SimpleNamespace(
@@ -241,11 +241,11 @@ def export_config(tmp_path: Path) -> dict[str, Any]:
 
 
 @pytest.fixture
-def offline_export(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Replace the steps of export_bundle that run git and Julia.
+def git_and_julia_in_export_mock(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Replace the steps of export_bundle that run git and Julia with mocks.
 
-    The commit is "a" * 40, the release does not exist, and BlochSimulators is
-    0.10.0.
+    The mocks give the commit "a" * 40, a release that does not exist, and
+    BlochSimulators 0.10.0.
     """
     for name, value in (
         ("clean_commit", "a" * 40),

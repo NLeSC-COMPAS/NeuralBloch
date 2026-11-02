@@ -2,8 +2,8 @@
 
 The other export tests write the checkpoint with write_checkpoint. This test
 exports the checkpoint that the training writes, so a change of the checkpoint
-on one side only fails it. Only Julia and git are fakes (julia_batch,
-offline_export).
+on one side only fails it. Only Julia and git are mocks (julia_batch_mock,
+git_and_julia_in_export_mock).
 """
 
 from collections.abc import Callable
@@ -46,7 +46,7 @@ def pipeline_config(
     return config
 
 
-@pytest.mark.usefixtures("julia_batch", "offline_export")
+@pytest.mark.usefixtures("julia_batch_mock", "git_and_julia_in_export_mock")
 def test_the_bundle_describes_the_checkpoint_of_the_training(
     pipeline_config: dict[str, Any],
     capsys: pytest.CaptureFixture[str],
