@@ -4,14 +4,15 @@ import argparse
 
 from juliacall import Main as jl
 
-from data.split_dataset import split_dataset
-from src.scripts.export_bundle import export_bundle
-from src.scripts.export_onnx import export_onnx
-from src.scripts.test_accuracy import test_accuracy
-from src.scripts.test_inference import test_inference
-from src.scripts.train import train
-from src.config import load_config
-from src.utils import set_seed
+from neuralbloch.data.split_dataset import split_dataset
+from neuralbloch.scripts.export_bundle import export_bundle
+from neuralbloch.scripts.export_onnx import export_onnx
+from neuralbloch.scripts.test_accuracy import test_accuracy
+from neuralbloch.scripts.test_inference import test_inference
+from neuralbloch.scripts.train import train
+from neuralbloch.config import load_config
+from neuralbloch.data import DATA_GENERATION_JL
+from neuralbloch.utils import set_seed
 
 
 def main() -> None:
@@ -42,7 +43,7 @@ def main() -> None:
     # Generate a new dataset using Julia and split it into
     # training and validation sets
     if args.task == "generate":
-        jl.include("data/data_generation.jl")
+        jl.include(DATA_GENERATION_JL)
         jl.save_dataset(config)
 
         split_dataset(config["experiment"])
@@ -50,7 +51,7 @@ def main() -> None:
         return
 
     if args.task == "train":
-        jl.include("data/data_generation.jl")
+        jl.include(DATA_GENERATION_JL)
         jl.seval("begin using BlochSimulators; CUDALibs(); true end")
 
     set_seed(config["experiment"]["SEED"])

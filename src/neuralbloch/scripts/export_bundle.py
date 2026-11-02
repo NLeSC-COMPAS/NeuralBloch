@@ -14,19 +14,19 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from src.scripts.export_onnx import TARGETS
-from src.scripts.export_onnx import onnx_precision
-from src.scripts.export_onnx import require_checkpoint
-from src.scripts.export_onnx import require_exported
-from src.scripts.export_onnx import target_paths
-from src.scripts.export_onnx import training_domain
-from src.scripts.export_onnx import verify_onnx
-from src.utils import RF_TABLE_KEYS
-from src.utils import file_sha256
-from src.utils import load_checkpoint
-from src.utils import model_from_checkpoint
-from src.utils import rf_sha256
-from src.utils import sample_parameters
+from neuralbloch.scripts.export_onnx import TARGETS
+from neuralbloch.scripts.export_onnx import onnx_precision
+from neuralbloch.scripts.export_onnx import require_checkpoint
+from neuralbloch.scripts.export_onnx import require_exported
+from neuralbloch.scripts.export_onnx import target_paths
+from neuralbloch.scripts.export_onnx import training_domain
+from neuralbloch.scripts.export_onnx import verify_onnx
+from neuralbloch.utils import RF_TABLE_KEYS
+from neuralbloch.utils import file_sha256
+from neuralbloch.utils import load_checkpoint
+from neuralbloch.utils import model_from_checkpoint
+from neuralbloch.utils import rf_sha256
+from neuralbloch.utils import sample_parameters
 
 
 # The model bundle that NeuralBloch.jl reads contains the ONNX model of each
@@ -52,13 +52,13 @@ RF_FILES = {
     "rf_phase": ("rf_data/rf_phase_list.txt", "RF_PHASE_FILE", "phases, degrees"),
 }
 
-# Each DERIVATIVE_METHOD name in data/data_generation.jl -> the name in the card.
+# Each DERIVATIVE_METHOD name in src/neuralbloch/data/data_generation.jl -> the name in the card.
 DERIVATIVE_METHODS = {
     "forward_sensitivity": "forward sensitivity",
     "finite_difference": "forward difference",
 }
 
-# data/data_generation.jl keeps only samples with T1 > T2. This is a physical
+# src/neuralbloch/data/data_generation.jl keeps only samples with T1 > T2. This is a physical
 # requirement, so it is a constant here and not a setting.
 CONSTRAINT = "T2 < T1"
 
@@ -425,7 +425,7 @@ def boolean(value: object, name: str) -> bool:
     raise ValueError(f"{name} must be true or false, not {value!r}")
 
 
-# The sequence that data/data_generation.jl simulates. It is FISP3D(...), made
+# The sequence that src/neuralbloch/data/data_generation.jl simulates. It is FISP3D(...), made
 # from these fields of the data configuration: (card key, data key, type, unit).
 SEQUENCE_KIND = "FISP3D"
 SEQUENCE_FIELDS = (
@@ -470,7 +470,7 @@ def card_text(inputs: CardInputs) -> str:
 
     lines += [
         "# NeuralBloch model card. The export_bundle task of NeuralBloch generates",
-        "# this file (python -m src.main export_bundle). Do not edit it by hand. Units",
+        "# this file (python -m neuralbloch.main export_bundle). Do not edit it by hand. Units",
         "# are physical: seconds for T1, T2 and times, B1 relative to nominal,",
         "# derivatives per second.",
         "",
@@ -496,7 +496,11 @@ def card_text(inputs: CardInputs) -> str:
         if not low < high:
             raise ValueError(f"{lower} = {low} must be below {upper} = {high}")
         field(key, [low, high], f"{lower}, {upper}: {comment}")
-    field("constraint", CONSTRAINT, "data/data_generation.jl keeps only T1 > T2")
+    field(
+        "constraint",
+        CONSTRAINT,
+        "src/neuralbloch/data/data_generation.jl keeps only T1 > T2",
+    )
 
     table("derivatives", "how the training targets were computed")
     field("method", method, "data_config DERIVATIVE_METHOD")
@@ -505,7 +509,10 @@ def card_text(inputs: CardInputs) -> str:
         field("dT1_step", dT1, "BlochSimulators.DEFAULT_ΔT₁")
         field("dT2_step", dT2, "BlochSimulators.DEFAULT_ΔT₂")
 
-    table("sequence", "FISP3D(...) in data/data_generation.jl, from data_config")
+    table(
+        "sequence",
+        "FISP3D(...) in src/neuralbloch/data/data_generation.jl, from data_config",
+    )
     field("kind", SEQUENCE_KIND)
     for key, data_key, convert, unit in SEQUENCE_FIELDS:
         field(
@@ -994,7 +1001,7 @@ def require_unreleased(tag: str, offline: bool) -> str | None:
 # The card names the commit of this repository. Thus, git runs in this
 # repository and not in the current directory, which can be a different
 # repository.
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def git(*args: str) -> str:

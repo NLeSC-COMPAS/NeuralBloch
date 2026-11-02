@@ -13,11 +13,11 @@ import onnx
 import onnxruntime as ort
 import torch
 import torch.nn as nn
-from src.metrics import nrmse
-from src.model import FCModel
-from src.utils import file_sha256
-from src.utils import load_model
-from src.utils import sample_parameters
+from neuralbloch.metrics import nrmse
+from neuralbloch.model import FCModel
+from neuralbloch.utils import file_sha256
+from neuralbloch.utils import load_model
+from neuralbloch.utils import sample_parameters
 
 
 @dataclass(frozen=True)
@@ -196,12 +196,12 @@ def require_checkpoint(
     if recorded is None:
         raise ValueError(
             f"{onnx_path} does not record its checkpoint. Export it again with "
-            "`python -m src.main export_onnx`"
+            "`python -m neuralbloch.main export_onnx`"
         )
     if recorded != checkpoint_sha256:
         raise ValueError(
             f"{onnx_path} comes from a different checkpoint than {checkpoint_path}. "
-            "Export it again with `python -m src.main export_onnx`"
+            "Export it again with `python -m neuralbloch.main export_onnx`"
         )
 
 
@@ -248,7 +248,7 @@ def require_exported(paths: dict[str, Path]) -> None:
     for onnx_path in paths.values():
         if not onnx_path.exists():
             raise FileNotFoundError(
-                f"{onnx_path} not found. Run `python -m src.main export_onnx` first."
+                f"{onnx_path} not found. Run `python -m neuralbloch.main export_onnx` first."
             )
 
 

@@ -1,11 +1,11 @@
 import time
 from typing import Any
 import torch
-from data.data_loading import TensorBatchLoader
-from data.data_loading import generate_train_loader
-from data.data_loading import generate_val_loader
-from src.model import FCModel
-from src.trainer import Trainer
+from neuralbloch.data.data_loading import TensorBatchLoader
+from neuralbloch.data.data_loading import generate_train_loader
+from neuralbloch.data.data_loading import generate_val_loader
+from neuralbloch.model import FCModel
+from neuralbloch.trainer import Trainer
 
 
 def initialize_joint_pca_basis(
@@ -58,8 +58,9 @@ def train(config: dict[str, Any]) -> None:
     # Load Julia data generation functions (used for online training data).
     # Import juliacall only here, because the import starts Julia.
     from juliacall import Main as jl
+    from neuralbloch.data import DATA_GENERATION_JL
 
-    jl.include("data/data_generation.jl")
+    jl.include(DATA_GENERATION_JL)
 
     initial_train_loader = None
     basis_initialization_seconds = 0.0

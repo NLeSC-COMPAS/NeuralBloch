@@ -2,7 +2,7 @@
 
 from typing import Any
 import torch
-from src.model import FCModel
+from neuralbloch.model import FCModel
 
 
 def representative_coeffs(
