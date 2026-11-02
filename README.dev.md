@@ -72,7 +72,7 @@ uv run pytest -m "julia or gpu"   # the tests of both markers
 
 A `-m` on the command line replaces the `-m "not julia and not gpu"` in `addopts`. pytest refuses a marker that `pyproject.toml` does not register.
 
-The Julia code reads the configuration keys by name, and only the tests of the marker `julia` run it. Run them after a change of the configuration keys. Each test runs Julia in a new Python process that imports `juliacall` before `torch`, as `run.py` does, and takes about a minute: the first simulation compiles the CUDA kernels. The first run in a new virtual environment also installs the Julia packages.
+The Julia code reads the configuration keys by name, and only the tests of the marker `julia` run it. Run them after a change of the configuration keys. Each test runs Julia in a new Python process that imports `juliacall` before `torch`, as `run.py` does. A test that simulates takes about a minute: the first simulation in each process compiles the CUDA kernels. The first run in a new virtual environment also installs the Julia packages.
 
 To see which lines the tests run, add `--cov`:
 

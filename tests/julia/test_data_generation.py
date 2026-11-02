@@ -1,8 +1,9 @@
 """The smoke test of the Julia data generation (data/data_generation.jl).
 
 The Julia code reads the configuration keys by name, and no other test runs
-it. Run these tests after a change of the configuration keys. Each test takes
-about a minute, because the first simulation compiles the CUDA kernels.
+it. Run these tests after a change of the configuration keys. A test that
+simulates takes about a minute, because the first simulation compiles the CUDA
+kernels.
 """
 
 import subprocess
@@ -12,6 +13,7 @@ import h5py
 import numpy as np
 import pytest
 import torch
+import yaml
 from data.data_loading import generate_val_loader
 from data.data_loading import load_data_from_h5_file
 from src.config import load_config
@@ -71,6 +73,33 @@ def test_the_julia_training_data_have_the_layout_of_the_model(
     assert (params[:, 0] > params[:, 1]).all()
     assert saved["batch_size"] == training["TRAIN_BATCH_SIZE"]
     assert saved["shuffle"]
+
+
+def test_ranges_without_a_sample_with_t1_above_t2_give_an_error_that_names_them(
+    julia_config_dir: Path,
+    run_python: Callable[..., subprocess.CompletedProcess[str]],
+    tmp_path: Path,
+) -> None:
+    # The simulation keeps only the samples with T1 > T2. Without them, the
+    # simulation on the GPU fails with a CUDA error that does not give the cause
+    path = julia_config_dir / "data.yaml"
+    data = yaml.safe_load(path.read_text())
+    data.update(T1_lower=0.1, T1_upper=0.2, T2_lower=0.3, T2_upper=2.0)
+    path.write_text(yaml.safe_dump(data))
+
+    result = run_python(
+        "-c",
+        TRAIN_LOADER,
+        str(julia_config_dir),
+        str(tmp_path / "train_loader.pt"),
+        succeeds=False,
+    )
+
+    assert (
+        "None of the 100 samples has T1 > T2: check the ranges data.T1_lower to "
+        "data.T1_upper (0.1 to 0.2) and data.T2_lower to data.T2_upper (0.3 to "
+        "2.0)"
+    ) in result.stderr
 
 
 def test_the_generate_task_writes_the_validation_and_test_datasets(
