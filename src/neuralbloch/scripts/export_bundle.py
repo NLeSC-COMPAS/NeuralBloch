@@ -470,7 +470,7 @@ def card_text(inputs: CardInputs) -> str:
 
     lines += [
         "# NeuralBloch model card. The export_bundle task of NeuralBloch generates",
-        "# this file (python -m neuralbloch.main export_bundle). Do not edit it by hand. Units",
+        "# this file (neuralbloch export_bundle). Do not edit it by hand. Units",
         "# are physical: seconds for T1, T2 and times, B1 relative to nominal,",
         "# derivatives per second.",
         "",

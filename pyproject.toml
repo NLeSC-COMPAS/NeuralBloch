@@ -16,6 +16,9 @@ dependencies = [
   "torch==2.13.0",
 ]
 
+[project.scripts]
+neuralbloch = "neuralbloch.main:main"
+
 [build-system]
 requires = ["setuptools>=80", "juliapkg>=0.1.24", "juliacall>=0.9.35"]
 build-backend = "setuptools.build_meta"

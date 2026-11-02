@@ -196,12 +196,12 @@ def require_checkpoint(
     if recorded is None:
         raise ValueError(
             f"{onnx_path} does not record its checkpoint. Export it again with "
-            "`python -m neuralbloch.main export_onnx`"
+            "`neuralbloch export_onnx`"
         )
     if recorded != checkpoint_sha256:
         raise ValueError(
             f"{onnx_path} comes from a different checkpoint than {checkpoint_path}. "
-            "Export it again with `python -m neuralbloch.main export_onnx`"
+            "Export it again with `neuralbloch export_onnx`"
         )
 
 
@@ -248,7 +248,7 @@ def require_exported(paths: dict[str, Path]) -> None:
     for onnx_path in paths.values():
         if not onnx_path.exists():
             raise FileNotFoundError(
-                f"{onnx_path} not found. Run `python -m neuralbloch.main export_onnx` first."
+                f"{onnx_path} not found. Run `neuralbloch export_onnx` first."
             )
 
 
