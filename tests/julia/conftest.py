@@ -1,7 +1,7 @@
 """Fixtures of the tests that run Julia.
 
 These tests run Julia in a new Python process that imports juliacall before
-torch, as run.py does. The pytest process has already imported torch.
+torch, as src/neuralbloch/main.py does. The pytest process has already imported torch.
 """
 
 import subprocess
@@ -10,7 +10,7 @@ from collections.abc import Callable
 from pathlib import Path
 import pytest
 import yaml
-from src.config import load_config
+from neuralbloch.config import load_config
 
 
 @pytest.fixture
@@ -55,10 +55,9 @@ def run_python(
     virtual environment installs the Julia packages (a few minutes), but a
     run that hangs, for example on the GPU, must not stop the tests.
 
-    juliapkg finds the juliapkg.json of the repository only in sys.path. With
-    -c, or with a script in the repository root, sys.path has the root. With a
-    script in another directory, juliapkg changes the Julia environment of the
-    virtual environment to one without BlochSimulators.
+    The runs need an install of the package (pip install -e .). The pythonpath
+    of pytest does not reach the new process, so Python finds neuralbloch, and
+    juliapkg finds its juliapkg.json, only through the install.
     """
 
     def run(*args: str, succeeds: bool = True) -> subprocess.CompletedProcess[str]:

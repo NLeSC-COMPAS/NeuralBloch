@@ -3,8 +3,8 @@ from typing import Any
 import numpy as np
 import pytest
 import torch
-from src.utils import complex_to_real_imag
-from src.utils import sample_parameters
+from neuralbloch.utils import complex_to_real_imag
+from neuralbloch.utils import sample_parameters
 
 
 def test_complex_conversion_pairs_real_and_imaginary_values() -> None:

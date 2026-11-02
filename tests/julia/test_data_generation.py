@@ -1,4 +1,4 @@
-"""The smoke test of the Julia data generation (data/data_generation.jl).
+"""The smoke test of the Julia data generation (src/neuralbloch/data/data_generation.jl).
 
 The Julia code reads the configuration keys by name, and no other test runs
 it. Run these tests after a change of the configuration keys. A test that
@@ -14,26 +14,27 @@ import numpy as np
 import pytest
 import torch
 import yaml
-from data.data_loading import generate_val_loader
-from data.data_loading import load_data_from_h5_file
-from src.config import load_config
+from neuralbloch.config import load_config
+from neuralbloch.data.data_loading import generate_val_loader
+from neuralbloch.data.data_loading import load_data_from_h5_file
 
 
 pytestmark = pytest.mark.julia
 
-# Make the training data as scripts/train.py does after run.py, with the seed
-# of run.py, and save the tensors, the batch size and the shuffle of the loader
+# Make the training data as src/neuralbloch/scripts/train.py does after src/neuralbloch/main.py, with the seed
+# of src/neuralbloch/main.py, and save the tensors, the batch size and the shuffle of the loader
 # in the file of the second argument
 TRAIN_LOADER = """\
 import sys
-from juliacall import Main as jl  # before torch, as in run.py
-from src.config import load_config
+from juliacall import Main as jl  # before torch, as in src/neuralbloch/main.py
+from neuralbloch.config import load_config
+from neuralbloch.data import DATA_GENERATION_JL
 config = load_config(sys.argv[1])
 seed = config["experiment"]["SEED"]
 jl.seval(f"begin using Random; Random.seed!({seed}); true end")
-jl.include("data/data_generation.jl")
+jl.include(DATA_GENERATION_JL)
 import torch
-from data.data_loading import generate_train_loader
+from neuralbloch.data.data_loading import generate_train_loader
 loader = generate_train_loader(config)
 torch.save(
     {
@@ -114,7 +115,9 @@ def test_the_generate_task_writes_the_validation_and_test_datasets(
 ) -> None:
     config = load_config(julia_config_dir)
 
-    run_python("run.py", "generate", "--config-dir", str(julia_config_dir))
+    run_python(
+        "-m", "neuralbloch.main", "generate", "--config-dir", str(julia_config_dir)
+    )
 
     experiment, data = config["experiment"], config["data"]
     params, signal, dT1, dT2, N, NTR = load_data_from_h5_file(

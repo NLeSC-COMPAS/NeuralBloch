@@ -7,31 +7,31 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import Mock
 import pytest
-from scripts.export_bundle import CARD
-from scripts.export_bundle import RF_FILES
-from scripts.export_bundle import SCHEMA_VERSION
-from scripts.export_bundle import CardInputs
-from scripts.export_bundle import card_text
-from scripts.export_bundle import check_bundle
-from scripts.export_bundle import check_family
-from scripts.export_bundle import check_rf_provenance
-from scripts.export_bundle import check_undersampling
-from scripts.export_bundle import check_version
-from scripts.export_bundle import config_sha256
-from scripts.export_bundle import derivative_method
-from scripts.export_bundle import family_rank
-from scripts.export_bundle import file_sha256
-from scripts.export_bundle import release_command
-from scripts.export_bundle import release_tag
-from scripts.export_bundle import require_configs
-from scripts.export_bundle import require_unreleased
-from scripts.export_bundle import rf_table_length
-from scripts.export_bundle import tarball_name
-from scripts.export_bundle import write_bundle
-from scripts.export_bundle import write_tarball
-from scripts.export_onnx import TARGETS
-from src.utils import RF_TABLE_KEYS
-from src.utils import rf_sha256
+from neuralbloch.scripts.export_bundle import CARD
+from neuralbloch.scripts.export_bundle import RF_FILES
+from neuralbloch.scripts.export_bundle import SCHEMA_VERSION
+from neuralbloch.scripts.export_bundle import CardInputs
+from neuralbloch.scripts.export_bundle import card_text
+from neuralbloch.scripts.export_bundle import check_bundle
+from neuralbloch.scripts.export_bundle import check_family
+from neuralbloch.scripts.export_bundle import check_rf_provenance
+from neuralbloch.scripts.export_bundle import check_undersampling
+from neuralbloch.scripts.export_bundle import check_version
+from neuralbloch.scripts.export_bundle import config_sha256
+from neuralbloch.scripts.export_bundle import derivative_method
+from neuralbloch.scripts.export_bundle import family_rank
+from neuralbloch.scripts.export_bundle import file_sha256
+from neuralbloch.scripts.export_bundle import release_command
+from neuralbloch.scripts.export_bundle import release_tag
+from neuralbloch.scripts.export_bundle import require_configs
+from neuralbloch.scripts.export_bundle import require_unreleased
+from neuralbloch.scripts.export_bundle import rf_table_length
+from neuralbloch.scripts.export_bundle import tarball_name
+from neuralbloch.scripts.export_bundle import write_bundle
+from neuralbloch.scripts.export_bundle import write_tarball
+from neuralbloch.scripts.export_onnx import TARGETS
+from neuralbloch.utils import RF_TABLE_KEYS
+from neuralbloch.utils import rf_sha256
 
 
 DATA_CONFIG = {
@@ -577,7 +577,7 @@ def run_git(local: str, remote: str | Exception, offline: bool = False) -> str |
         return subprocess.CompletedProcess(args, 0, local, "")
 
     with pytest.MonkeyPatch.context() as m:
-        m.setattr("scripts.export_bundle.subprocess.run", run)
+        m.setattr("neuralbloch.scripts.export_bundle.subprocess.run", run)
         return require_unreleased(TAG, offline)
 
 

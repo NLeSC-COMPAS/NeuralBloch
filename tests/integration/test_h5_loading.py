@@ -1,9 +1,9 @@
 from collections.abc import Callable
 from pathlib import Path
 import numpy as np
-from data.data_loading import load_data_from_h5_file
-from data.data_loading import make_loader
-from src.utils import complex_to_real_imag
+from neuralbloch.data.data_loading import load_data_from_h5_file
+from neuralbloch.data.data_loading import make_loader
+from neuralbloch.utils import complex_to_real_imag
 
 
 def test_h5_loader_preserves_physical_parameters_and_target_shape(

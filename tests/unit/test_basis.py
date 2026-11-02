@@ -1,11 +1,11 @@
 import copy
 from typing import Any
 import torch
-from src.basis import orthogonalize_shared_basis
-from src.basis import representative_coeffs
-from src.basis import truncate_shared_basis
-from src.basis import worst_relative_output_difference
-from src.model import FCModel
+from neuralbloch.basis import orthogonalize_shared_basis
+from neuralbloch.basis import representative_coeffs
+from neuralbloch.basis import truncate_shared_basis
+from neuralbloch.basis import worst_relative_output_difference
+from neuralbloch.model import FCModel
 
 
 FIT_PARAMS = torch.tensor(

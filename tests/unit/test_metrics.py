@@ -1,7 +1,7 @@
 import numpy as np
 import torch
-from src.loss import nmae_loss
-from src.metrics import nrmse
+from neuralbloch.loss import nmae_loss
+from neuralbloch.metrics import nrmse
 
 
 def test_metrics_reduce_over_all_non_batch_dimensions() -> None:

@@ -1,11 +1,11 @@
 from collections.abc import Callable
 import pytest
 import torch
-from src.loss import Loss
-from src.loss import hybrid_relative_loss
-from src.loss import nmae_loss
-from src.loss import relative_l2_loss
-from src.loss import relative_l2_squared_loss
+from neuralbloch.loss import Loss
+from neuralbloch.loss import hybrid_relative_loss
+from neuralbloch.loss import nmae_loss
+from neuralbloch.loss import relative_l2_loss
+from neuralbloch.loss import relative_l2_squared_loss
 
 
 LossFunction = Callable[[torch.Tensor, torch.Tensor], torch.Tensor]

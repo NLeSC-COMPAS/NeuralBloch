@@ -12,11 +12,11 @@ from typing import Any
 import numpy as np
 import pytest
 import torch
-from scripts.export_bundle import check_bundle
-from scripts.export_bundle import export_bundle
-from scripts.export_onnx import export_onnx
-from scripts.train import train
-from src.utils import file_sha256
+from neuralbloch.scripts.export_bundle import check_bundle
+from neuralbloch.scripts.export_bundle import export_bundle
+from neuralbloch.scripts.export_onnx import export_onnx
+from neuralbloch.scripts.train import train
+from neuralbloch.utils import file_sha256
 
 
 @pytest.fixture
@@ -53,7 +53,7 @@ def test_the_bundle_describes_the_checkpoint_of_the_training(
 ) -> None:
     config = pipeline_config
 
-    # The tasks of run.py: train, export_onnx and export_bundle
+    # The tasks of src/neuralbloch/main.py: train, export_onnx and export_bundle
     train(config)
     export_onnx(config)
     export_bundle(config)
