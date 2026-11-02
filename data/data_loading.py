@@ -33,6 +33,10 @@ class TensorBatchLoader:
         n_samples = tensors[0].shape[0]
         if any(tensor.shape[0] != n_samples for tensor in tensors):
             raise ValueError("All tensors must contain the same number of samples")
+        # Without samples, an epoch has no batch, and its mean loss is
+        # 0 / 0 = NaN. check_dataset gives this error with the name of the data
+        if n_samples == 0:
+            raise ValueError("The tensors must contain at least one sample")
 
         self.tensors = tensors
         self.batch_size = batch_size
@@ -60,6 +64,68 @@ class TensorBatchLoader:
             yield tuple(tensor[start:stop] for tensor in tensors)
 
 
+def check_dataset(
+    source: str,
+    params: npt.NDArray[np.float32],
+    targets: dict[str, npt.NDArray[np.float32]],
+    *,
+    empty_hint: str = "",
+) -> None:
+    """Refuse a dataset that gives a NaN loss.
+
+    A dataset without samples, with values that are not finite, or with T1 or
+    T2 that are not positive gives a NaN loss, the error of a training that
+    diverges. These errors name the dataset instead. Check the float32 arrays that the
+    model gets: a larger value of the file can become inf in float32.
+
+    Args:
+        source: The dataset, as the errors name it.
+        params: T1, T2 and B1 of each sample, shape ``(N, 3)``.
+        targets: The targets of the model by their name in the source, with
+            the sample on the first axis.
+        empty_hint: Added to the error for a dataset without samples: why the
+            dataset can be empty.
+
+    Raises:
+        ValueError: If the dataset has no samples, values that are not
+            finite, or T1 or T2 that are not positive. The error gives the
+            number of bad samples, and the first.
+    """
+    if len(params) == 0:
+        raise ValueError(f"{source} has no samples. {empty_hint}".rstrip())
+
+    for name, values in {"T1, T2 or B1": params, **targets}.items():
+        bad = ~np.isfinite(values).reshape(len(values), -1).all(axis=1)
+        if bad.any():
+            raise ValueError(
+                f"{source} has values that are not finite in {name}: "
+                f"{_describe_bad_samples(params, bad)}"
+            )
+
+    # The model takes the logarithm of T1 and T2. After the check above, no
+    # value is NaN, for which a comparison is always False
+    bad = ~(params[:, :2] > 0).all(axis=1)
+    if bad.any():
+        raise ValueError(
+            f"{source} has values of T1 or T2 that are not positive: "
+            f"{_describe_bad_samples(params, bad)}. The model takes their "
+            "logarithm"
+        )
+
+
+def _describe_bad_samples(
+    params: npt.NDArray[np.float32],
+    bad: npt.NDArray[np.bool_],
+) -> str:
+    """Give the number of bad samples, and the parameters of the first."""
+    first = int(np.argmax(bad))
+    T1, T2, B1 = params[first]
+    return (
+        f"{int(bad.sum())} of {len(bad)} samples, the first is sample {first} "
+        f"(T1, T2, B1 = {T1:.4g}, {T2:.4g}, {B1:.4g})"
+    )
+
+
 def generate_val_loader(
     config: dict[str, Any],
 ) -> tuple[TensorBatchLoader, int]:
@@ -74,14 +140,20 @@ def generate_val_loader(
     """
     device = get_device(config)
 
-    params, signal, dT1, dT2, _, NTR = load_data_from_h5_file(
-        config["experiment"]["DATASET_FOR_VALIDATION_PATH"]
-    )
+    path = config["experiment"]["DATASET_FOR_VALIDATION_PATH"]
+    params, signal, dT1, dT2, _, NTR = load_data_from_h5_file(path)
 
     # Stack complex-valued data into paired real and imaginary channels
     sig_split = complex_to_real_imag(signal)
     dT1_split = complex_to_real_imag(dT1)
     dT2_split = complex_to_real_imag(dT2)
+
+    # Check the data here, where the file is known
+    check_dataset(
+        f"The validation dataset {path} (experiment.DATASET_FOR_VALIDATION_PATH)",
+        params,
+        {"signal": sig_split, "deriv_T1": dT1_split, "deriv_T2": dT2_split},
+    )
 
     batchsize = config["training"]["VALIDATION_BATCH_SIZE"]
 
@@ -129,6 +201,22 @@ def generate_train_loader(
     sig_split = complex_to_real_imag(signal)
     dT1_split = complex_to_real_imag(dT1)
     dT2_split = complex_to_real_imag(dT2)
+
+    # Without this check, NaN of the simulation gives the error of a training
+    # that diverges, or an error of the joint PCA basis
+    n_sampled = (
+        config["training"]["ONLINE_BATCH_SIZE"] * config["training"]["REGEN_EVERY"]
+    )
+    check_dataset(
+        "The training data of the Julia simulation",
+        params,
+        {"signal": sig_split, "dM_dT1": dT1_split, "dM_dT2": dT2_split},
+        empty_hint=(
+            f"data/data_generation.jl keeps only the samples with T1 > T2 of "
+            f"the {n_sampled} that it samples (training.ONLINE_BATCH_SIZE * "
+            "training.REGEN_EVERY): check the ranges data.T1_* and data.T2_*"
+        ),
+    )
 
     batch_size = config["training"]["TRAIN_BATCH_SIZE"]
 

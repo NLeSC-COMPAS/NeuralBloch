@@ -14,6 +14,24 @@ from src.utils import get_device
 from src.utils import rf_sha256
 
 
+def _not_finite_error(
+    problem: str,
+    best_epoch: int | None,
+    pt_file_path: str,
+) -> RuntimeError:
+    """Return the error for a value of the training that is not finite.
+
+    The message says where the checkpoint of this run is, if there is one. A
+    file at pt_file_path without a checkpoint of this run is of an earlier run.
+    """
+    saved = (
+        f"The checkpoint of epoch {best_epoch} is in {pt_file_path}"
+        if best_epoch is not None
+        else "This run saved no checkpoint"
+    )
+    return RuntimeError(f"{problem}. {saved}.")
+
+
 class Trainer:
     """Training loop for the surrogate model.
 
@@ -113,6 +131,12 @@ class Trainer:
         Periodically regenerates training data, trains the model,
         evaluates validation loss, updates the learning rate,
         and saves the best performing model.
+
+        Raises:
+            RuntimeError: If the training loss of an epoch, the weights after
+                it or its validation loss are not finite, or if no epoch was
+                validated. The checkpoint of the best earlier epoch, if any,
+                stays on disk.
         """
         best_val_loss = float("inf")
         best_epoch: int | None = None
@@ -149,6 +173,24 @@ class Trainer:
                 raise RuntimeError("Training data was not generated")
             train_loss, loss_signal, loss_dT1, loss_dT2 = self.train_epoch(train_loader)
             train_time = time.perf_counter() - started
+            # A training that diverges, or NaN in the training data, makes the
+            # weights NaN. Stop in this epoch, not at the next validation: the
+            # checkpoint of the best earlier epoch, if any, stays on disk
+            if not math.isfinite(train_loss):
+                raise _not_finite_error(
+                    f"The training loss of epoch {epoch} is {train_loss}, not finite",
+                    best_epoch,
+                    pt_file_path,
+                )
+            # The losses come from before each step, so the last step of an
+            # epoch can make the weights NaN with a finite training loss
+            if not self._weights_are_finite():
+                raise _not_finite_error(
+                    "The weights of the model are not finite after the training "
+                    f"of epoch {epoch}",
+                    best_epoch,
+                    pt_file_path,
+                )
 
             # Validation is intentionally much less frequent than optimization.
             # Always validate the first and final epoch so a checkpoint exists
@@ -164,16 +206,13 @@ class Trainer:
                 validation_time = time.perf_counter() - started
                 # NaN and inf are never below best_val_loss, and -inf would
                 # stop each later save. Stop at the first such loss: the
-                # checkpoint of the best earlier epoch stays on disk
+                # checkpoint of the best earlier epoch, if any, stays on disk
                 if not math.isfinite(val_loss):
-                    saved = (
-                        f"The checkpoint of epoch {best_epoch} is in {pt_file_path}"
-                        if best_epoch is not None
-                        else "No checkpoint was saved"
-                    )
-                    raise RuntimeError(
+                    raise _not_finite_error(
                         f"The validation loss of epoch {epoch} is {val_loss}, "
-                        f"not finite. {saved}."
+                        "not finite",
+                        best_epoch,
+                        pt_file_path,
                     )
 
             # Update learning rate
@@ -245,6 +284,12 @@ class Trainer:
         print(f"Loaded best model from epoch {checkpoint['epoch']}")
 
         self.writer.close()
+
+    def _weights_are_finite(self) -> bool:
+        """Return whether all parameters of the model are finite."""
+        # One synchronization for all parameters, not one for each
+        finite = [parameter.isfinite().all() for parameter in self.model.parameters()]
+        return bool(torch.stack(finite).all())
 
     def train_epoch(
         self,
