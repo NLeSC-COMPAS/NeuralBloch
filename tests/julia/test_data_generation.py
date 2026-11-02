@@ -22,7 +22,8 @@ from src.config import load_config
 pytestmark = pytest.mark.julia
 
 # Make the training data as scripts/train.py does after run.py, and save the
-# tensors of the loader in the file of the second argument
+# tensors, the batch size and the shuffle of the loader in the file of the
+# second argument
 TRAIN_LOADER = """\
 import sys
 from juliacall import Main as jl  # before torch, as in run.py
@@ -59,7 +60,7 @@ def test_the_julia_training_data_have_the_layout_of_the_model(
     NTR = len(np.loadtxt(pytestconfig.rootpath / data["RF_ANGLE_FILE"]))
     training = config["training"]
     n_sampled = training["ONLINE_BATCH_SIZE"] * training["REGEN_EVERY"]
-    # The simulation keeps the samples with T1 > T2. NTR is not a possible
+    # generate_data keeps the samples with T1 > T2. NTR is not a possible
     # number of samples, so a target with the axes of the Julia arrays,
     # (NTR, N), fails
     assert 0 < len(params) <= n_sampled < NTR
@@ -80,8 +81,9 @@ def test_ranges_without_a_sample_with_t1_above_t2_give_an_error_that_names_them(
     run_python: Callable[..., subprocess.CompletedProcess[str]],
     tmp_path: Path,
 ) -> None:
-    # The simulation keeps only the samples with T1 > T2. Without them, the
-    # simulation on the GPU fails with a CUDA error that does not give the cause
+    # generate_data keeps only the samples with T1 > T2. Without a sample, the
+    # simulation on the GPU fails with a CUDA error that does not give the
+    # cause, so generate_data must raise an error before it
     path = julia_config_dir / "data.yaml"
     data = yaml.safe_load(path.read_text())
     data.update(T1_lower=0.1, T1_upper=0.2, T2_lower=0.3, T2_upper=2.0)

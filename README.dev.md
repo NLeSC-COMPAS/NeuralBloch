@@ -82,7 +82,7 @@ uv run pytest --cov   # the coverage of each file, and the lines that no test ru
 
 The coverage settings are in the `[tool.coverage]` tables of `pyproject.toml`. The coverage includes the branches, and the report also shows the files that no test imports.
 
-The tests do not start Julia. The import of `juliacall` starts Julia, so only `run.py` imports it at module level; the other modules import it in the functions that run Julia. A test checks this. In a test without the marker `julia`, an import of `juliacall` raises `ImportError`, so that the test cannot start Julia by mistake.
+The tests without the marker `julia` do not start Julia. The import of `juliacall` starts Julia, so only `run.py` imports it at module level; the other modules import it in the functions that run Julia. A test checks this. In a test without the marker `julia`, an import of `juliacall` raises `ImportError`, so that the test cannot start Julia by mistake. Such a test can replace `juliacall` with a mock (`julia_batch_mock`).
 
 CI runs the tests (see [Continuous integration](#continuous-integration)). The git hooks do not run them.
 

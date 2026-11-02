@@ -50,7 +50,7 @@ def test_the_target_gives_0_and_a_zero_prediction_gives_1(
         (nmae_loss, 2 / 3.5),
         (relative_l2_loss, 4 / 5),
         (relative_l2_squared_loss, 16 / 25),
-        # The mean of the two above it
+        # The mean of nmae and relative_l2
         (hybrid_relative_loss, (2 / 3.5 + 4 / 5) / 2),
     ],
     ids=FUNCTIONS.keys(),
