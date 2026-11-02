@@ -5,15 +5,15 @@ description = "Neural network surrogate model for Bloch simulations in MR-STAT"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "h5py>=3.16.0",
-    "juliacall>=0.9.35",
-    "numpy>=2.5.1",
-    "onnx>=1.22.0",
-    "onnxruntime>=1.29.0",
-    "onnxscript>=0.7.1",
-    "pyyaml>=6.0.3",
-    "tensorboard>=2.21.0",
-    "torch==2.13.0",
+  "h5py>=3.16.0",
+  "juliacall>=0.9.35",
+  "numpy>=2.5.1",
+  "onnx>=1.22.0",
+  "onnxruntime>=1.29.0",
+  "onnxscript>=0.7.1",
+  "pyyaml>=6.0.3",
+  "tensorboard>=2.21.0",
+  "torch==2.13.0",
 ]
 
 [tool.uv.sources]
@@ -26,11 +26,11 @@ explicit = true
 
 [dependency-groups]
 dev = [
-    "prek>=0.4.11",
-    "pytest>=9",
-    "pytest-cov>=7.1.0",
-    "ruff>=0.16.1",
-    "ty>=0.0.66",
+  "prek>=0.4.11",
+  "pytest>=9",
+  "pytest-cov>=7.1.0",
+  "ruff>=0.16.1",
+  "ty>=0.0.66",
 ]
 
 [tool.pytest]
@@ -41,8 +41,8 @@ pythonpath = ["."]
 addopts = ["-ra", "--import-mode=importlib", "-m", "not julia and not gpu"]
 strict = true
 markers = [
-    "julia: needs Julia and BlochSimulators (the simulations need a CUDA GPU)",
-    "gpu: needs a CUDA GPU",
+  "julia: needs Julia and BlochSimulators (the simulations need a CUDA GPU)",
+  "gpu: needs a CUDA GPU",
 ]
 
 [tool.coverage.run]
@@ -58,39 +58,39 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = [
-    "D", # pydocstyle
-    "E", # pycodestyle (error)
-    "F", # Pyflakes
-    "I", # isort
-    "W", # pycodestyle (warning)
-    "N", # pep8-naming
-    "PT", # flake8-pytest-style
+  "D",  # pydocstyle
+  "E",  # pycodestyle (error)
+  "F",  # Pyflakes
+  "I",  # isort
+  "W",  # pycodestyle (warning)
+  "N",  # pep8-naming
+  "PT", # flake8-pytest-style
 ]
 
 ignore = [
-    "E501", # Line too long
-    "D100", # Missing module docstring
-    "D104", # Missing public package docstring
-    "D105", # Missing docstring in magic method
-    "D107", # Missing `__init__` docstring
-    # MR-STAT notation (T1, T2, B1, dT1, dT2, NTR) and the juliacall `Main as jl`
-    # alias are conventional in this domain and match data_generation.jl
-    "N803", # Argument name should be lowercase
-    "N806", # Variable in function should be lowercase
-    "N813", # Camelcase imported as lowercase
-    # The following list excludes rules irrelevant to the Google style
-    "D203",
-    "D204",
-    "D213",
-    "D215",
-    "D400",
-    "D401",
-    "D404",
-    "D406",
-    "D407",
-    "D408",
-    "D409",
-    "D413",
+  "E501", # Line too long
+  "D100", # Missing module docstring
+  "D104", # Missing public package docstring
+  "D105", # Missing docstring in magic method
+  "D107", # Missing `__init__` docstring
+  # MR-STAT notation (T1, T2, B1, dT1, dT2, NTR) and the juliacall `Main as jl`
+  # alias are conventional in this domain and match data_generation.jl
+  "N803", # Argument name should be lowercase
+  "N806", # Variable in function should be lowercase
+  "N813", # Camelcase imported as lowercase
+  # The following list excludes rules irrelevant to the Google style
+  "D203",
+  "D204",
+  "D213",
+  "D215",
+  "D400",
+  "D401",
+  "D404",
+  "D406",
+  "D407",
+  "D408",
+  "D409",
+  "D413",
 ]
 
 # Allow autofix for all enabled rules (when `--fix`) is provided.
@@ -109,11 +109,11 @@ preview = true
 force-single-line = true
 lines-after-imports = 2
 no-lines-before = [
-    "future",
-    "standard-library",
-    "third-party",
-    "first-party",
-    "local-folder",
+  "future",
+  "standard-library",
+  "third-party",
+  "first-party",
+  "local-folder",
 ]
 
 [tool.ruff.lint.pydocstyle]
