@@ -13,12 +13,14 @@ from types import ModuleType
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import Mock
+from unittest.mock import create_autospec
 import h5py
 import numpy as np
 import numpy.typing as npt
 import pytest
 import torch
 from data.data_loading import TensorBatchLoader
+from scripts import export_bundle
 from scripts.export_onnx import TARGETS
 from scripts.export_onnx import export_target
 from src.model import FCModel
@@ -239,15 +241,17 @@ def export_config(tmp_path: Path) -> dict[str, Any]:
 def git_and_julia_in_export_mock(monkeypatch: pytest.MonkeyPatch) -> None:
     """Replace the steps of export_bundle that run git and Julia with mocks.
 
-    The mocks give the commit "a" * 40, a release that does not exist, and
-    BlochSimulators 0.10.0.
+    The mocks have the signatures of the real functions, so a call with other
+    arguments fails. They give the commit "a" * 40, a release that does not
+    exist, and BlochSimulators 0.10.0.
     """
     for name, value in (
         ("clean_commit", "a" * 40),
         ("require_unreleased", None),
         ("blochsimulators_facts", ("0.10.0", None)),
     ):
-        monkeypatch.setattr(f"scripts.export_bundle.{name}", Mock(return_value=value))
+        mock = create_autospec(getattr(export_bundle, name), return_value=value)
+        monkeypatch.setattr(export_bundle, name, mock)
 
 
 @pytest.fixture(scope="session")
