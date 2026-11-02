@@ -21,17 +21,20 @@ from src.config import load_config
 
 pytestmark = pytest.mark.julia
 
-# Make the training data as scripts/train.py does after run.py, and save the
-# tensors, the batch size and the shuffle of the loader in the file of the
-# second argument
+# Make the training data as scripts/train.py does after run.py, with the seed
+# of run.py, and save the tensors, the batch size and the shuffle of the loader
+# in the file of the second argument
 TRAIN_LOADER = """\
 import sys
 from juliacall import Main as jl  # before torch, as in run.py
+from src.config import load_config
+config = load_config(sys.argv[1])
+seed = config["experiment"]["SEED"]
+jl.seval(f"begin using Random; Random.seed!({seed}); true end")
 jl.include("data/data_generation.jl")
 import torch
 from data.data_loading import generate_train_loader
-from src.config import load_config
-loader = generate_train_loader(load_config(sys.argv[1]))
+loader = generate_train_loader(config)
 torch.save(
     {
         "tensors": [tensor.cpu() for tensor in loader.tensors],

@@ -51,6 +51,9 @@ def run_python(
     The function takes the arguments of the Python command (a script, or -c
     and the code) and fails the test with the output of a failed run. With
     succeeds=False, it fails the test with the output of a run that succeeds.
+    A run that takes more than 30 minutes fails: the first run in a new
+    virtual environment installs the Julia packages (a few minutes), but a
+    run that hangs, for example on the GPU, must not stop the tests.
 
     juliapkg finds the juliapkg.json of the repository only in sys.path. With
     -c, or with a script in the repository root, sys.path has the root. With a
@@ -64,6 +67,7 @@ def run_python(
             cwd=pytestconfig.rootpath,
             capture_output=True,
             text=True,
+            timeout=1800,
         )
         output = result.stdout[-2000:] + result.stderr[-5000:]
         assert (result.returncode == 0) == succeeds, output
