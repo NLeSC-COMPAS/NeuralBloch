@@ -78,6 +78,21 @@ def test_each_sample_is_normalized_by_its_own_target(
 
 
 @each_function
+def test_each_sample_is_normalized_over_all_its_axes(
+    function: LossFunction, target: torch.Tensor, pred: torch.Tensor
+) -> None:
+    # The targets are (N, NTR, 2). A normalization of each readout or of each
+    # channel gives another loss, when the two channels have other sizes
+    scale = torch.tensor([1.0, 0.01])
+    target, pred = target * scale, pred * scale
+
+    torch.testing.assert_close(
+        function(pred, target),
+        function(pred.flatten(start_dim=1), target.flatten(start_dim=1)),
+    )
+
+
+@each_function
 def test_the_loss_of_a_batch_is_the_mean_of_the_losses_of_its_samples(
     function: LossFunction, target: torch.Tensor, pred: torch.Tensor
 ) -> None:
