@@ -186,17 +186,13 @@ def write_dataset() -> Callable[..., None]:
 
 
 @pytest.fixture
-def julia_batch_mock(
-    config: dict[str, Any],
-    monkeypatch: pytest.MonkeyPatch,
-) -> SimpleNamespace:
+def julia_batch_mock(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     """Replace juliacall with a mock; return the batch of its generate_data.
 
     The mock module in sys.modules has a Main with two Mocks: generate_data
     gives this batch, and include does nothing. A test can check their calls.
     The batch has 6 samples with T1 > T2 and NTR = 5, with the targets in the
-    layout of the Julia arrays, (NTR, N). A test can change the batch. config
-    gets ONLINE_BATCH_SIZE, a key of the Julia data generation.
+    layout of the Julia arrays, (NTR, N). A test can change the batch.
     """
     rng = np.random.default_rng(0)
     batch = SimpleNamespace(
@@ -214,7 +210,6 @@ def julia_batch_mock(
         generate_data=Mock(return_value=batch),
     )
     monkeypatch.setitem(sys.modules, "juliacall", juliacall)
-    config["training"]["ONLINE_BATCH_SIZE"] = 2
     return batch
 
 

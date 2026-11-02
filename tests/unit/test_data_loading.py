@@ -273,19 +273,15 @@ def test_julia_data_without_samples_are_refused(
     config: dict[str, Any],
     julia_batch_mock: SimpleNamespace,
 ) -> None:
-    # The filter T1 > T2 of data/data_generation.jl can remove all samples
+    # data/data_generation.jl raises an error before it gives 0 samples (a
+    # test with the marker julia checks it). This check is for the data that
+    # Python gets
     julia_batch_mock.T1 = julia_batch_mock.T2 = julia_batch_mock.B1 = np.zeros(0)
     for key in ("signal", "dM_dT1", "dM_dT2"):
         setattr(julia_batch_mock, key, np.zeros((5, 0), dtype=np.complex64))
 
-    with pytest.raises(
-        ValueError,
-        match=re.escape(
-            "The training data of the Julia simulation has no samples. "
-            "data/data_generation.jl keeps only the samples with T1 > T2 of the "
-            "200 that it samples"
-        ),
-    ):
+    error = "The training data of the Julia simulation has no samples."
+    with pytest.raises(ValueError, match=f"^{re.escape(error)}$"):
         generate_train_loader(config)
 
 
