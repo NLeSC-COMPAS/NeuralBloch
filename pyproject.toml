@@ -20,12 +20,12 @@ dependencies = [
 requires = ["setuptools>=80", "juliapkg>=0.1.24", "juliacall>=0.9.35"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools]
-packages = ["src", "data", "scripts"]
-py-modules = ["run"]
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.setuptools.package-data]
-data = ["data_generation.jl", "rf_data/*.txt"]
+neuralbloch = ["juliapkg.json"]
+"neuralbloch.data" = ["data_generation.jl"]
 
 # for pip: --extra-index-url https://download.pytorch.org/whl/cu126.
 [tool.uv.sources]
@@ -47,8 +47,7 @@ dev = [
 
 [tool.pytest]
 testpaths = ["tests"]
-# The tests import `scripts`, `src` and `data` from the repository root.
-pythonpath = ["."]
+pythonpath = ["src"]
 # The tests that need Julia or a GPU run only on request (-m julia, -m gpu)
 addopts = ["-ra", "--import-mode=importlib", "-m", "not julia and not gpu"]
 strict = true
@@ -58,7 +57,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["src", "scripts", "data"]
+source = ["neuralbloch"]
 branch = true
 
 [tool.coverage.report]
@@ -136,7 +135,7 @@ convention = "google"
 python-version = "3.12"
 
 [tool.ty.src]
-include = ["run.py", "src", "data", "scripts"]
+include = ["src"]
 
 [tool.ty.rules]
 missing-type-argument = "error"
