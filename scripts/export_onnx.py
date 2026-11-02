@@ -13,7 +13,7 @@ import onnx
 import onnxruntime as ort
 import torch
 import torch.nn as nn
-from scripts.test_accuracy import nrmse
+from src.metrics import nrmse
 from src.model import FCModel
 from src.utils import file_sha256
 from src.utils import load_model
