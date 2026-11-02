@@ -68,8 +68,6 @@ def check_dataset(
     source: str,
     params: npt.NDArray[np.float32],
     targets: dict[str, npt.NDArray[np.float32]],
-    *,
-    empty_hint: str = "",
 ) -> None:
     """Refuse a dataset that gives a NaN loss.
 
@@ -83,8 +81,6 @@ def check_dataset(
         params: T1, T2 and B1 of each sample, shape ``(N, 3)``.
         targets: The targets of the model by their name in the source, with
             the sample on the first axis.
-        empty_hint: Added to the error for a dataset without samples: why the
-            dataset can be empty.
 
     Raises:
         ValueError: If the dataset has no samples, values that are not
@@ -92,7 +88,7 @@ def check_dataset(
             number of bad samples, and the first.
     """
     if len(params) == 0:
-        raise ValueError(f"{source} has no samples. {empty_hint}".rstrip())
+        raise ValueError(f"{source} has no samples.")
 
     for name, values in {"T1, T2 or B1": params, **targets}.items():
         bad = ~np.isfinite(values).reshape(len(values), -1).all(axis=1)
@@ -203,19 +199,12 @@ def generate_train_loader(
     dT2_split = complex_to_real_imag(dT2)
 
     # Without this check, NaN of the simulation gives the error of a training
-    # that diverges, or an error of the joint PCA basis
-    n_sampled = (
-        config["training"]["ONLINE_BATCH_SIZE"] * config["training"]["REGEN_EVERY"]
-    )
+    # that diverges, or an error of the joint PCA basis. (For 0 samples,
+    # data/data_generation.jl raises an error with the cause first.)
     check_dataset(
         "The training data of the Julia simulation",
         params,
         {"signal": sig_split, "dM_dT1": dT1_split, "dM_dT2": dT2_split},
-        empty_hint=(
-            f"data/data_generation.jl keeps only the samples with T1 > T2 of "
-            f"the {n_sampled} that it samples (training.ONLINE_BATCH_SIZE * "
-            "training.REGEN_EVERY): check the ranges data.T1_* and data.T2_*"
-        ),
     )
 
     batch_size = config["training"]["TRAIN_BATCH_SIZE"]

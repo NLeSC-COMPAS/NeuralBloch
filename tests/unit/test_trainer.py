@@ -81,20 +81,22 @@ class TrainingEvents:
 
 
 @pytest.fixture
-def record_training(
+def record_mocked_training(
     monkeypatch: pytest.MonkeyPatch,
     synthetic_loader: Callable[..., TensorBatchLoader],
 ) -> Callable[..., TrainingEvents]:
-    """Return a function that records what a trainer does in train().
+    """Return a function that mocks the data generation and records train().
 
-    When the trainer generates data, it gets 10 synthetic samples, not Julia
-    data. Each torch.save of the test is recorded, so write other files before
-    the recording starts. With val_losses, the validations give these losses in
-    this order and do not run the model: give one loss for each validation.
-    With train_losses, the epochs give these training losses in this order and
-    do not train the model: give one loss for each epoch. The three terms of
-    each epoch are then 0. The optimizer makes no step, so PyTorch warns when
-    the scheduler steps.
+    A mock replaces generate_train_loader: when the trainer generates data, it
+    gets 10 synthetic samples, not Julia data. Each torch.save of the test is
+    recorded, so write other files before the recording starts. With
+    val_losses, a mock replaces the validation: the validations give these
+    losses in this order and do not run the model; give one loss for each
+    validation. With train_losses, a mock replaces the training of an epoch:
+    the epochs give these training losses in this order and do not train the
+    model; give one loss for each epoch. The three terms of each epoch are
+    then 0. The optimizer makes no step, so PyTorch warns when the scheduler
+    steps.
     """
 
     def record(
@@ -177,10 +179,10 @@ def earlier_checkpoint(
 
 def test_the_data_are_generated_at_the_first_epoch_and_every_regen_every_epochs(
     make_trainer: Callable[..., Trainer],
-    record_training: Callable[..., TrainingEvents],
+    record_mocked_training: Callable[..., TrainingEvents],
 ) -> None:
     trainer = make_trainer(N_EPOCHS=7, REGEN_EVERY=3)
-    events = record_training(trainer)
+    events = record_mocked_training(trainer)
 
     trainer.train()
 
@@ -191,11 +193,11 @@ def test_the_data_are_generated_at_the_first_epoch_and_every_regen_every_epochs(
 
 def test_a_first_loader_is_used_until_the_first_regeneration(
     make_trainer: Callable[..., Trainer],
-    record_training: Callable[..., TrainingEvents],
+    record_mocked_training: Callable[..., TrainingEvents],
     synthetic_loader: Callable[..., TensorBatchLoader],
 ) -> None:
     trainer = make_trainer(N_EPOCHS=7, REGEN_EVERY=3)
-    events = record_training(trainer)
+    events = record_mocked_training(trainer)
     first = synthetic_loader(10, 4, shuffle=True)
 
     trainer.train(first)
@@ -219,10 +221,10 @@ def test_the_first_epoch_every_validate_every_epochs_and_the_last_are_validated(
     validate_every: int,
     validated: list[int],
     make_trainer: Callable[..., Trainer],
-    record_training: Callable[..., TrainingEvents],
+    record_mocked_training: Callable[..., TrainingEvents],
 ) -> None:
     trainer = make_trainer(N_EPOCHS=n_epochs, VALIDATE_EVERY=validate_every)
-    events = record_training(trainer)
+    events = record_mocked_training(trainer)
 
     trainer.train()
 
@@ -231,10 +233,10 @@ def test_the_first_epoch_every_validate_every_epochs_and_the_last_are_validated(
 
 def test_a_checkpoint_is_saved_only_for_a_lower_validation_loss(
     make_trainer: Callable[..., Trainer],
-    record_training: Callable[..., TrainingEvents],
+    record_mocked_training: Callable[..., TrainingEvents],
 ) -> None:
     trainer = make_trainer(N_EPOCHS=5)
-    events = record_training(trainer, val_losses=[3.0, 1.0, 1.0, 0.5, 2.0])
+    events = record_mocked_training(trainer, val_losses=[3.0, 1.0, 1.0, 0.5, 2.0])
 
     trainer.train()
 
@@ -281,10 +283,10 @@ def test_write_checkpoint_writes_the_keys_of_the_trainer(
 
 def test_the_trained_model_has_the_weights_of_the_best_epoch(
     make_trainer: Callable[..., Trainer],
-    record_training: Callable[..., TrainingEvents],
+    record_mocked_training: Callable[..., TrainingEvents],
 ) -> None:
     trainer = make_trainer(N_EPOCHS=3)
-    events = record_training(trainer, val_losses=[2.0, 1.0, 3.0])
+    events = record_mocked_training(trainer, val_losses=[2.0, 1.0, 3.0])
 
     trainer.train()
 
@@ -295,11 +297,11 @@ def test_the_trained_model_has_the_weights_of_the_best_epoch(
 
 def test_the_plateau_scheduler_steps_after_each_validation_with_its_loss(
     make_trainer: Callable[..., Trainer],
-    record_training: Callable[..., TrainingEvents],
+    record_mocked_training: Callable[..., TrainingEvents],
 ) -> None:
     trainer = make_trainer(N_EPOCHS=7, VALIDATE_EVERY=3, LR_SCHEDULER="plateau")
     val_losses = [4.0, 3.0, 2.0, 1.0]
-    events = record_training(trainer, val_losses=val_losses)
+    events = record_mocked_training(trainer, val_losses=val_losses)
 
     trainer.train()
 
@@ -308,10 +310,10 @@ def test_the_plateau_scheduler_steps_after_each_validation_with_its_loss(
 
 def test_the_cosine_scheduler_anneals_the_learning_rate_to_0_over_the_epochs(
     make_trainer: Callable[..., Trainer],
-    record_training: Callable[..., TrainingEvents],
+    record_mocked_training: Callable[..., TrainingEvents],
 ) -> None:
     trainer = make_trainer(N_EPOCHS=7, VALIDATE_EVERY=3, LR_SCHEDULER="cosine")
-    events = record_training(trainer)
+    events = record_mocked_training(trainer)
 
     trainer.train()
 
@@ -387,10 +389,10 @@ def test_a_first_validation_loss_that_is_not_finite_stops_the_training(
     loss: float,
     config: dict[str, Any],
     make_trainer: Callable[..., Trainer],
-    record_training: Callable[..., TrainingEvents],
+    record_mocked_training: Callable[..., TrainingEvents],
 ) -> None:
     trainer = make_trainer(N_EPOCHS=3)
-    events = record_training(trainer, val_losses=[loss] * 3)
+    events = record_mocked_training(trainer, val_losses=[loss] * 3)
 
     with pytest.raises(
         RuntimeError,
@@ -408,10 +410,10 @@ def test_a_first_validation_loss_that_is_not_finite_stops_the_training(
 def test_a_nan_after_a_finite_validation_loss_keeps_the_checkpoint(
     config: dict[str, Any],
     make_trainer: Callable[..., Trainer],
-    record_training: Callable[..., TrainingEvents],
+    record_mocked_training: Callable[..., TrainingEvents],
 ) -> None:
     trainer = make_trainer(N_EPOCHS=3)
-    events = record_training(trainer, val_losses=[1.0, math.nan, 0.5])
+    events = record_mocked_training(trainer, val_losses=[1.0, math.nan, 0.5])
     path = config["experiment"]["PT_FILE_PATH"]
 
     # The message says where the checkpoint of this run is
@@ -433,13 +435,13 @@ def test_a_nan_after_a_finite_validation_loss_keeps_the_checkpoint(
 def test_a_first_training_loss_that_is_not_finite_stops_the_training(
     config: dict[str, Any],
     make_trainer: Callable[..., Trainer],
-    record_training: Callable[..., TrainingEvents],
+    record_mocked_training: Callable[..., TrainingEvents],
     synthetic_loader: Callable[..., TensorBatchLoader],
 ) -> None:
     # NaN in the training data makes the weights NaN. The error must name the
     # training, not the validation after it
     trainer = make_trainer(N_EPOCHS=3)
-    events = record_training(trainer)
+    events = record_mocked_training(trainer)
     x, signal, _, _ = synthetic_loader(8, 4).tensors
     nan = torch.full_like(signal, math.nan)
 
@@ -466,14 +468,14 @@ def test_a_training_loss_that_is_not_finite_stops_the_training_in_its_epoch(
     loss: float,
     config: dict[str, Any],
     make_trainer: Callable[..., Trainer],
-    record_training: Callable[..., TrainingEvents],
+    record_mocked_training: Callable[..., TrainingEvents],
 ) -> None:
     # Of epochs 1 to 3, only 1 and 3 are validated. A bad loss of epoch 2 does
     # not wait for the validation of epoch 3, and one of epoch 3 stops before it
     trainer = make_trainer(N_EPOCHS=5, VALIDATE_EVERY=3)
     train_losses = [1.0] * 5
     train_losses[bad_epoch - 1] = loss
-    events = record_training(trainer, train_losses=train_losses)
+    events = record_mocked_training(trainer, train_losses=train_losses)
     path = config["experiment"]["PT_FILE_PATH"]
 
     with pytest.raises(
@@ -495,14 +497,14 @@ def test_a_training_loss_that_is_not_finite_stops_the_training_in_its_epoch(
 def test_weights_that_are_not_finite_after_an_epoch_stop_the_training(
     config: dict[str, Any],
     make_trainer: Callable[..., Trainer],
-    record_training: Callable[..., TrainingEvents],
+    record_mocked_training: Callable[..., TrainingEvents],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # The losses come from before each step. When the last step of epoch 2
     # makes the weights NaN, the training loss of epoch 2 is finite, and the
     # validation of epoch 2 would give the error of the validation
     trainer = make_trainer(N_EPOCHS=3)
-    events = record_training(trainer, train_losses=[1.0, 1.0, 1.0])
+    events = record_mocked_training(trainer, train_losses=[1.0, 1.0, 1.0])
     train_epoch = trainer.train_epoch
 
     def last_step_makes_nan(

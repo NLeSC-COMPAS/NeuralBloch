@@ -9,13 +9,18 @@ the checkpoint format changes only this file of the tests.
 import sys
 from collections.abc import Callable
 from pathlib import Path
+from types import ModuleType
+from types import SimpleNamespace
 from typing import Any
+from unittest.mock import Mock
+from unittest.mock import create_autospec
 import h5py
 import numpy as np
 import numpy.typing as npt
 import pytest
 import torch
 from data.data_loading import TensorBatchLoader
+from scripts import export_bundle
 from scripts.export_onnx import TARGETS
 from scripts.export_onnx import export_target
 from src.model import FCModel
@@ -29,8 +34,8 @@ def no_julia(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) ->
     """Make an import of juliacall fail in each test without the marker julia.
 
     The import starts Julia, and installs it at the first use. A test that
-    needs Julia must have the marker; another test can put a fake juliacall
-    module in sys.modules.
+    needs Julia must have the marker; another test can replace juliacall with
+    a mock (julia_batch_mock).
     """
     if request.node.get_closest_marker("julia") is None:
         monkeypatch.setitem(sys.modules, "juliacall", None)
@@ -180,6 +185,73 @@ def write_dataset() -> Callable[..., None]:
                 file.create_dataset(key, data=np.asarray(values, dtype=np.complex64))
 
     return write
+
+
+@pytest.fixture
+def julia_batch_mock(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
+    """Replace juliacall with a mock; return the batch of its generate_data.
+
+    The mock module in sys.modules has a Main with two Mocks: generate_data
+    gives this batch, and include does nothing. A test can check their calls.
+    The batch has 6 samples with T1 > T2 and NTR = 5, with the targets in the
+    layout of the Julia arrays, (NTR, N). A test can change the batch.
+    """
+    rng = np.random.default_rng(0)
+    batch = SimpleNamespace(
+        T1=rng.uniform(1.0, 2.0, 6),
+        T2=rng.uniform(0.05, 0.5, 6),
+        B1=rng.uniform(0.5, 1.5, 6),
+        **{
+            key: rng.standard_normal((5, 6)) + 1j * rng.standard_normal((5, 6))
+            for key in ("signal", "dM_dT1", "dM_dT2")
+        },
+    )
+    juliacall = ModuleType("juliacall")
+    juliacall.__dict__["Main"] = SimpleNamespace(
+        include=Mock(return_value=None),
+        generate_data=Mock(return_value=batch),
+    )
+    monkeypatch.setitem(sys.modules, "juliacall", juliacall)
+    return batch
+
+
+@pytest.fixture
+def export_config(tmp_path: Path) -> dict[str, Any]:
+    """The export configuration of config/export.yaml, for the models of NTR 5.
+
+    The ONNX models and the bundle are in tmp_path. The family is of rank 3,
+    the rank of direct_config.
+    """
+    return {
+        "TARGETS": {
+            target: {"ONNX_FILE_PATH": str(tmp_path / "onnx" / spec.bundle_file)}
+            for target, spec in TARGETS.items()
+        },
+        "OPSET_VERSION": 18,
+        "FP16": False,
+        "N_VERIFY_SAMPLES": 8,
+        "BUNDLE_DIR": str(tmp_path / "out" / "bundle"),
+        "MODEL_FAMILY": "fisp5-rank3",
+        "MODEL_VERSION": "0.1.0",
+        "OFFLINE": False,
+    }
+
+
+@pytest.fixture
+def git_and_julia_in_export_mock(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Replace the steps of export_bundle that run git and Julia with mocks.
+
+    The mocks have the signatures of the real functions, so a call with other
+    arguments fails. They give the commit "a" * 40, a release that does not
+    exist, and BlochSimulators 0.10.0.
+    """
+    for name, value in (
+        ("clean_commit", "a" * 40),
+        ("require_unreleased", None),
+        ("blochsimulators_facts", ("0.10.0", None)),
+    ):
+        mock = create_autospec(getattr(export_bundle, name), return_value=value)
+        monkeypatch.setattr(export_bundle, name, mock)
 
 
 @pytest.fixture(scope="session")

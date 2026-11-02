@@ -4,7 +4,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from unittest.mock import Mock
 import pytest
 import torch
 from scripts.export_bundle import REPO_ROOT
@@ -36,43 +35,38 @@ class ExportSetup:
 @pytest.fixture
 def export(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
     direct_config: dict[str, Any],
     data_config: dict[str, Any],
+    export_config: dict[str, Any],
     exported_model: FCModel,
     onnx_models: dict[str, Path],
     write_checkpoint: Callable[..., None],
+    git_and_julia_in_export_mock: None,
 ) -> ExportSetup:
-    """export_bundle, from a small checkpoint to the bundle and its release file."""
+    """export_bundle, from a small checkpoint to the bundle and its release file.
+
+    git and Julia are mocks in these tests (git_and_julia_in_export_mock).
+    """
     source = tmp_path / "src"
     source.mkdir()
     checkpoint = source / "model.pt"
     # A copy, because the tests stamp and change the ONNX models
     onnx = {t: Path(shutil.copy(path, source)) for t, path in onnx_models.items()}
-    bundle = tmp_path / "out" / "bundle"
+    bundle = Path(export_config["BUNDLE_DIR"])
     config = {
         "experiment": {"PT_FILE_PATH": str(checkpoint)},
         "model": {},
         "data": {},
         "export": {
+            **export_config,
             "TARGETS": {
                 target: {"ONNX_FILE_PATH": str(path)} for target, path in onnx.items()
             },
-            "N_VERIFY_SAMPLES": 8,
-            "BUNDLE_DIR": str(bundle),
-            "MODEL_FAMILY": "fisp5-rank3",
-            "MODEL_VERSION": "0.1.0",
-            "OFFLINE": False,
         },
     }
-    tarball = bundle.with_name(tarball_name("fisp5-rank3", "0.1.0"))
-    # git and Julia are not part of this test
-    for name, value in (
-        ("clean_commit", "a" * 40),
-        ("require_unreleased", None),
-        ("blochsimulators_facts", ("0.10.0", None)),
-    ):
-        monkeypatch.setattr(f"scripts.export_bundle.{name}", Mock(return_value=value))
+    tarball = bundle.with_name(
+        tarball_name(export_config["MODEL_FAMILY"], export_config["MODEL_VERSION"])
+    )
     write_checkpoint(checkpoint, exported_model, direct_config, data_config, epoch=7)
     setup = ExportSetup(checkpoint, onnx, bundle, config, tarball)
     stamp_onnx_models(setup)

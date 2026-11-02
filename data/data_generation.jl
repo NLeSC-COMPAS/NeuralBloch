@@ -95,10 +95,19 @@ function generate_data(config; for_training)
 
     # Convert tissue parameters to BlochSimulators format.
     # Remove physically unrealistic cases where T2 > T1.
+    n_sampled = length(T₁)
     parameters = @parameters T₁ T₂ B₁
     parameters = filter(p -> (p.T₁ > p.T₂), parameters)
 
     @info "Generated parameter grid with $(length(parameters)) samples (after filtering T₁ > T₂)"
+
+    # Without samples, the simulation on the GPU fails with a CUDA error that
+    # does not give the cause
+    isempty(parameters) && error(
+        "None of the $n_sampled samples has T1 > T2: check the ranges " *
+        "data.T1_lower to data.T1_upper ($T1_lower to $T1_upper) and " *
+        "data.T2_lower to data.T2_upper ($T2_lower to $T2_upper)"
+    )
 
     # Load RF train definition.
     rf_train, _, _ = build_rf_train(
