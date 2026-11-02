@@ -65,9 +65,4 @@ class BuildPyWithJulia(build_py):
         meta_file.write_text(json.dumps(meta))
 
 
-setup(
-    packages=["src", "data", "scripts"],
-    py_modules=["run"],
-    package_data={"data": ["data_generation.jl", "rf_data/*.txt"]},
-    cmdclass={"build_py": BuildPyWithJulia},
-)
+setup(cmdclass={"build_py": BuildPyWithJulia})
