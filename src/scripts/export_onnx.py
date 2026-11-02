@@ -196,12 +196,12 @@ def require_checkpoint(
     if recorded is None:
         raise ValueError(
             f"{onnx_path} does not record its checkpoint. Export it again with "
-            "`uv run run.py export_onnx`"
+            "`python -m src.main export_onnx`"
         )
     if recorded != checkpoint_sha256:
         raise ValueError(
             f"{onnx_path} comes from a different checkpoint than {checkpoint_path}. "
-            "Export it again with `uv run run.py export_onnx`"
+            "Export it again with `python -m src.main export_onnx`"
         )
 
 
@@ -248,7 +248,7 @@ def require_exported(paths: dict[str, Path]) -> None:
     for onnx_path in paths.values():
         if not onnx_path.exists():
             raise FileNotFoundError(
-                f"{onnx_path} not found. Run `uv run run.py export_onnx` first."
+                f"{onnx_path} not found. Run `python -m src.main export_onnx` first."
             )
 
 

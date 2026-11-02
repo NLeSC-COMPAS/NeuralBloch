@@ -14,13 +14,13 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from scripts.export_onnx import TARGETS
-from scripts.export_onnx import onnx_precision
-from scripts.export_onnx import require_checkpoint
-from scripts.export_onnx import require_exported
-from scripts.export_onnx import target_paths
-from scripts.export_onnx import training_domain
-from scripts.export_onnx import verify_onnx
+from src.scripts.export_onnx import TARGETS
+from src.scripts.export_onnx import onnx_precision
+from src.scripts.export_onnx import require_checkpoint
+from src.scripts.export_onnx import require_exported
+from src.scripts.export_onnx import target_paths
+from src.scripts.export_onnx import training_domain
+from src.scripts.export_onnx import verify_onnx
 from src.utils import RF_TABLE_KEYS
 from src.utils import file_sha256
 from src.utils import load_checkpoint
@@ -470,7 +470,7 @@ def card_text(inputs: CardInputs) -> str:
 
     lines += [
         "# NeuralBloch model card. The export_bundle task of NeuralBloch generates",
-        "# this file (uv run run.py export_bundle). Do not edit it by hand. Units",
+        "# this file (python -m src.main export_bundle). Do not edit it by hand. Units",
         "# are physical: seconds for T1, T2 and times, B1 relative to nominal,",
         "# derivatives per second.",
         "",
@@ -994,7 +994,7 @@ def require_unreleased(tag: str, offline: bool) -> str | None:
 # The card names the commit of this repository. Thus, git runs in this
 # repository and not in the current directory, which can be a different
 # repository.
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def git(*args: str) -> str:
