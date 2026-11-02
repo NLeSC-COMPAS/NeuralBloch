@@ -1,6 +1,17 @@
+"""placeholder"""
+
 import argparse
+
 from juliacall import Main as jl
+
+from data.split_dataset import split_dataset
+from scripts.export_bundle import export_bundle
+from scripts.export_onnx import export_onnx
+from scripts.test_accuracy import test_accuracy
+from scripts.test_inference import test_inference
+from scripts.train import train
 from src.config import load_config
+from src.utils import set_seed
 
 
 def main() -> None:
@@ -34,8 +45,6 @@ def main() -> None:
         jl.include("data/data_generation.jl")
         jl.save_dataset(config)
 
-        from data.split_dataset import split_dataset
-
         split_dataset(config["experiment"])
 
         return
@@ -44,38 +53,26 @@ def main() -> None:
         jl.include("data/data_generation.jl")
         jl.seval("begin using BlochSimulators; CUDALibs(); true end")
 
-    from src.utils import set_seed
-
     set_seed(config["experiment"]["SEED"])
 
     # Train the surrogate model
     if args.task == "train":
-        from scripts.train import train
-
         train(config)
 
     # Evaluate prediction accuracy on the test dataset
     elif args.task == "test_accuracy":
-        from scripts.test_accuracy import test_accuracy
-
         test_accuracy(config)
 
     # Benchmark surrogate inference time
     elif args.task == "test_inference":
-        from scripts.test_inference import test_inference
-
         test_inference(config)
 
     # Export the trained model to ONNX
     elif args.task == "export_onnx":
-        from scripts.export_onnx import export_onnx
-
         export_onnx(config)
 
     # Write the model bundle that NeuralBloch.jl reads
     elif args.task == "export_bundle":
-        from scripts.export_bundle import export_bundle
-
         export_bundle(config)
 
 
