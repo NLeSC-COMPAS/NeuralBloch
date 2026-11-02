@@ -5,11 +5,11 @@ import argparse
 from juliacall import Main as jl
 
 from data.split_dataset import split_dataset
-from scripts.export_bundle import export_bundle
-from scripts.export_onnx import export_onnx
-from scripts.test_accuracy import test_accuracy
-from scripts.test_inference import test_inference
-from scripts.train import train
+from src.scripts.export_bundle import export_bundle
+from src.scripts.export_onnx import export_onnx
+from src.scripts.test_accuracy import test_accuracy
+from src.scripts.test_inference import test_inference
+from src.scripts.train import train
 from src.config import load_config
 from src.utils import set_seed
 
