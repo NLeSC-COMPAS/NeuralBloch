@@ -25,7 +25,5 @@ jobs:
       - run: >-
           pip install -e ".[dev]"
           --extra-index-url https://download.pytorch.org/whl/cpu
-        env:
-          NEURALBLOCH_SKIP_JULIA: "1"
 
       - run: pytest --cov --cov-fail-under=80

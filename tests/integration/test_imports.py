@@ -4,7 +4,6 @@ from pathlib import Path
 import pytest
 
 
-@pytest.mark.skip(reason="wip")
 def test_no_module_starts_julia_at_import(pytestconfig: pytest.Config) -> None:
     # The import of juliacall starts Julia, and installs it at the first use.
     root: Path = pytestconfig.rootpath
