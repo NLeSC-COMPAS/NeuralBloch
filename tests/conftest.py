@@ -20,13 +20,13 @@ import numpy.typing as npt
 import pytest
 import torch
 from data.data_loading import TensorBatchLoader
+from neuralbloch.model import FCModel
+from neuralbloch.utils import RF_TABLE_KEYS
+from neuralbloch.utils import rf_sha256
+from neuralbloch.utils import sample_parameters
 from scripts import export_bundle
 from scripts.export_onnx import TARGETS
 from scripts.export_onnx import export_target
-from src.model import FCModel
-from src.utils import RF_TABLE_KEYS
-from src.utils import rf_sha256
-from src.utils import sample_parameters
 
 
 @pytest.fixture(autouse=True)

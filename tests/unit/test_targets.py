@@ -8,13 +8,13 @@ import pytest
 import torch
 from onnx import helper
 from onnx import numpy_helper
+from neuralbloch.model import FCModel
 from scripts.export_onnx import TARGETS
 from scripts.export_onnx import TargetModel
 from scripts.export_onnx import check_outputs
 from scripts.export_onnx import onnx_precision
 from scripts.export_onnx import staged
 from scripts.export_onnx import target_paths
-from src.model import FCModel
 
 
 NTR = 5

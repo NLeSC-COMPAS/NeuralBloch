@@ -2,8 +2,8 @@ from collections.abc import Callable
 from typing import Any
 import torch
 from data.data_loading import TensorBatchLoader
+from neuralbloch.model import FCModel
 from scripts.train import initialize_joint_pca_basis
-from src.model import FCModel
 
 
 def test_initial_basis_matches_best_rank_limited_svd_subspace(

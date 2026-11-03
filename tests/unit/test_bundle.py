@@ -7,6 +7,8 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import Mock
 import pytest
+from neuralbloch.utils import RF_TABLE_KEYS
+from neuralbloch.utils import rf_sha256
 from scripts.export_bundle import CARD
 from scripts.export_bundle import RF_FILES
 from scripts.export_bundle import SCHEMA_VERSION
@@ -30,8 +32,6 @@ from scripts.export_bundle import tarball_name
 from scripts.export_bundle import write_bundle
 from scripts.export_bundle import write_tarball
 from scripts.export_onnx import TARGETS
-from src.utils import RF_TABLE_KEYS
-from src.utils import rf_sha256
 
 
 DATA_CONFIG = {

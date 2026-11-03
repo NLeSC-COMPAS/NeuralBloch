@@ -14,6 +14,12 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from neuralbloch.utils import RF_TABLE_KEYS
+from neuralbloch.utils import file_sha256
+from neuralbloch.utils import load_checkpoint
+from neuralbloch.utils import model_from_checkpoint
+from neuralbloch.utils import rf_sha256
+from neuralbloch.utils import sample_parameters
 from scripts.export_onnx import TARGETS
 from scripts.export_onnx import onnx_precision
 from scripts.export_onnx import require_checkpoint
@@ -21,12 +27,6 @@ from scripts.export_onnx import require_exported
 from scripts.export_onnx import target_paths
 from scripts.export_onnx import training_domain
 from scripts.export_onnx import verify_onnx
-from src.utils import RF_TABLE_KEYS
-from src.utils import file_sha256
-from src.utils import load_checkpoint
-from src.utils import model_from_checkpoint
-from src.utils import rf_sha256
-from src.utils import sample_parameters
 
 
 # The model bundle that NeuralBloch.jl reads contains the ONNX model of each

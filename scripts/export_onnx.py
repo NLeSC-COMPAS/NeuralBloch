@@ -13,11 +13,11 @@ import onnx
 import onnxruntime as ort
 import torch
 import torch.nn as nn
-from src.metrics import nrmse
-from src.model import FCModel
-from src.utils import file_sha256
-from src.utils import load_model
-from src.utils import sample_parameters
+from neuralbloch.metrics import nrmse
+from neuralbloch.model import FCModel
+from neuralbloch.utils import file_sha256
+from neuralbloch.utils import load_model
+from neuralbloch.utils import sample_parameters
 
 
 @dataclass(frozen=True)

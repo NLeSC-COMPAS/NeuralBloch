@@ -16,6 +16,10 @@ dependencies = [
     "torch==2.13.0",
 ]
 
+[build-system]
+requires = ["uv_build>=0.13.6,<0.14"]
+build-backend = "uv_build"
+
 [tool.uv.sources]
 torch = { index = "pytorch-cu126" }
 
@@ -35,7 +39,7 @@ dev = [
 
 [tool.pytest]
 testpaths = ["tests"]
-# The tests import `scripts`, `src` and `data` from the repository root.
+# The tests import `scripts` and `data` from the repository root.
 pythonpath = ["."]
 # The tests that need Julia or a GPU run only on request (-m julia, -m gpu)
 addopts = ["-ra", "--import-mode=importlib", "-m", "not julia and not gpu"]
@@ -46,7 +50,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["src", "scripts", "data"]
+source = ["neuralbloch", "scripts", "data"]
 branch = true
 
 [tool.coverage.report]

@@ -1,6 +1,6 @@
 import argparse
 from juliacall import Main as jl
-from src.config import load_config
+from neuralbloch.config import load_config
 
 
 def main() -> None:
@@ -44,7 +44,7 @@ def main() -> None:
         jl.include("data/data_generation.jl")
         jl.seval("begin using BlochSimulators; CUDALibs(); true end")
 
-    from src.utils import set_seed
+    from neuralbloch.utils import set_seed
 
     set_seed(config["experiment"]["SEED"])
 

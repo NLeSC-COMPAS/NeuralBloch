@@ -8,10 +8,10 @@ from torch.optim.lr_scheduler import LRScheduler
 from torch.utils.tensorboard import SummaryWriter
 from data.data_loading import TensorBatchLoader
 from data.data_loading import generate_train_loader
-from src.loss import Loss
-from src.model import FCModel
-from src.utils import get_device
-from src.utils import rf_sha256
+from neuralbloch.loss import Loss
+from neuralbloch.model import FCModel
+from neuralbloch.utils import get_device
+from neuralbloch.utils import rf_sha256
 
 
 def _not_finite_error(

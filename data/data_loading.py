@@ -4,8 +4,8 @@ import h5py
 import numpy as np
 import numpy.typing as npt
 import torch
-from src.utils import complex_to_real_imag
-from src.utils import get_device
+from neuralbloch.utils import complex_to_real_imag
+from neuralbloch.utils import get_device
 
 
 class TensorBatchLoader:

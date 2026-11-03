@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 import pytest
 import torch
+from neuralbloch.model import FCModel
 from scripts.export_bundle import REPO_ROOT
 from scripts.export_bundle import check_bundle
 from scripts.export_bundle import export_bundle
@@ -15,7 +16,6 @@ from scripts.export_bundle import rf_table_length
 from scripts.export_bundle import tarball_name
 from scripts.export_bundle import write_tarball
 from scripts.export_onnx import stamp_checkpoint
-from src.model import FCModel
 
 
 NTR = 5

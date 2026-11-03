@@ -6,6 +6,7 @@ from typing import Any
 import onnx
 import pytest
 import torch
+from neuralbloch.model import FCModel
 from scripts.export_onnx import TARGETS
 from scripts.export_onnx import export_target
 from scripts.export_onnx import onnx_checkpoint
@@ -13,7 +14,6 @@ from scripts.export_onnx import onnx_precision
 from scripts.export_onnx import require_checkpoint
 from scripts.export_onnx import stamp_checkpoint
 from scripts.export_onnx import verify_onnx
-from src.model import FCModel
 
 
 NTR = 5

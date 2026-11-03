@@ -10,7 +10,7 @@ from collections.abc import Callable
 from pathlib import Path
 import pytest
 import yaml
-from src.config import load_config
+from neuralbloch.config import load_config
 
 
 @pytest.fixture

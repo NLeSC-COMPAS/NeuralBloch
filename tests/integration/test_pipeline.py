@@ -12,11 +12,11 @@ from typing import Any
 import numpy as np
 import pytest
 import torch
+from neuralbloch.utils import file_sha256
 from scripts.export_bundle import check_bundle
 from scripts.export_bundle import export_bundle
 from scripts.export_onnx import export_onnx
 from scripts.train import train
-from src.utils import file_sha256
 
 
 @pytest.fixture

@@ -4,8 +4,8 @@ import torch
 from data.data_loading import TensorBatchLoader
 from data.data_loading import generate_train_loader
 from data.data_loading import generate_val_loader
-from src.model import FCModel
-from src.trainer import Trainer
+from neuralbloch.model import FCModel
+from neuralbloch.trainer import Trainer
 
 
 def initialize_joint_pca_basis(

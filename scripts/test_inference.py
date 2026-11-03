@@ -5,8 +5,8 @@ from typing import cast
 import numpy as np
 import torch
 import torch.nn as nn
-from src.utils import get_device
-from src.utils import load_model
+from neuralbloch.utils import get_device
+from neuralbloch.utils import load_model
 
 
 def benchmark(

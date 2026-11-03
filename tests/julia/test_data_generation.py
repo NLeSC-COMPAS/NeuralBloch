@@ -16,7 +16,7 @@ import torch
 import yaml
 from data.data_loading import generate_val_loader
 from data.data_loading import load_data_from_h5_file
-from src.config import load_config
+from neuralbloch.config import load_config
 
 
 pytestmark = pytest.mark.julia
@@ -27,7 +27,7 @@ pytestmark = pytest.mark.julia
 TRAIN_LOADER = """\
 import sys
 from juliacall import Main as jl  # before torch, as in run.py
-from src.config import load_config
+from neuralbloch.config import load_config
 config = load_config(sys.argv[1])
 seed = config["experiment"]["SEED"]
 jl.seval(f"begin using Random; Random.seed!({seed}); true end")
