@@ -47,7 +47,7 @@ The tests are in three directories:
 
 - `tests/unit/`: each test checks one function or one class, with small inputs that the test makes. These tests take a few seconds.
 - `tests/integration/`: each test checks modules together through their real interfaces (a checkpoint, an ONNX file, an HDF5 file), a full task, or a real external component: `torch.onnx.export`, ONNX Runtime, git or the files of the repository.
-- `tests/julia/`: the tests that run the Julia data generation (`data/data_generation.jl`) with BlochSimulators on a CUDA GPU. They have the marker `julia`.
+- `tests/julia/`: the tests that run the Julia data generation (`src/neuralbloch/data/data_generation.jl`) with BlochSimulators on a CUDA GPU. They have the marker `julia`.
 
 The fixtures in `tests/conftest.py` make the configurations, the models, the checkpoints and the datasets of the tests. Use them in new tests, so that a change of the configuration or of the checkpoint format changes only `conftest.py`.
 

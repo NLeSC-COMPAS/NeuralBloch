@@ -1,5 +1,5 @@
 # Locations of the exported models. Each target has one ONNX model (TARGETS in
-# scripts/export_onnx.py). Each target is a method of the model:
+# src/neuralbloch/scripts/export_onnx.py). Each target is a method of the model:
 #   signal_and_derivs  forward: the signal and its T1/T2 derivatives
 #   signal             forward_signal: only the signal
 #   coeffs             forward_coeffs: the basis coefficients of the signal
