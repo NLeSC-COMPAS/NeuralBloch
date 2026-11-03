@@ -1,4 +1,4 @@
-"""The smoke test of the Julia data generation (data/data_generation.jl).
+"""The smoke test of the Julia data generation (data_generation.jl).
 
 The Julia code reads the configuration keys by name, and no other test runs
 it. Run these tests after a change of the configuration keys. A test that
@@ -14,9 +14,9 @@ import numpy as np
 import pytest
 import torch
 import yaml
-from data.data_loading import generate_val_loader
-from data.data_loading import load_data_from_h5_file
 from neuralbloch.config import load_config
+from neuralbloch.data.data_loading import generate_val_loader
+from neuralbloch.data.data_loading import load_data_from_h5_file
 
 
 pytestmark = pytest.mark.julia
@@ -28,12 +28,13 @@ TRAIN_LOADER = """\
 import sys
 from juliacall import Main as jl  # before torch, as in run.py
 from neuralbloch.config import load_config
+from neuralbloch.data import DATA_GENERATION_JL
 config = load_config(sys.argv[1])
 seed = config["experiment"]["SEED"]
 jl.seval(f"begin using Random; Random.seed!({seed}); true end")
-jl.include("data/data_generation.jl")
+jl.include(DATA_GENERATION_JL)
 import torch
-from data.data_loading import generate_train_loader
+from neuralbloch.data.data_loading import generate_train_loader
 loader = generate_train_loader(config)
 torch.save(
     {

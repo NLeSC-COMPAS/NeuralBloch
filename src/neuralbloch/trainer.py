@@ -6,8 +6,8 @@ import torch
 import torch.optim as optim
 from torch.optim.lr_scheduler import LRScheduler
 from torch.utils.tensorboard import SummaryWriter
-from data.data_loading import TensorBatchLoader
-from data.data_loading import generate_train_loader
+from neuralbloch.data.data_loading import TensorBatchLoader
+from neuralbloch.data.data_loading import generate_train_loader
 from neuralbloch.loss import Loss
 from neuralbloch.model import FCModel
 from neuralbloch.utils import get_device

@@ -39,7 +39,7 @@ dev = [
 
 [tool.pytest]
 testpaths = ["tests"]
-# The tests import `scripts` and `data` from the repository root.
+# The tests import `scripts` from the repository root.
 pythonpath = ["."]
 # The tests that need Julia or a GPU run only on request (-m julia, -m gpu)
 addopts = ["-ra", "--import-mode=importlib", "-m", "not julia and not gpu"]
@@ -50,7 +50,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["neuralbloch", "scripts", "data"]
+source = ["neuralbloch", "scripts"]
 branch = true
 
 [tool.coverage.report]
@@ -128,7 +128,7 @@ convention = "google"
 python-version = "3.12"
 
 [tool.ty.src]
-include = ["run.py", "src", "data", "scripts"]
+include = ["run.py", "src", "scripts"]
 
 [tool.ty.rules]
 missing-type-argument = "error"

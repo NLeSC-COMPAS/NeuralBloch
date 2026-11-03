@@ -19,7 +19,7 @@ import numpy as np
 import numpy.typing as npt
 import pytest
 import torch
-from data.data_loading import TensorBatchLoader
+from neuralbloch.data.data_loading import TensorBatchLoader
 from neuralbloch.model import FCModel
 from neuralbloch.utils import RF_TABLE_KEYS
 from neuralbloch.utils import rf_sha256

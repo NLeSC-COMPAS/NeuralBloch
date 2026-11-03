@@ -1,6 +1,7 @@
 import argparse
 from juliacall import Main as jl
 from neuralbloch.config import load_config
+from neuralbloch.data import DATA_GENERATION_JL
 
 
 def main() -> None:
@@ -31,17 +32,17 @@ def main() -> None:
     # Generate a new dataset using Julia and split it into
     # training and validation sets
     if args.task == "generate":
-        jl.include("data/data_generation.jl")
+        jl.include(DATA_GENERATION_JL)
         jl.save_dataset(config)
 
-        from data.split_dataset import split_dataset
+        from neuralbloch.data.split_dataset import split_dataset
 
         split_dataset(config["experiment"])
 
         return
 
     if args.task == "train":
-        jl.include("data/data_generation.jl")
+        jl.include(DATA_GENERATION_JL)
         jl.seval("begin using BlochSimulators; CUDALibs(); true end")
 
     from neuralbloch.utils import set_seed

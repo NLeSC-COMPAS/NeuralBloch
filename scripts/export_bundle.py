@@ -52,13 +52,13 @@ RF_FILES = {
     "rf_phase": ("rf_data/rf_phase_list.txt", "RF_PHASE_FILE", "phases, degrees"),
 }
 
-# Each DERIVATIVE_METHOD name in data/data_generation.jl -> the name in the card.
+# Each DERIVATIVE_METHOD name in data_generation.jl -> the name in the card.
 DERIVATIVE_METHODS = {
     "forward_sensitivity": "forward sensitivity",
     "finite_difference": "forward difference",
 }
 
-# data/data_generation.jl keeps only samples with T1 > T2. This is a physical
+# data_generation.jl keeps only samples with T1 > T2. This is a physical
 # requirement, so it is a constant here and not a setting.
 CONSTRAINT = "T2 < T1"
 
@@ -425,7 +425,7 @@ def boolean(value: object, name: str) -> bool:
     raise ValueError(f"{name} must be true or false, not {value!r}")
 
 
-# The sequence that data/data_generation.jl simulates. It is FISP3D(...), made
+# The sequence that data_generation.jl simulates. It is FISP3D(...), made
 # from these fields of the data configuration: (card key, data key, type, unit).
 SEQUENCE_KIND = "FISP3D"
 SEQUENCE_FIELDS = (
@@ -496,7 +496,7 @@ def card_text(inputs: CardInputs) -> str:
         if not low < high:
             raise ValueError(f"{lower} = {low} must be below {upper} = {high}")
         field(key, [low, high], f"{lower}, {upper}: {comment}")
-    field("constraint", CONSTRAINT, "data/data_generation.jl keeps only T1 > T2")
+    field("constraint", CONSTRAINT, "data_generation.jl keeps only T1 > T2")
 
     table("derivatives", "how the training targets were computed")
     field("method", method, "data_config DERIVATIVE_METHOD")
@@ -505,7 +505,7 @@ def card_text(inputs: CardInputs) -> str:
         field("dT1_step", dT1, "BlochSimulators.DEFAULT_ΔT₁")
         field("dT2_step", dT2, "BlochSimulators.DEFAULT_ΔT₂")
 
-    table("sequence", "FISP3D(...) in data/data_generation.jl, from data_config")
+    table("sequence", "FISP3D(...) in data_generation.jl, from data_config")
     field("kind", SEQUENCE_KIND)
     for key, data_key, convert, unit in SEQUENCE_FIELDS:
         field(

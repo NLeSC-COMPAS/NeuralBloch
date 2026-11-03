@@ -1,7 +1,7 @@
 from collections.abc import Callable
 from typing import Any
 import torch
-from data.data_loading import TensorBatchLoader
+from neuralbloch.data.data_loading import TensorBatchLoader
 from neuralbloch.model import FCModel
 from scripts.train import initialize_joint_pca_basis
 

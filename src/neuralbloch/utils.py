@@ -114,7 +114,7 @@ def file_sha256(path: str | Path) -> str:
 
 
 # The keys of the data configuration that give the RF tables of the training
-# sequence (data/data_generation.jl)
+# sequence (data_generation.jl)
 RF_TABLE_KEYS = ("RF_ANGLE_FILE", "RF_PHASE_FILE")
 
 

@@ -12,14 +12,14 @@ def test_no_module_starts_julia_at_import(pytestconfig: pytest.Config) -> None:
         ".".join(path.relative_to(base).with_suffix("").parts)
         for base, directory in (
             (root / "src", "neuralbloch"),
+            (root / "src", "neuralbloch/data"),
             (root, "scripts"),
-            (root, "data"),
         )
         for path in (base / directory).glob("*.py")
         if path.stem != "__init__"
     )
     assert "neuralbloch.trainer" in modules
-    assert "data.data_loading" in modules
+    assert "neuralbloch.data.data_loading" in modules
     assert "scripts.train" in modules
     # A new process, because another test of this run can import juliacall.
     # There, an import of juliacall raises ImportError, and the traceback

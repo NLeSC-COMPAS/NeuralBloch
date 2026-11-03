@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 import pytest
 import torch
-from data.data_loading import TensorBatchLoader
+from neuralbloch.data.data_loading import TensorBatchLoader
 from neuralbloch.loss import Loss
 from neuralbloch.model import FCModel
 from neuralbloch.trainer import Trainer
