@@ -21,9 +21,9 @@ from neuralbloch.data.data_loading import load_data_from_h5_file
 
 pytestmark = pytest.mark.julia
 
-# Make the training data as scripts/train.py does after run.py, with the seed
-# of run.py, and save the tensors, the batch size and the shuffle of the loader
-# in the file of the second argument
+# Make the training data as neuralbloch.scripts.train does after run.py, with
+# the seed of run.py, and save the tensors, the batch size and the shuffle of
+# the loader in the file of the second argument
 TRAIN_LOADER = """\
 import sys
 from juliacall import Main as jl  # before torch, as in run.py

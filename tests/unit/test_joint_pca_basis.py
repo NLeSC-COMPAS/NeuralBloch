@@ -3,7 +3,7 @@ from typing import Any
 import torch
 from neuralbloch.data.data_loading import TensorBatchLoader
 from neuralbloch.model import FCModel
-from scripts.train import initialize_joint_pca_basis
+from neuralbloch.scripts.train import initialize_joint_pca_basis
 
 
 def test_initial_basis_matches_best_rank_limited_svd_subspace(

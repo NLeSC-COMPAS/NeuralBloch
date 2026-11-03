@@ -14,19 +14,19 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from neuralbloch.scripts.export_onnx import TARGETS
+from neuralbloch.scripts.export_onnx import onnx_precision
+from neuralbloch.scripts.export_onnx import require_checkpoint
+from neuralbloch.scripts.export_onnx import require_exported
+from neuralbloch.scripts.export_onnx import target_paths
+from neuralbloch.scripts.export_onnx import training_domain
+from neuralbloch.scripts.export_onnx import verify_onnx
 from neuralbloch.utils import RF_TABLE_KEYS
 from neuralbloch.utils import file_sha256
 from neuralbloch.utils import load_checkpoint
 from neuralbloch.utils import model_from_checkpoint
 from neuralbloch.utils import rf_sha256
 from neuralbloch.utils import sample_parameters
-from scripts.export_onnx import TARGETS
-from scripts.export_onnx import onnx_precision
-from scripts.export_onnx import require_checkpoint
-from scripts.export_onnx import require_exported
-from scripts.export_onnx import target_paths
-from scripts.export_onnx import training_domain
-from scripts.export_onnx import verify_onnx
 
 
 # The model bundle that NeuralBloch.jl reads contains the ONNX model of each
@@ -994,7 +994,7 @@ def require_unreleased(tag: str, offline: bool) -> str | None:
 # The card names the commit of this repository. Thus, git runs in this
 # repository and not in the current directory, which can be a different
 # repository.
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
 def git(*args: str) -> str:

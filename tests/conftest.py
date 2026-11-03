@@ -21,12 +21,12 @@ import pytest
 import torch
 from neuralbloch.data.data_loading import TensorBatchLoader
 from neuralbloch.model import FCModel
+from neuralbloch.scripts import export_bundle
+from neuralbloch.scripts.export_onnx import TARGETS
+from neuralbloch.scripts.export_onnx import export_target
 from neuralbloch.utils import RF_TABLE_KEYS
 from neuralbloch.utils import rf_sha256
 from neuralbloch.utils import sample_parameters
-from scripts import export_bundle
-from scripts.export_onnx import TARGETS
-from scripts.export_onnx import export_target
 
 
 @pytest.fixture(autouse=True)

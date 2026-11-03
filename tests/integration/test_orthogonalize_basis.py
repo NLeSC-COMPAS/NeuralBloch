@@ -6,8 +6,8 @@ import pytest
 import torch
 from neuralbloch.basis import worst_relative_output_difference
 from neuralbloch.model import FCModel
-from scripts.orthogonalize_basis import load_checkpoint
-from scripts.orthogonalize_basis import postprocess_basis
+from neuralbloch.scripts.orthogonalize_basis import load_checkpoint
+from neuralbloch.scripts.orthogonalize_basis import postprocess_basis
 
 
 FIT_PARAMS = torch.tensor(

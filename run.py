@@ -51,31 +51,31 @@ def main() -> None:
 
     # Train the surrogate model
     if args.task == "train":
-        from scripts.train import train
+        from neuralbloch.scripts.train import train
 
         train(config)
 
     # Evaluate prediction accuracy on the test dataset
     elif args.task == "test_accuracy":
-        from scripts.test_accuracy import test_accuracy
+        from neuralbloch.scripts.test_accuracy import test_accuracy
 
         test_accuracy(config)
 
     # Benchmark surrogate inference time
     elif args.task == "test_inference":
-        from scripts.test_inference import test_inference
+        from neuralbloch.scripts.test_inference import test_inference
 
         test_inference(config)
 
     # Export the trained model to ONNX
     elif args.task == "export_onnx":
-        from scripts.export_onnx import export_onnx
+        from neuralbloch.scripts.export_onnx import export_onnx
 
         export_onnx(config)
 
     # Write the model bundle that NeuralBloch.jl reads
     elif args.task == "export_bundle":
-        from scripts.export_bundle import export_bundle
+        from neuralbloch.scripts.export_bundle import export_bundle
 
         export_bundle(config)
 
