@@ -513,7 +513,7 @@ dependencies = [
     { name = "torch" },
 ]
 
-[package.optional-dependencies]
+[package.dev-dependencies]
 dev = [
     { name = "prek" },
     { name = "pytest" },
@@ -530,16 +530,19 @@ requires-dist = [
     { name = "onnx", specifier = ">=1.22.0" },
     { name = "onnxruntime", specifier = ">=1.29.0" },
     { name = "onnxscript", specifier = ">=0.7.1" },
-    { name = "prek", marker = "extra == 'dev'", specifier = ">=0.4.11" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=9" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=7.1.0" },
     { name = "pyyaml", specifier = ">=6.0.3" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.16.1" },
     { name = "tensorboard", specifier = ">=2.21.0" },
     { name = "torch", specifier = "==2.13.0", index = "https://download.pytorch.org/whl/cu126" },
-    { name = "ty", marker = "extra == 'dev'", specifier = ">=0.0.66" },
 ]
-provides-extras = ["dev"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "prek", specifier = ">=0.4.11" },
+    { name = "pytest", specifier = ">=9" },
+    { name = "pytest-cov", specifier = ">=7.1.0" },
+    { name = "ruff", specifier = ">=0.16.1" },
+    { name = "ty", specifier = ">=0.0.66" },
+]
 
 [[package]]
 name = "numpy"

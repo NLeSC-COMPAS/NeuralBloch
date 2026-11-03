@@ -23,7 +23,6 @@ neuralbloch = "neuralbloch.main:main"
 requires = ["uv_build>=0.13.6,<0.14"]
 build-backend = "uv_build"
 
-# for pip: --extra-index-url https://download.pytorch.org/whl/cu126.
 [tool.uv.sources]
 torch = { index = "pytorch-cu126" }
 
@@ -32,7 +31,7 @@ name = "pytorch-cu126"
 url = "https://download.pytorch.org/whl/cu126"
 explicit = true
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
   "prek>=0.4.11",
   "pytest>=9",
