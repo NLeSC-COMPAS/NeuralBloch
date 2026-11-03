@@ -54,11 +54,6 @@ def run_python(
     A run that takes more than 30 minutes fails: the first run in a new
     virtual environment installs the Julia packages (a few minutes), but a
     run that hangs, for example on the GPU, must not stop the tests.
-
-    juliapkg finds the juliapkg.json of the repository only in sys.path. With
-    -c, or with a script in the repository root, sys.path has the root. With a
-    script in another directory, juliapkg changes the Julia environment of the
-    virtual environment to one without BlochSimulators.
     """
 
     def run(*args: str, succeeds: bool = True) -> subprocess.CompletedProcess[str]:

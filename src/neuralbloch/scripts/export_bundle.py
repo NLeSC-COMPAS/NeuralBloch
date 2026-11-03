@@ -1020,7 +1020,7 @@ def blochsimulators_facts(
     """Return the BlochSimulators version and its T1 and T2 forward-difference steps.
 
     The training data come from simulations in the Julia environment of this
-    repository (juliapkg.json), so the function reads the data from this
+    package (neuralbloch/juliapkg.json), so the function reads the data from this
     environment. It reads the version from the Project.toml file of the package
     and does not load the package. (When Julia loads the package, the package
     also initializes CUDA, in addition to the CUDA of PyTorch.) The function
