@@ -4,6 +4,7 @@ import h5py
 import numpy as np
 import numpy.typing as npt
 import torch
+from neuralbloch.julia import data_generation
 from neuralbloch.utils import complex_to_real_imag
 from neuralbloch.utils import get_device
 
@@ -174,9 +175,7 @@ def generate_train_loader(
     Returns:
         A batch loader over the freshly simulated data.
     """
-    # Import juliacall only here: the import starts Julia, and the other
-    # functions of this module do not need it. run.py imports it first.
-    from juliacall import Main as jl
+    jl = data_generation()
 
     device = get_device(config)
 

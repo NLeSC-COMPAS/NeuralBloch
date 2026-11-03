@@ -4,6 +4,7 @@ import torch
 from neuralbloch.data.data_loading import TensorBatchLoader
 from neuralbloch.data.data_loading import generate_train_loader
 from neuralbloch.data.data_loading import generate_val_loader
+from neuralbloch.julia import data_generation
 from neuralbloch.model import FCModel
 from neuralbloch.trainer import Trainer
 
@@ -55,12 +56,8 @@ def train(config: dict[str, Any]) -> None:
     # Initialize the model
     model = FCModel(NTR, config["model"], config["data"])
 
-    # Load Julia data generation functions (used for online training data).
-    # Import juliacall only here, because the import starts Julia.
-    from juliacall import Main as jl
-    from neuralbloch.data import DATA_GENERATION_JL
-
-    jl.include(DATA_GENERATION_JL)
+    # Load the Julia data generation functions (used for online training data)
+    data_generation()
 
     initial_train_loader = None
     basis_initialization_seconds = 0.0

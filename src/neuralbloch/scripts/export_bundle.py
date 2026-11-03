@@ -14,6 +14,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from neuralbloch.julia import julia
 from neuralbloch.scripts.export_onnx import TARGETS
 from neuralbloch.scripts.export_onnx import onnx_precision
 from neuralbloch.scripts.export_onnx import require_checkpoint
@@ -1041,8 +1042,7 @@ def blochsimulators_facts(
         The version, and ``(dT1_step, dT2_step)`` if ``finite_difference``,
         else ``None``.
     """
-    from juliacall import Main as jl
-
+    jl = julia()
     jl.seval("import TOML")
     version = str(
         jl.seval(

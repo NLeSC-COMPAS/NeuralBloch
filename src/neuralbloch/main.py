@@ -1,16 +1,13 @@
 """The command-line entry point of NeuralBloch (the `neuralbloch` command)."""
 
 import argparse
-from juliacall import Main as jl
 from neuralbloch.config import load_config
-from neuralbloch.data import DATA_GENERATION_JL
-from neuralbloch.data.split_dataset import split_dataset
-from neuralbloch.scripts.export_bundle import export_bundle
-from neuralbloch.scripts.export_onnx import export_onnx
-from neuralbloch.scripts.test_accuracy import test_accuracy
-from neuralbloch.scripts.test_inference import test_inference
-from neuralbloch.scripts.train import train
-from neuralbloch.utils import set_seed
+from neuralbloch.julia import data_generation
+from neuralbloch.julia import julia
+from neuralbloch.julia import setup_julia
+
+
+JULIA_TASKS = {"generate", "train", "export_bundle"}
 
 
 def main() -> None:
@@ -20,6 +17,7 @@ def main() -> None:
     parser.add_argument(
         "task",
         choices=[
+            "setup_julia",
             "generate",
             "train",
             "test_accuracy",
@@ -31,26 +29,42 @@ def main() -> None:
     parser.add_argument("--config-dir", default="config")
     args = parser.parse_args()
 
-    # Load configuration files and set random seed
+    if args.task == "setup_julia":
+        setup_julia()
+        return
+
+    # Load configuration files
     config = load_config(args.config_dir)
-    # Online samples are drawn by Julia, so Python's RNG seed alone does not
-    # make training runs reproducible.
-    julia_seed = int(config["experiment"]["SEED"])
-    jl.seval(f"begin using Random; Random.seed!({julia_seed}); true end")
+
+    # Start Julia only for the tasks that use it, and before the imports below,
+    # because juliacall must be imported before torch
+    if args.task in JULIA_TASKS:
+        jl = julia()
+        # Online samples are drawn by Julia, so Python's RNG seed alone does not
+        # make training runs reproducible.
+        julia_seed = int(config["experiment"]["SEED"])
+        jl.seval(f"begin using Random; Random.seed!({julia_seed}); true end")
+
+    # NOTE: Since we use lazy-load of Julia these need to be here
+    from neuralbloch.data.split_dataset import split_dataset
+    from neuralbloch.scripts.export_bundle import export_bundle
+    from neuralbloch.scripts.export_onnx import export_onnx
+    from neuralbloch.scripts.test_accuracy import test_accuracy
+    from neuralbloch.scripts.test_inference import test_inference
+    from neuralbloch.scripts.train import train
+    from neuralbloch.utils import set_seed
 
     # Generate a new dataset using Julia and split it into
     # training and validation sets
     if args.task == "generate":
-        jl.include(DATA_GENERATION_JL)
-        jl.save_dataset(config)
+        data_generation().save_dataset(config)
 
         split_dataset(config["experiment"])
 
         return
 
     if args.task == "train":
-        jl.include(DATA_GENERATION_JL)
-        jl.seval("begin using BlochSimulators; CUDALibs(); true end")
+        data_generation().seval("begin using BlochSimulators; CUDALibs(); true end")
 
     set_seed(config["experiment"]["SEED"])
 
