@@ -27,6 +27,12 @@ hooks = [
   ], pass_filenames = false, require_serial = true, stages = ["pre-push"] },
 ]
 
+# Validates aidecl.yaml against the AI Declaration schema (https://ai-declaration.org).
+[[repos]]
+repo = "https://github.com/ai-declaration/cli"
+rev = "v0.3.0"
+hooks = [{ id = "aidecl" }]
+
 # Prek builtin hooks
 [[repos]]
 repo = "builtin"
