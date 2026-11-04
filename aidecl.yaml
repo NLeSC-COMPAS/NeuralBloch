@@ -1,0 +1,39 @@
+schema_version: "1.0.0"
+
+project:
+  name: neuralbloch
+  version: "0.1.0"
+  repository: https://github.com/NLeSC-COMPAS/NeuralBloch
+  license: Apache-2.0
+  content_type: software
+
+ai_usage:
+  used: true
+  summary: >-
+    Claude Code was used to write and refactor code, tests and documentation.
+    All AI-assisted changes are reviewed by a maintainer before merging.
+  level: significant
+  tools:
+    - name: Claude Code
+      vendor: Anthropic
+      type: agent
+      hosting: cloud_vendor
+      purpose:
+        - code generation
+        - refactoring
+        - testing
+        - documentation
+  activities:
+    - code_generation
+    - refactoring
+    - testing
+    - documentation
+  scope:
+    code_generation: true
+    refactoring: true
+    testing: true
+    documentation: true
+
+declaration:
+  date: "2026-11-04"
+  declared_by: Rodrigo V. Honorato
