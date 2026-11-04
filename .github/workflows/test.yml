@@ -3,7 +3,14 @@ name: Test
 on:
   push:
     branches: [main]
+    # Changes that cannot affect the tests do not trigger them.
+    paths-ignore: &no-code
+      - "**.md"
+      - "aidecl.yaml"
+      - "prek.toml"
+      - ".github/workflows/lint.yml"
   pull_request:
+    paths-ignore: *no-code
 
 # A new push to a pull request cancels the run of the push before it
 concurrency:
