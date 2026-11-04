@@ -4,8 +4,8 @@ import h5py
 import numpy as np
 import numpy.typing as npt
 import torch
-from src.utils import complex_to_real_imag
-from src.utils import get_device
+from neuralbloch.utils import complex_to_real_imag
+from neuralbloch.utils import get_device
 
 
 class TensorBatchLoader:
@@ -200,7 +200,7 @@ def generate_train_loader(
 
     # Without this check, NaN of the simulation gives the error of a training
     # that diverges, or an error of the joint PCA basis. (For 0 samples,
-    # data/data_generation.jl raises an error with the cause first.)
+    # data_generation.jl raises an error with the cause first.)
     check_dataset(
         "The training data of the Julia simulation",
         params,

@@ -10,7 +10,7 @@ import torch
 
 
 if TYPE_CHECKING:
-    from src.model import FCModel
+    from neuralbloch.model import FCModel
 
 
 def complex_to_real_imag(
@@ -95,7 +95,7 @@ def model_from_checkpoint(checkpoint: dict[str, Any], device: str) -> "FCModel":
     The model comes from the configuration in the checkpoint, not from
     ``config/``.
     """
-    from src.model import FCModel
+    from neuralbloch.model import FCModel
 
     NTR = checkpoint["NTR"]
 
@@ -114,7 +114,7 @@ def file_sha256(path: str | Path) -> str:
 
 
 # The keys of the data configuration that give the RF tables of the training
-# sequence (data/data_generation.jl)
+# sequence (data_generation.jl)
 RF_TABLE_KEYS = ("RF_ANGLE_FILE", "RF_PHASE_FILE")
 
 

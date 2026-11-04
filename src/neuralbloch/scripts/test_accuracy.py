@@ -1,10 +1,10 @@
 from typing import Any
 import torch
-from data.data_loading import load_data_from_h5_file
-from src.metrics import nrmse
-from src.utils import complex_to_real_imag
-from src.utils import get_device
-from src.utils import load_model
+from neuralbloch.data.data_loading import load_data_from_h5_file
+from neuralbloch.metrics import nrmse
+from neuralbloch.utils import complex_to_real_imag
+from neuralbloch.utils import get_device
+from neuralbloch.utils import load_model
 
 
 def test_accuracy(config: dict[str, Any]) -> None:

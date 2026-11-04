@@ -8,9 +8,9 @@ from typing import Any
 import numpy as np
 import pytest
 import torch
-from data.data_loading import TensorBatchLoader
-from data.data_loading import generate_train_loader
-from data.data_loading import generate_val_loader
+from neuralbloch.data.data_loading import TensorBatchLoader
+from neuralbloch.data.data_loading import generate_train_loader
+from neuralbloch.data.data_loading import generate_val_loader
 
 
 @pytest.fixture
@@ -273,7 +273,7 @@ def test_julia_data_without_samples_are_refused(
     config: dict[str, Any],
     julia_batch_mock: SimpleNamespace,
 ) -> None:
-    # data/data_generation.jl raises an error before it gives 0 samples (a
+    # data_generation.jl raises an error before it gives 0 samples (a
     # test with the marker julia checks it). This check is for the data that
     # Python gets
     julia_batch_mock.T1 = julia_batch_mock.T2 = julia_batch_mock.B1 = np.zeros(0)

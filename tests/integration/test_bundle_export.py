@@ -6,16 +6,16 @@ from pathlib import Path
 from typing import Any
 import pytest
 import torch
-from scripts.export_bundle import REPO_ROOT
-from scripts.export_bundle import check_bundle
-from scripts.export_bundle import export_bundle
-from scripts.export_bundle import file_sha256
-from scripts.export_bundle import git
-from scripts.export_bundle import rf_table_length
-from scripts.export_bundle import tarball_name
-from scripts.export_bundle import write_tarball
-from scripts.export_onnx import stamp_checkpoint
-from src.model import FCModel
+from neuralbloch.model import FCModel
+from neuralbloch.scripts.export_bundle import REPO_ROOT
+from neuralbloch.scripts.export_bundle import check_bundle
+from neuralbloch.scripts.export_bundle import export_bundle
+from neuralbloch.scripts.export_bundle import file_sha256
+from neuralbloch.scripts.export_bundle import git
+from neuralbloch.scripts.export_bundle import rf_table_length
+from neuralbloch.scripts.export_bundle import tarball_name
+from neuralbloch.scripts.export_bundle import write_tarball
+from neuralbloch.scripts.export_onnx import stamp_checkpoint
 
 
 NTR = 5

@@ -9,13 +9,13 @@ from pathlib import Path
 from typing import Any
 import pytest
 import torch
-from data.data_loading import TensorBatchLoader
-from src.loss import Loss
-from src.model import FCModel
-from src.trainer import Trainer
-from src.utils import load_checkpoint
-from src.utils import load_model
-from src.utils import rf_sha256
+from neuralbloch.data.data_loading import TensorBatchLoader
+from neuralbloch.loss import Loss
+from neuralbloch.model import FCModel
+from neuralbloch.trainer import Trainer
+from neuralbloch.utils import load_checkpoint
+from neuralbloch.utils import load_model
+from neuralbloch.utils import rf_sha256
 
 
 Weights = dict[str, torch.Tensor]
@@ -150,7 +150,9 @@ def record_mocked_training(
             step(*args, **kwargs)
             events.learning_rates.append(trainer.optimizer.param_groups[0]["lr"])
 
-        monkeypatch.setattr("src.trainer.generate_train_loader", generate_train_loader)
+        monkeypatch.setattr(
+            "neuralbloch.trainer.generate_train_loader", generate_train_loader
+        )
         monkeypatch.setattr(trainer, "train_epoch", recording_train_epoch)
         monkeypatch.setattr(trainer, "validate", recording_validate)
         monkeypatch.setattr(torch, "save", recording_save)

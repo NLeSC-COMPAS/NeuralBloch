@@ -9,11 +9,11 @@ from typing import Any
 import h5py
 import numpy as np
 import torch
-from src.basis import orthogonalize_shared_basis
-from src.basis import truncate_shared_basis
-from src.basis import worst_relative_output_difference
-from src.model import FCModel
-from src.utils import get_device
+from neuralbloch.basis import orthogonalize_shared_basis
+from neuralbloch.basis import truncate_shared_basis
+from neuralbloch.basis import worst_relative_output_difference
+from neuralbloch.model import FCModel
+from neuralbloch.utils import get_device
 
 
 def load_checkpoint(path: Path, device: str) -> tuple[FCModel, dict[str, Any]]:

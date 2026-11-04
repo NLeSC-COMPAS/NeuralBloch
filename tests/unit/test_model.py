@@ -1,7 +1,7 @@
 from collections.abc import Callable
 from typing import Any
 import torch
-from src.model import FCModel
+from neuralbloch.model import FCModel
 
 
 def test_model_logs_physical_parameters_and_returns_pairs(

@@ -23,13 +23,43 @@ Contains all configuration files.
 
 ### `data/`
 
-Contains all data-related code.
+Contains the data files. The code that generates and loads the data is in `src/neuralbloch/data/`.
+
+- **datasets/** – location where generated HDF5 datasets will be stored
+- **rf_data/** – RF pulse sequence data used during data generation (which files are used is set by `data.RF_ANGLE_FILE` / `data.RF_PHASE_FILE`)
+
+---
+
+### `outputs/`
+
+Contains automatically generated output files.
+
+- TensorBoard log files
+- Saved model checkpoints (`.pt`)
+- Exported ONNX models (`.onnx`): one model for each target
+- The model bundle (`bundle/`) and its release file (`neuralbloch-model-<family>-v<version>.tar.gz`)
+
+---
+
+### `src/neuralbloch/`
+
+The `neuralbloch` Python package. `uv sync` installs it in the virtual environment.
+
+- **model.py** – neural network architecture
+- **basis.py** – post-training shared-basis ordering and rank truncation
+- **trainer.py** – training loop, validation, checkpointing, and logging
+- **loss.py** – loss function definitions
+- **metrics.py** – accuracy metrics (NRMSE)
+- **utils.py** – helper functions (device selection, model loading, random seeds, etc.)
+- **config.py** – configuration file loader
+
+#### `src/neuralbloch/data/`
+
+Contains the data generation and loading code.
 
 - **data_generation.jl** – Julia implementation for generating Bloch simulation training data and saving it to a HDF5 file
 - **data_loading.py** – loading datasets and creating PyTorch `DataLoader`s
 - **split_dataset.py** – splitting a pre-generated HDF5 dataset into fixed validation and test sets
-- **datasets/** – location where generated HDF5 datasets will be stored
-- **rf_data/** – RF pulse sequence data used during data generation (which files are used is set by `data.RF_ANGLE_FILE` / `data.RF_PHASE_FILE`)
 
 Training data is generated online during training using Julia Bloch simulations. Validation and test datasets are generated separately and stored as fixed HDF5 files.
 
@@ -45,20 +75,7 @@ leading singular vectors of row-normalized signal and derivative targets.
 These span the rank-limited subspace with the smallest squared projection
 error on the initialization batch. Training then updates the decoder weights.
 
----
-
-### `outputs/`
-
-Contains automatically generated output files.
-
-- TensorBoard log files
-- Saved model checkpoints (`.pt`)
-- Exported ONNX models (`.onnx`): one model for each target
-- The model bundle (`bundle/`) and its release file (`neuralbloch-model-<family>-v<version>.tar.gz`)
-
----
-
-### `scripts/`
+#### `src/neuralbloch/scripts/`
 
 Contains scripts called by `run.py` and standalone post-training commands.
 
@@ -68,20 +85,6 @@ Contains scripts called by `run.py` and standalone post-training commands.
 - **orthogonalize_basis.py** – optionally orders a trained shared basis and saves smaller-rank checkpoints
 - **export_onnx.py** – exports the trained model to ONNX
 - **export_bundle.py** – writes the model bundle and its release file
-
----
-
-### `src/`
-
-Contains the core implementation.
-
-- **model.py** – neural network architecture
-- **basis.py** – post-training shared-basis ordering and rank truncation
-- **trainer.py** – training loop, validation, checkpointing, and logging
-- **loss.py** – loss function definitions
-- **metrics.py** – accuracy metrics (NRMSE)
-- **utils.py** – helper functions (device selection, model loading, random seeds, etc.)
-- **config.py** – configuration file loader
 
 ---
 
@@ -125,7 +128,7 @@ saves an equivalent full-rank checkpoint and separate smaller-rank checkpoints;
 the original checkpoint is untouched:
 
 ```bash
-uv run python -m scripts.orthogonalize_basis \
+uv run python -m neuralbloch.scripts.orthogonalize_basis \
   --checkpoint outputs/model.pt \
   --fit-dataset data/datasets/dataset_for_validation.h5 \
   --output outputs/model_ordered.pt \
@@ -177,7 +180,7 @@ uv run run.py export_bundle
 
 Writes the model bundle to `export.BUNDLE_DIR`: the three ONNX models of step 5, the RF tables of the training sequence, and `model_card.toml`. The card describes the model: its family and version, shapes, training domain, sequence and origin. Next to the bundle, the task writes the release file `neuralbloch-model-<family>-v<version>.tar.gz` (step 7).
 
-The task checks the checkpoint and the ONNX models before it writes. It stops if the repository has uncommitted changes, because the card records the commit. It also stops if the release of the family version exists (step 7), or if it cannot get the tags of `origin` to find out. To continue without `origin`, set `export.OFFLINE: true`. For the card fields, the checks and the version rules, refer to `scripts/export_bundle.py` and `config/export.yaml`.
+The task checks the checkpoint and the ONNX models before it writes. It stops if the repository has uncommitted changes, because the card records the commit. It also stops if the release of the family version exists (step 7), or if it cannot get the tags of `origin` to find out. To continue without `origin`, set `export.OFFLINE: true`. For the card fields, the checks and the version rules, refer to `src/neuralbloch/scripts/export_bundle.py` and `config/export.yaml`.
 
 ### 7. Publish a model release
 
