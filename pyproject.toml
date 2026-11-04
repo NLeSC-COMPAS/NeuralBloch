@@ -16,6 +16,9 @@ dependencies = [
     "torch==2.13.0",
 ]
 
+[project.scripts]
+neuralbloch = "neuralbloch.cli:main"
+
 [build-system]
 requires = ["uv_build>=0.13.6,<0.14"]
 build-backend = "uv_build"
@@ -126,7 +129,7 @@ convention = "google"
 python-version = "3.12"
 
 [tool.ty.src]
-include = ["run.py", "src"]
+include = ["src"]
 
 [tool.ty.rules]
 missing-type-argument = "error"
