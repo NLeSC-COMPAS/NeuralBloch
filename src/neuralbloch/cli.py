@@ -1,13 +1,26 @@
+"""``neuralbloch`` command line interface.
+
+Runs one task of the pipeline with the configuration in ``--config-dir``
+(default ``config``)::
+
+    uv run neuralbloch generate
+    uv run neuralbloch train
+    uv run neuralbloch export_bundle --config-dir path/to/config
+
+Some imports are inside ``main()`` on purpose. juliacall must be imported
+before torch, and its import starts Julia, so it waits until the arguments are
+parsed. The task modules are imported only when their task runs.
+"""
+
 import argparse
-from juliacall import Main as jl
 from neuralbloch.config import load_config
 from neuralbloch.data import DATA_GENERATION_JL
 
 
 def main() -> None:
-    """The entry point."""
+    """The entry point of the ``neuralbloch`` command."""
     # Parse command-line arguments
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(prog="neuralbloch")
     parser.add_argument(
         "task",
         choices=[
@@ -21,6 +34,10 @@ def main() -> None:
     )
     parser.add_argument("--config-dir", default="config")
     args = parser.parse_args()
+
+    # juliacall must be imported before torch. The import starts Julia, so it
+    # waits until the arguments are parsed.
+    from juliacall import Main as jl  # ruff: noqa: PLC0415
 
     # Load configuration files and set random seed
     config = load_config(args.config_dir)
