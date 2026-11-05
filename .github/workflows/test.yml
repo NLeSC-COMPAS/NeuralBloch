@@ -3,7 +3,16 @@ name: Test
 on:
   push:
     branches: [main]
+    # Only changes that can affect the tests trigger them.
+    paths: &code
+      - "src/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".python-version"
+      - ".github/workflows/test.yml"
   pull_request:
+    paths: *code
 
 # A new push to a pull request cancels the run of the push before it
 concurrency:
