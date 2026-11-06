@@ -82,23 +82,23 @@ class Trainer:
         if validate_every <= 0:
             raise ValueError("training.validate_every_n_epochs must be positive")
 
-        if config["training"]["LR_SCHEDULER"] == "plateau":
-            # ReduceLROnPlateau counts calls rather than epochs.  Keep its
-            # original 100-epoch patience when validation is less frequent.
+        lr_scheduler = config["training"]["lr_scheduler"]
+        if lr_scheduler["name"] == "plateau":
+            # ReduceLROnPlateau counts validations, not epochs
             self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
                 self.optimizer,
-                patience=math.ceil(100 / validate_every),
-                factor=0.5,
-                min_lr=1e-5,
+                patience=math.ceil(lr_scheduler["patience_epochs"] / validate_every),
+                factor=lr_scheduler["factor"],
+                min_lr=lr_scheduler["min_lr"],
             )
-        elif config["training"]["LR_SCHEDULER"] == "cosine":
+        elif lr_scheduler["name"] == "cosine":
             self.scheduler = optim.lr_scheduler.CosineAnnealingLR(
                 self.optimizer, T_max=config["training"]["n_epochs"]
             )
         else:
             raise ValueError(
-                "training.LR_SCHEDULER must be 'plateau' or 'cosine', got "
-                f"{config['training']['LR_SCHEDULER']!r}"
+                "training.lr_scheduler.name must be 'plateau' or 'cosine', got "
+                f"{lr_scheduler['name']!r}"
             )
 
         # Loss function
