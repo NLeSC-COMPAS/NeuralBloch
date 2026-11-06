@@ -21,7 +21,7 @@ derivative_mode: "direct"
 activation: "relu"
 
 # Scale the network inputs [log(T1), log(T2), B1] to [-1, 1] with the parameter
-# ranges in data.yaml (T1_lower to B1_upper). If false, the sub-networks get
+# ranges in data.yaml (parameter_ranges). If false, the sub-networks get
 # [log(T1), log(T2), B1] without scaling.
 normalize_inputs: false
 
