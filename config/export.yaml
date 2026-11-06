@@ -39,7 +39,7 @@ bundle_dir: "outputs/bundle"
 # The name of the model in NeuralBloch.jl and in its release tag,
 # model-<model_family>-v<model_version>.
 # A family is one contract for callers: the sequence, the number of readouts and
-# the rank of the signal basis (model.NB_signal). The name of a family has the form
+# the rank of the signal basis (model.signal.rank). The name of a family has the form
 # <sequence><ntr>-rank<rank>. (export_bundle checks the rank.) If two families
 # would have the same name, add a qualifier at the end (fisp600-rank16-narrow).
 # The version is a semantic version in quotes: MAJOR.MINOR.PATCH, with an optional
