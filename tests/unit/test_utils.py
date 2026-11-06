@@ -44,11 +44,28 @@ def test_parameter_sampling_is_physical_and_log_uniform(
         )
 
 
-def test_a_checkpoint_with_the_old_config_keys_is_refused() -> None:
+@pytest.mark.parametrize(
+    ("model_config", "data_config"),
+    [
+        (
+            {"derivative_mode": "direct", "NB_signal": 3},
+            {"T1_lower": 0.1, "T1_upper": 6.0},
+        ),
+        # Only the model blocks are old
+        (
+            {"derivative_mode": "direct", "signal": {"rank": 3}},
+            {"parameter_ranges": {}},
+        ),
+    ],
+    ids=["old", "partly-new"],
+)
+def test_a_checkpoint_with_the_old_config_keys_is_refused(
+    model_config: dict[str, Any], data_config: dict[str, Any]
+) -> None:
     checkpoint = {
         "NTR": 5,
-        "model_config": {"derivative_mode": "direct", "NB_signal": 3},
-        "data_config": {"T1_lower": 0.1, "T1_upper": 6.0},
+        "model_config": model_config,
+        "data_config": data_config,
         "model_state": {},
     }
     with pytest.raises(ValueError, match="Train the model again"):

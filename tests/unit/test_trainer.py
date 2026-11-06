@@ -314,6 +314,22 @@ def test_the_plateau_scheduler_gets_its_settings_from_the_config(
     assert scheduler.min_lrs == [1.0e-5]
 
 
+def test_the_plateau_scheduler_needs_its_keys(
+    make_trainer: Callable[..., Trainer],
+) -> None:
+    with pytest.raises(ValueError, match=r"needs the keys \['factor', 'min_lr'\]"):
+        make_trainer(lr_scheduler={"name": "plateau", "patience_epochs": 100})
+
+
+def test_the_plateau_scheduler_reads_floats_in_exponent_form(
+    make_trainer: Callable[..., Trainer],
+) -> None:
+    # PyYAML reads 1e-5 as the string "1e-5"
+    trainer = make_trainer(lr_scheduler={**PLATEAU, "min_lr": "1e-5"})
+
+    assert trainer.scheduler.min_lrs == [1.0e-5]
+
+
 def test_the_plateau_scheduler_steps_after_each_validation_with_its_loss(
     make_trainer: Callable[..., Trainer],
     record_mocked_training: Callable[..., TrainingEvents],

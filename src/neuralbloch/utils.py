@@ -94,10 +94,11 @@ def model_from_checkpoint(checkpoint: dict[str, Any], device: str) -> "FCModel":
     """
     from neuralbloch.model import FCModel
 
-    if (
-        "parameter_ranges" not in checkpoint["data_config"]
-        or "signal" not in checkpoint["model_config"]
-    ):
+    model_config = checkpoint["model_config"]
+    if "parameter_ranges" not in checkpoint["data_config"] or not {
+        "signal",
+        "derivative",
+    } <= set(model_config):
         raise ValueError(
             "The checkpoint has the config keys of an earlier version of "
             "NeuralBloch. Train the model again."
