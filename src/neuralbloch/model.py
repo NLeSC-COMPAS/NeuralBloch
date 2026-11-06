@@ -194,22 +194,24 @@ class FCModel(nn.Module):
         super().__init__()
 
         activation = config["activation"]
-        self.derivative_mode = config["derivative_mode"]
+        signal = config["signal"]
+        derivative = config["derivative"]
+        self.derivative_mode = derivative["mode"]
 
         if self.derivative_mode not in {"direct", "derived"}:
             raise ValueError(
-                "model.derivative_mode must be 'direct' or 'derived', got "
+                "model.derivative.mode must be 'direct' or 'derived', got "
                 f"{self.derivative_mode!r}"
             )
         if self.derivative_mode == "derived" and activation == "relu":
             raise ValueError(
-                "model.activation must be smooth when derivative_mode='derived'"
+                "model.activation must be smooth when derivative.mode='derived'"
             )
 
         self.NTR = NTR
         # Signal basis coefficients per sample: the width of
         # forward_coeffs and the rank of U_signal
-        self.rank: int = config["NB_signal"]
+        self.rank: int = signal["rank"]
 
         # Physical [T1, T2, B1] -> internal [log(T1), log(T2), B1] coordinates
         self.input_transform = InputTransform(
@@ -219,16 +221,16 @@ class FCModel(nn.Module):
 
         # Learned low-rank decoders with paired real-imaginary outputs
         self.U_signal = nn.Sequential(
-            nn.Linear(config["NB_signal"], 2 * NTR, bias=False),
+            nn.Linear(signal["rank"], 2 * NTR, bias=False),
             nn.Unflatten(-1, (NTR, 2)),
         )
 
         # Sub-network for the signal
         self.subnet_signal = SubNetwork(
             input_dim=INPUT_DIM,
-            output_dim=config["NB_signal"],
-            hidden_size=config["hidden_size_signal"],
-            num_layers=config["num_layers_signal"],
+            output_dim=signal["rank"],
+            hidden_size=signal["hidden_size"],
+            num_layers=signal["num_layers"],
             activation=activation,
         )
 
@@ -238,26 +240,27 @@ class FCModel(nn.Module):
         self.subnet_dT2: SubNetwork | None = None
 
         if self.derivative_mode == "direct":
+            dT1, dT2 = derivative["dT1"], derivative["dT2"]
             self.U_dT1 = nn.Sequential(
-                nn.Linear(config["NB_dT1"], 2 * NTR, bias=False),
+                nn.Linear(dT1["rank"], 2 * NTR, bias=False),
                 nn.Unflatten(-1, (NTR, 2)),
             )
             self.U_dT2 = nn.Sequential(
-                nn.Linear(config["NB_dT2"], 2 * NTR, bias=False),
+                nn.Linear(dT2["rank"], 2 * NTR, bias=False),
                 nn.Unflatten(-1, (NTR, 2)),
             )
             self.subnet_dT1 = SubNetwork(
                 input_dim=INPUT_DIM,
-                output_dim=config["NB_dT1"],
-                hidden_size=config["hidden_size_dT1"],
-                num_layers=config["num_layers_dT1"],
+                output_dim=dT1["rank"],
+                hidden_size=dT1["hidden_size"],
+                num_layers=dT1["num_layers"],
                 activation=activation,
             )
             self.subnet_dT2 = SubNetwork(
                 input_dim=INPUT_DIM,
-                output_dim=config["NB_dT2"],
-                hidden_size=config["hidden_size_dT2"],
-                num_layers=config["num_layers_dT2"],
+                output_dim=dT2["rank"],
+                hidden_size=dT2["hidden_size"],
+                num_layers=dT2["num_layers"],
                 activation=activation,
             )
 
@@ -341,6 +344,6 @@ class FCModel(nn.Module):
                 be finite and strictly positive.
 
         Returns:
-            Coefficients with shape ``(batch, NB_signal)``.
+            Coefficients with shape ``(batch, rank)``.
         """
         return self.subnet_signal(self.input_transform(x))
