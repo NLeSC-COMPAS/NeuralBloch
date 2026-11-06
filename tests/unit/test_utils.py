@@ -30,13 +30,14 @@ def test_parameter_sampling_is_physical_and_log_uniform(
     samples = sample_parameters({"data": data_config}, 20_000)
 
     assert samples.shape == (20_000, 3)
-    for column, name in enumerate(("T1", "T2", "B1")):
-        assert torch.all(samples[:, column] >= data_config[f"{name}_lower"])
-        assert torch.all(samples[:, column] <= data_config[f"{name}_upper"])
+    ranges = data_config["parameter_ranges"]
+    for column, name in enumerate(("T1_s", "T2_s", "B1")):
+        assert torch.all(samples[:, column] >= ranges[name]["lower"])
+        assert torch.all(samples[:, column] <= ranges[name]["upper"])
 
-    for column, name in enumerate(("T1", "T2")):
-        lower = math.log(data_config[f"{name}_lower"])
-        upper = math.log(data_config[f"{name}_upper"])
+    for column, name in enumerate(("T1_s", "T2_s")):
+        lower = math.log(ranges[name]["lower"])
+        upper = math.log(ranges[name]["upper"])
         assert torch.log(samples[:, column]).mean().item() == pytest.approx(
             (lower + upper) / 2, abs=0.03
         )
