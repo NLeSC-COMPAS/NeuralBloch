@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 import torch
 from neuralbloch.utils import complex_to_real_imag
+from neuralbloch.utils import model_from_checkpoint
 from neuralbloch.utils import sample_parameters
 
 
@@ -41,3 +42,14 @@ def test_parameter_sampling_is_physical_and_log_uniform(
         assert torch.log(samples[:, column]).mean().item() == pytest.approx(
             (lower + upper) / 2, abs=0.03
         )
+
+
+def test_a_checkpoint_with_the_old_config_keys_is_refused() -> None:
+    checkpoint = {
+        "NTR": 5,
+        "model_config": {"derivative_mode": "direct", "NB_signal": 3},
+        "data_config": {"T1_lower": 0.1, "T1_upper": 6.0},
+        "model_state": {},
+    }
+    with pytest.raises(ValueError, match="Train the model again"):
+        model_from_checkpoint(checkpoint, "cpu")
