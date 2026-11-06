@@ -24,7 +24,7 @@ def _start(config_dir: Path, *, seed_python: bool = True) -> tuple[Any, dict[str
 
     Args:
         config_dir: Directory containing the YAML configuration files.
-        seed_python: Also seed Python's RNGs with ``experiment.SEED``.
+        seed_python: Also seed Python's RNGs with ``experiment.seed``.
 
     Returns:
         The Julia ``Main`` module and the loaded configuration.
@@ -36,13 +36,13 @@ def _start(config_dir: Path, *, seed_python: bool = True) -> tuple[Any, dict[str
     config = load_config(config_dir)
     # Online samples are drawn by Julia, so Python's RNG seed alone does not
     # make training runs reproducible.
-    julia_seed = int(config["experiment"]["SEED"])
+    julia_seed = int(config["experiment"]["seed"])
     jl.seval(f"begin using Random; Random.seed!({julia_seed}); true end")
 
     if seed_python:
         from neuralbloch.utils import set_seed
 
-        set_seed(config["experiment"]["SEED"])
+        set_seed(config["experiment"]["seed"])
 
     return jl, config
 

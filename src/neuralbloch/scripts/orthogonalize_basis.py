@@ -112,7 +112,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     """Run basis postprocessing from the command line."""
     args = parse_args()
-    device = get_device({"experiment": {"DEVICE": "cuda"}})
+    device = get_device({"experiment": {"device": "cuda"}})
     postprocess_basis(
         args.checkpoint, args.fit_dataset, args.output, args.truncate, device
     )
