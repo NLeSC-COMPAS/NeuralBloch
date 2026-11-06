@@ -39,7 +39,7 @@ def test_command_writes_new_checkpoints_and_keeps_input(
     smaller, saved = load_checkpoint(tmp_path / "ordered_r2.pt", "cpu")
     assert worst_relative_output_difference(rank4_model, ordered, HELD_OUT) < 1e-5
     assert smaller.U_signal[0].in_features == 2
-    assert saved["model_config"]["NB_signal"] == 2
+    assert saved["model_config"]["signal"]["rank"] == 2
 
     with pytest.raises(ValueError, match="must differ from --checkpoint"):
         postprocess_basis(checkpoint_path, dataset_path, checkpoint_path, [], "cpu")

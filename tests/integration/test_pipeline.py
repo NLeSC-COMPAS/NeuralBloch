@@ -41,7 +41,6 @@ def pipeline_config(
     path = tmp_path / "validation.h5"
     write_dataset(path, params, *targets)
     config["experiment"]["dataset_for_validation_path"] = str(path)
-    config["model"]["basis_initialization"] = "learned"
     config["export"] = export_config
     return config
 
