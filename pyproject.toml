@@ -83,6 +83,7 @@ ignore = [
     # alias are conventional in this domain and match data_generation.jl
     "N803", # Argument name should be lowercase
     "N806", # Variable in function should be lowercase
+    "N815", # Variable in class scope should not be mixedCase
     "N813", # Camelcase imported as lowercase
     # The following list excludes rules irrelevant to the Google style
     "D203",
