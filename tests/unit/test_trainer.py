@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 import pytest
 import torch
+from torch import optim
 from neuralbloch.data.data_loading import TensorBatchLoader
 from neuralbloch.loss import Loss
 from neuralbloch.model import FCModel
@@ -19,6 +20,9 @@ from neuralbloch.utils import rf_sha256
 
 
 Weights = dict[str, torch.Tensor]
+
+# The plateau values in the comment of config/training.yaml
+PLATEAU = {"name": "plateau", "patience_epochs": 100, "factor": 0.5, "min_lr": 1.0e-5}
 
 
 def copy_weights(model: FCModel) -> Weights:
@@ -297,13 +301,24 @@ def test_the_trained_model_has_the_weights_of_the_best_epoch(
     assert not same_weights(weights, events.weights[3])
 
 
+def test_the_plateau_scheduler_gets_its_settings_from_the_config(
+    make_trainer: Callable[..., Trainer],
+) -> None:
+    trainer = make_trainer(validate_every_n_epochs=30, lr_scheduler=PLATEAU)
+
+    scheduler = trainer.scheduler
+    assert isinstance(scheduler, optim.lr_scheduler.ReduceLROnPlateau)
+    # The patience counts validations: ceil(100 / 30)
+    assert scheduler.patience == 4
+    assert scheduler.factor == 0.5
+    assert scheduler.min_lrs == [1.0e-5]
+
+
 def test_the_plateau_scheduler_steps_after_each_validation_with_its_loss(
     make_trainer: Callable[..., Trainer],
     record_mocked_training: Callable[..., TrainingEvents],
 ) -> None:
-    trainer = make_trainer(
-        n_epochs=7, validate_every_n_epochs=3, LR_SCHEDULER="plateau"
-    )
+    trainer = make_trainer(n_epochs=7, validate_every_n_epochs=3, lr_scheduler=PLATEAU)
     val_losses = [4.0, 3.0, 2.0, 1.0]
     events = record_mocked_training(trainer, val_losses=val_losses)
 
@@ -316,7 +331,9 @@ def test_the_cosine_scheduler_anneals_the_learning_rate_to_0_over_the_epochs(
     make_trainer: Callable[..., Trainer],
     record_mocked_training: Callable[..., TrainingEvents],
 ) -> None:
-    trainer = make_trainer(n_epochs=7, validate_every_n_epochs=3, LR_SCHEDULER="cosine")
+    trainer = make_trainer(
+        n_epochs=7, validate_every_n_epochs=3, lr_scheduler={"name": "cosine"}
+    )
     events = record_mocked_training(trainer)
 
     trainer.train()

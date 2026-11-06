@@ -103,7 +103,7 @@ def config(
             "validation_batch_size": 8,
             "validate_every_n_epochs": 1,
             "compile_train_step": False,
-            "LR_SCHEDULER": "cosine",
+            "lr_scheduler": {"name": "cosine"},
             "loss_function": "nmae",
             "regen_every_n_epochs": 100,
         },
