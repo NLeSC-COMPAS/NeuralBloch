@@ -5,16 +5,16 @@
 #   coeffs             forward_coeffs: the basis coefficients of the signal
 # A model calculates all its outputs on each call. Thus, a separate model for
 # each target lets a caller do only the work that it needs.
-TARGETS:
+targets:
   signal_and_derivs:
-    ONNX_FILE_PATH: "outputs/model.onnx"
+    onnx_file_path: "outputs/model.onnx"
   signal:
-    ONNX_FILE_PATH: "outputs/model_signal.onnx"
+    onnx_file_path: "outputs/model_signal.onnx"
   coeffs:
-    ONNX_FILE_PATH: "outputs/model_coeffs.onnx"
+    onnx_file_path: "outputs/model_coeffs.onnx"
 
 # ONNX opset version used for export
-OPSET_VERSION: 18
+opset_version: 18
 
 # Export the model with FP16 precision (model inputs and outputs stay FP32).
 # NeuralBloch.jl builds TensorRT engines from the ONNX models. An engine
@@ -22,22 +22,22 @@ OPSET_VERSION: 18
 # typed), so this yields an FP16 engine that trades a small accuracy cost for
 # inference speed.
 # Re-run `export_onnx` and `export_bundle` after changing this setting.
-FP16: false
+fp16: false
 
 # Number of samples used to verify exported models against PyTorch
-N_VERIFY_SAMPLES: 14400
+n_verify_samples: 14400
 
 # The model bundle that NeuralBloch.jl reads (run.py export_bundle). It contains
 # the ONNX models above, the RF tables and a generated model_card.toml that
 # describes them. The task writes the release file of the bundle,
-# neuralbloch-model-<MODEL_FAMILY>-v<MODEL_VERSION>.tar.gz, next to the bundle.
-# The task deletes an old bundle in BUNDLE_DIR. Thus, BUNDLE_DIR must be a new
+# neuralbloch-model-<model_family>-v<model_version>.tar.gz, next to the bundle.
+# The task deletes an old bundle in bundle_dir. Thus, bundle_dir must be a new
 # directory or a bundle (a directory with model_card.toml), and the sources of
 # the bundle must be outside it.
-BUNDLE_DIR: "outputs/bundle"
+bundle_dir: "outputs/bundle"
 
 # The name of the model in NeuralBloch.jl and in its release tag,
-# model-<MODEL_FAMILY>-v<MODEL_VERSION>.
+# model-<model_family>-v<model_version>.
 # A family is one contract for callers: the sequence, the number of readouts and
 # the rank of the signal basis (model.NB_signal). The name of a family has the form
 # <sequence><ntr>-rank<rank>. (export_bundle checks the rank.) If two families
@@ -49,11 +49,11 @@ BUNDLE_DIR: "outputs/bundle"
 #   PATCH: the same weights, exported again
 #   MINOR: new weights or a wider domain
 #   MAJOR: stays 0 until the family is stable
-MODEL_FAMILY: "fisp600-rank16"
-MODEL_VERSION: "0.1.0-beta.1"
+model_family: "fisp600-rank16"
+model_version: "0.1.0-beta.1"
 
 # export_bundle refuses a family version whose release tag exists, here or on
 # origin. If it cannot get the tags of origin (for example without a network),
-# it stops. Set OFFLINE to true to continue with only a warning; then make sure
+# it stops. Set offline to true to continue with only a warning; then make sure
 # that the version is not released before you publish it.
-OFFLINE: false
+offline: false
