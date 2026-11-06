@@ -15,18 +15,13 @@ from neuralbloch.basis import with_signal_rank
 from neuralbloch.basis import worst_relative_output_difference
 from neuralbloch.model import FCModel
 from neuralbloch.utils import get_device
+from neuralbloch.utils import model_from_checkpoint
 
 
 def load_checkpoint(path: Path, device: str) -> tuple[FCModel, dict[str, Any]]:
     """Load a shared-basis model and its checkpoint dictionary."""
     checkpoint: dict[str, Any] = torch.load(path, map_location=device)
-    model = FCModel(
-        checkpoint["NTR"], checkpoint["model_config"], checkpoint["data_config"]
-    )
-    model.load_state_dict(checkpoint["model_state"])
-    model.to(device)
-    model.eval()
-    return model, checkpoint
+    return model_from_checkpoint(checkpoint, device), checkpoint
 
 
 def postprocess_basis(
