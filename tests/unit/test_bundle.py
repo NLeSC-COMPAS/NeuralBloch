@@ -34,6 +34,12 @@ from neuralbloch.utils import RF_TABLE_KEYS
 from neuralbloch.utils import rf_sha256
 
 
+RANGES = {
+    "T1_s": {"lower": 0.1, "upper": 6},
+    "T2_s": {"lower": 0.01, "upper": 2.0},
+    "B1": {"lower": 0.5, "upper": 1.5},
+}
+
 DATA_CONFIG = {
     "n_samples": 40000,
     "derivative_method": "forward_sensitivity",
@@ -49,12 +55,7 @@ DATA_CONFIG = {
     "wait_spoiling": True,
     "py_undersampling_factor": 1,
     "delta_k_spoil_rad_per_m": 0.0,
-    "T1_lower": 0.1,
-    "T1_upper": 6,
-    "T2_lower": 0.01,
-    "T2_upper": 2.0,
-    "B1_lower": 0.5,
-    "B1_upper": 1.5,
+    "parameter_ranges": RANGES,
 }
 
 INPUTS = CardInputs(
@@ -121,7 +122,7 @@ def test_card_states_every_field() -> None:
 
 def test_integers_floats_and_booleans_keep_their_types() -> None:
     card = tomllib.loads(card_text(INPUTS))
-    # The card writes an integer bound (T1_upper: 6) with a decimal point
+    # The card writes an integer bound (T1_s upper: 6) with a decimal point
     assert isinstance(card["domain"]["T1"][1], float)
     assert isinstance(card["sequence"]["max_state"], int)
     assert isinstance(card["sequence"]["TW"], float)
@@ -204,10 +205,13 @@ def test_undersampling_factors_other_than_1_are_refused(
         ({"max_state": 64.0}, "max_state must be an integer"),
         ({"wait_spoiling": "yes"}, "wait_spoiling must be true or false"),
         ({"TR_s": "5.58 ms"}, "TR_s must be a number"),
-        ({"T1_lower": 6.0}, "T1_lower = 6.0 must be below T1_upper"),
+        (
+            {"parameter_ranges": {**RANGES, "T1_s": {"lower": 6.0, "upper": 6}}},
+            "parameter_ranges.T1_s.lower = 6.0 must be below upper",
+        ),
         ({"TE_s": float("nan")}, "must be finite"),
     ],
-    ids=["max_state", "wait_spoiling", "TR_s", "T1_lower", "TE_s"],
+    ids=["max_state", "wait_spoiling", "TR_s", "T1_s", "TE_s"],
 )
 def test_malformed_configuration_is_refused(
     change: dict[str, object], words: str

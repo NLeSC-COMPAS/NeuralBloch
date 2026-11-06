@@ -71,10 +71,10 @@ def test_the_julia_training_data_have_the_layout_of_the_model(
     for target in targets:
         assert target.shape == (len(params), NTR, 2)
     # Each column is in the range of its parameter: the order is T1, T2, B1
-    for column, name in enumerate(("T1", "T2", "B1")):
+    for column, name in enumerate(("T1_s", "T2_s", "B1")):
         values = params[:, column]
-        assert data[f"{name}_lower"] * (1 - 1e-6) <= values.min()
-        assert values.max() <= data[f"{name}_upper"] * (1 + 1e-6)
+        assert data["parameter_ranges"][name]["lower"] * (1 - 1e-6) <= values.min()
+        assert values.max() <= data["parameter_ranges"][name]["upper"] * (1 + 1e-6)
     assert (params[:, 0] > params[:, 1]).all()
     assert saved["batch_size"] == training["train_batch_size"]
     assert saved["shuffle"]
@@ -90,7 +90,9 @@ def test_ranges_without_a_sample_with_t1_above_t2_give_an_error_that_names_them(
     # cause, so generate_data must raise an error before it
     path = julia_config_dir / "data.yaml"
     data = yaml.safe_load(path.read_text())
-    data.update(T1_lower=0.1, T1_upper=0.2, T2_lower=0.3, T2_upper=2.0)
+    data["parameter_ranges"].update(
+        T1_s={"lower": 0.1, "upper": 0.2}, T2_s={"lower": 0.3, "upper": 2.0}
+    )
     path.write_text(yaml.safe_dump(data))
 
     result = run_python(
@@ -102,9 +104,9 @@ def test_ranges_without_a_sample_with_t1_above_t2_give_an_error_that_names_them(
     )
 
     assert (
-        "None of the 100 samples has T1 > T2: check the ranges data.T1_lower to "
-        "data.T1_upper (0.1 to 0.2) and data.T2_lower to data.T2_upper (0.3 to "
-        "2.0)"
+        "None of the 100 samples has T1 > T2: check the ranges "
+        "data.parameter_ranges.T1_s (0.1 to 0.2) and data.parameter_ranges.T2_s "
+        "(0.3 to 2.0)"
     ) in result.stderr
 
 
@@ -123,8 +125,14 @@ def test_the_generate_task_writes_the_validation_and_test_datasets(
     )
     # The grid of n_samples, without the points with T1 <= T2
     side = round(data["n_samples"] ** (1 / 3))
-    T1 = np.geomspace(data["T1_lower"], data["T1_upper"], side)
-    T2 = np.geomspace(data["T2_lower"], data["T2_upper"], side)
+    T1, T2 = (
+        np.geomspace(
+            data["parameter_ranges"][name]["lower"],
+            data["parameter_ranges"][name]["upper"],
+            side,
+        )
+        for name in ("T1_s", "T2_s")
+    )
     assert N == side * (T1[:, None] > T2[None, :]).sum()
     assert NTR == len(np.loadtxt(pytestconfig.rootpath / data["rf_angle_file"]))
     for target in (signal, dT1, dT2):
