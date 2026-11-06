@@ -14,6 +14,10 @@ from neuralbloch.utils import get_device
 from neuralbloch.utils import rf_sha256
 
 
+# The keys of training.lr_scheduler for name "plateau", besides "name"
+PLATEAU_KEYS = {"patience_epochs", "factor", "min_lr"}
+
+
 def _not_finite_error(
     problem: str,
     best_epoch: int | None,
@@ -84,12 +88,19 @@ class Trainer:
 
         lr_scheduler = config["training"]["lr_scheduler"]
         if lr_scheduler["name"] == "plateau":
-            # ReduceLROnPlateau counts validations, not epochs
+            missing = PLATEAU_KEYS - set(lr_scheduler)
+            if missing:
+                raise ValueError(
+                    "training.lr_scheduler with name 'plateau' needs the keys "
+                    f"{sorted(missing)}"
+                )
+            # ReduceLROnPlateau counts validations, not epochs. PyYAML reads
+            # 1e-5 as a string, so cast the floats.
             self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
                 self.optimizer,
                 patience=math.ceil(lr_scheduler["patience_epochs"] / validate_every),
-                factor=lr_scheduler["factor"],
-                min_lr=lr_scheduler["min_lr"],
+                factor=float(lr_scheduler["factor"]),
+                min_lr=float(lr_scheduler["min_lr"]),
             )
         elif lr_scheduler["name"] == "cosine":
             self.scheduler = optim.lr_scheduler.CosineAnnealingLR(

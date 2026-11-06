@@ -173,8 +173,6 @@ def test_card_inputs_agree(change: dict[str, object], words: str) -> None:
 
 
 def test_the_derivative_method_is_required() -> None:
-    # Old configurations without derivative_method used finite differences,
-    # but data_generation.jl now defaults to forward sensitivity
     config = {k: v for k, v in DATA_CONFIG.items() if k != "derivative_method"}
     with pytest.raises(ValueError, match="does not give derivative_method"):
         derivative_method(config)

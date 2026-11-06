@@ -8,6 +8,12 @@ from torch.nn import functional
 # The public model input is always [T1, T2, B1]
 INPUT_DIM = 3
 
+# The keys of model.derivative for each mode, besides "mode"
+DERIVATIVE_MODE_KEYS = {
+    "direct": {"dT1", "dT2"},
+    "derived": {"basis_initialization"},
+}
+
 
 def make_activation(name: str) -> nn.Module:
     """Create a hidden-layer activation by name."""
@@ -198,14 +204,33 @@ class FCModel(nn.Module):
         derivative = config["derivative"]
         self.derivative_mode = derivative["mode"]
 
-        if self.derivative_mode not in {"direct", "derived"}:
+        if self.derivative_mode not in DERIVATIVE_MODE_KEYS:
             raise ValueError(
                 "model.derivative.mode must be 'direct' or 'derived', got "
                 f"{self.derivative_mode!r}"
             )
+        expected = DERIVATIVE_MODE_KEYS[self.derivative_mode]
+        given = set(derivative) - {"mode"}
+        if given != expected:
+            raise ValueError(
+                f"model.derivative with mode {self.derivative_mode!r} needs the "
+                f"keys {sorted(expected)}, got {sorted(given)}"
+            )
         if self.derivative_mode == "derived" and activation == "relu":
             raise ValueError(
                 "model.activation must be smooth when derivative.mode='derived'"
+            )
+
+        # A "direct" model has no choice: its decoders are always learned
+        self.basis_initialization: str = (
+            derivative["basis_initialization"]
+            if self.derivative_mode == "derived"
+            else "learned"
+        )
+        if self.basis_initialization not in {"learned", "joint_pca"}:
+            raise ValueError(
+                "model.derivative.basis_initialization must be 'learned' or "
+                f"'joint_pca', got {self.basis_initialization!r}"
             )
 
         self.NTR = NTR

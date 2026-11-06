@@ -164,8 +164,8 @@ def require_configs(checkpoint: Mapping[str, Any], path: str | Path) -> None:
 
     The card describes the model in the checkpoint. Thus, all fields must come
     from the training configuration of the model. Older checkpoints do not
-    contain this configuration. This check gives a clearer error than the
-    ``KeyError`` of ``model_from_checkpoint``.
+    contain this configuration. ``model_from_checkpoint`` needs it, and this
+    check gives the clearer error for its absence.
 
     Args:
         checkpoint: The loaded checkpoint.
@@ -250,11 +250,7 @@ def check_version(version: object) -> str:
 def derivative_method(data_config: Mapping[str, Any]) -> str:
     """Return the method that calculated the training derivatives, as the card names it.
 
-    The data configuration must give the method. data_generation.jl uses
-    forward sensitivity if derivative_method is missing, but before commit
-    088ba08 it used only finite differences, and its configurations did not
-    give derivative_method. Thus, a missing method does not tell which method
-    calculated the derivatives.
+    The data configuration must give the method, because the card states it.
 
     Raises:
         ValueError: If the data configuration does not give the method, or
@@ -263,11 +259,7 @@ def derivative_method(data_config: Mapping[str, Any]) -> str:
     if "derivative_method" not in data_config:
         raise ValueError(
             "The checkpoint's data_config does not give derivative_method, so the "
-            "card cannot state the derivative method. Checkpoints from before "
-            "commit 088ba08 were trained with finite_difference. Add the method "
-            "of the training to the checkpoint yourself "
-            "(checkpoint['data_config']['derivative_method'] = ..., "
-            "torch.save(checkpoint, path))."
+            "card cannot state the derivative method"
         )
     method = data_config["derivative_method"]
     if method not in DERIVATIVE_METHODS:

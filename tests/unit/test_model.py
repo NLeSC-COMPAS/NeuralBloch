@@ -1,5 +1,6 @@
 from collections.abc import Callable
 from typing import Any
+import pytest
 import torch
 from neuralbloch.model import FCModel
 
@@ -192,3 +193,36 @@ def test_model_output_contract_supports_multiple_batch_sizes(
             outputs = model(x)
         for output in outputs:
             assert output.shape == (batch_size, 5, 2)
+
+
+NETWORK = {"rank": 2, "hidden_size": 4, "num_layers": 2}
+
+
+def test_a_direct_model_always_has_a_learned_basis(
+    direct_config: dict[str, Any], make_model: Callable[..., FCModel]
+) -> None:
+    assert make_model(5, direct_config).basis_initialization == "learned"
+
+
+@pytest.mark.parametrize(
+    ("derivative", "words"),
+    [
+        (
+            {"mode": "derived"},
+            r"mode 'derived' needs the keys \['basis_initialization'\], got \[\]",
+        ),
+        (
+            {"mode": "derived", "basis_initialization": "learned", "dT1": NETWORK},
+            r"mode 'derived' needs the keys \['basis_initialization'\]",
+        ),
+    ],
+    ids=["derived-without-basis", "derived-with-dT1"],
+)
+def test_a_derivative_block_must_have_the_keys_of_its_mode(
+    derivative: dict[str, Any],
+    words: str,
+    derived_config: dict[str, Any],
+    make_model: Callable[..., FCModel],
+) -> None:
+    with pytest.raises(ValueError, match=words):
+        make_model(5, {**derived_config, "derivative": derivative})

@@ -56,23 +56,6 @@ def train(config: dict[str, Any]) -> None:
     # Initialize the model
     model = FCModel(NTR, config["model"], config["data"])
 
-    # Only "derived" mode has a choice: a "direct" decoder is always learned
-    derivative = config["model"]["derivative"]
-    if model.derivative_mode == "derived":
-        basis_mode = derivative["basis_initialization"]
-    elif "basis_initialization" in derivative:
-        raise ValueError(
-            "model.derivative.basis_initialization is only for "
-            "derivative.mode='derived'"
-        )
-    else:
-        basis_mode = "learned"
-    if basis_mode not in {"learned", "joint_pca"}:
-        raise ValueError(
-            "model.derivative.basis_initialization must be 'learned' or "
-            f"'joint_pca', got {basis_mode!r}"
-        )
-
     # Load Julia data generation functions (used for online training data).
     # Import juliacall only here, because the import starts Julia.
     from juliacall import Main as jl
@@ -81,7 +64,7 @@ def train(config: dict[str, Any]) -> None:
 
     initial_train_loader = None
     basis_initialization_seconds = 0.0
-    if basis_mode == "joint_pca":
+    if model.basis_initialization == "joint_pca":
         started = time.perf_counter()
         initial_train_loader = generate_train_loader(config)
         initialize_joint_pca_basis(model, initial_train_loader)
