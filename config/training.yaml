@@ -1,33 +1,33 @@
 # Number of training epochs
-N_EPOCHS: 5000
+n_epochs: 5000
 
 # Number of samples used in each optimization step.
-TRAIN_BATCH_SIZE: 1000
+train_batch_size: 1000
 
 # Initial optimizer learning rate.
-LEARNING_RATE: 1.0e-3
+learning_rate: 1.0e-3
 
 # Validation does not affect gradients, so use larger batches and run it less
 # frequently. The first and final epochs are always validated.
-VALIDATION_BATCH_SIZE: 5000
-VALIDATE_EVERY: 10
+validation_batch_size: 5000
+validate_every_n_epochs: 10
 
 # Compile the complete optimizer step on CUDA. The first training batch takes
 # several seconds to compile; subsequent batches use a captured CUDA graph.
-COMPILE_TRAIN_STEP: true
+compile_train_step: true
 
 # Learning rate scheduler used during training
 LR_SCHEDULER: "cosine"  # "plateau" or "cosine"
 
 # Loss function used for the signal and derivative targets.
 # Options: "nmae", "relative_l2", "relative_l2_squared", or "hybrid_relative"
-LOSS_FUNCTION: "nmae"
+loss_function: "nmae"
 
-# Average number of new training samples per epoch. Every REGEN_EVERY epochs,
-# the Julia simulation makes ONLINE_BATCH_SIZE * REGEN_EVERY samples and
+# Average number of new training samples per epoch. Every regen_every_n_epochs epochs,
+# the Julia simulation makes online_samples_per_epoch * regen_every_n_epochs samples and
 # removes those with T2 >= T1.
-ONLINE_BATCH_SIZE: 250
+online_samples_per_epoch: 250
 
 # Frequency of online data regeneration.
-# A new training dataset is generated every REGEN_EVERY epochs.
-REGEN_EVERY: 100
+# A new training dataset is generated every regen_every_n_epochs epochs.
+regen_every_n_epochs: 100
