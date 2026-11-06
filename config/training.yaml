@@ -16,8 +16,16 @@ validate_every_n_epochs: 10
 # several seconds to compile; subsequent batches use a captured CUDA graph.
 compile_train_step: true
 
-# Learning rate scheduler used during training
-LR_SCHEDULER: "cosine"  # "plateau" or "cosine"
+# Learning rate scheduler used during training.
+#   "cosine":  Anneal the learning rate to 0 over n_epochs. No other keys.
+#   "plateau": Multiply the learning rate by factor when the validation loss
+#              does not decrease for patience_epochs epochs, down to min_lr.
+#              These values give the training of the earlier versions:
+#                patience_epochs: 100
+#                factor: 0.5
+#                min_lr: 1.0e-5
+lr_scheduler:
+  name: "cosine"
 
 # Loss function used for the signal and derivative targets.
 # Options: "nmae", "relative_l2", "relative_l2_squared", or "hybrid_relative"
