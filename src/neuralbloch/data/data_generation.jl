@@ -56,14 +56,16 @@ function generate_data(config; for_training)
         BlochSimulators.CUDA.reclaim()
     end
 
-    T1_lower = config["data"]["T1_lower"]
-    T1_upper = config["data"]["T1_upper"]
+    ranges = config["data"]["parameter_ranges"]
 
-    T2_lower = config["data"]["T2_lower"]
-    T2_upper = config["data"]["T2_upper"]
+    T1_lower = ranges["T1_s"]["lower"]
+    T1_upper = ranges["T1_s"]["upper"]
 
-    B1_lower = config["data"]["B1_lower"]
-    B1_upper = config["data"]["B1_upper"]
+    T2_lower = ranges["T2_s"]["lower"]
+    T2_upper = ranges["T2_s"]["upper"]
+
+    B1_lower = ranges["B1"]["lower"]
+    B1_upper = ranges["B1"]["upper"]
 
 
     # Generate tissue parameter samples
@@ -105,8 +107,8 @@ function generate_data(config; for_training)
     # does not give the cause
     isempty(parameters) && error(
         "None of the $n_sampled samples has T1 > T2: check the ranges " *
-        "data.T1_lower to data.T1_upper ($T1_lower to $T1_upper) and " *
-        "data.T2_lower to data.T2_upper ($T2_lower to $T2_upper)"
+        "data.parameter_ranges.T1_s ($T1_lower to $T1_upper) and " *
+        "data.parameter_ranges.T2_s ($T2_lower to $T2_upper)"
     )
 
     # Load RF train definition.
