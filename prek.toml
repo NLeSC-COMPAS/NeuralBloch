@@ -27,6 +27,12 @@ hooks = [
   ], pass_filenames = false, require_serial = true, stages = ["pre-push"] },
 ]
 
+# Style of the config files, configured in .yamllint.yaml.
+[[repos]]
+repo = "https://github.com/adrienverge/yamllint"
+rev = "v1.38.0"
+hooks = [{ id = "yamllint", args = ["--strict"], files = "^config/" }]
+
 # Prek builtin hooks
 [[repos]]
 repo = "builtin"
