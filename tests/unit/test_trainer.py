@@ -50,7 +50,7 @@ def make_trainer(
         torch.manual_seed(0)
         model = make_model(5, config["model"], config["data"])
         if val_loader is None:
-            batch_size = config["training"]["VALIDATION_BATCH_SIZE"]
+            batch_size = config["training"]["validation_batch_size"]
             val_loader = synthetic_loader(8, batch_size)
         trainer = Trainer(model, val_loader, config)
         trainers.append(trainer)
@@ -112,7 +112,7 @@ def record_mocked_training(
             return len(events.trained_on)
 
         def generate_train_loader(config: dict[str, Any]) -> TensorBatchLoader:
-            batch_size = config["training"]["TRAIN_BATCH_SIZE"]
+            batch_size = config["training"]["train_batch_size"]
             loader = synthetic_loader(10, batch_size, shuffle=True)
             events.generated[epoch() + 1] = loader
             return loader
@@ -168,13 +168,13 @@ def earlier_checkpoint(
     make_model: Callable[..., FCModel],
     write_checkpoint: Callable[..., None],
 ) -> Weights:
-    """Write a checkpoint of an earlier run at PT_FILE_PATH; return its weights.
+    """Write a checkpoint of an earlier run at pt_file_path; return its weights.
 
-    The default PT_FILE_PATH is the same for each run.
+    The default pt_file_path is the same for each run.
     """
     torch.manual_seed(1)
     model = make_model(5, config["model"], config["data"])
-    path = Path(config["experiment"]["PT_FILE_PATH"])
+    path = Path(config["experiment"]["pt_file_path"])
     write_checkpoint(path, model, config["model"], config["data"], epoch=4242)
     return model.state_dict()
 
@@ -183,7 +183,7 @@ def test_the_data_are_generated_at_the_first_epoch_and_every_regen_every_epochs(
     make_trainer: Callable[..., Trainer],
     record_mocked_training: Callable[..., TrainingEvents],
 ) -> None:
-    trainer = make_trainer(N_EPOCHS=7, REGEN_EVERY=3)
+    trainer = make_trainer(n_epochs=7, regen_every_n_epochs=3)
     events = record_mocked_training(trainer)
 
     trainer.train()
@@ -198,7 +198,7 @@ def test_a_first_loader_is_used_until_the_first_regeneration(
     record_mocked_training: Callable[..., TrainingEvents],
     synthetic_loader: Callable[..., TensorBatchLoader],
 ) -> None:
-    trainer = make_trainer(N_EPOCHS=7, REGEN_EVERY=3)
+    trainer = make_trainer(n_epochs=7, regen_every_n_epochs=3)
     events = record_mocked_training(trainer)
     first = synthetic_loader(10, 4, shuffle=True)
 
@@ -225,7 +225,7 @@ def test_the_first_epoch_every_validate_every_epochs_and_the_last_are_validated(
     make_trainer: Callable[..., Trainer],
     record_mocked_training: Callable[..., TrainingEvents],
 ) -> None:
-    trainer = make_trainer(N_EPOCHS=n_epochs, VALIDATE_EVERY=validate_every)
+    trainer = make_trainer(n_epochs=n_epochs, validate_every_n_epochs=validate_every)
     events = record_mocked_training(trainer)
 
     trainer.train()
@@ -237,7 +237,7 @@ def test_a_checkpoint_is_saved_only_for_a_lower_validation_loss(
     make_trainer: Callable[..., Trainer],
     record_mocked_training: Callable[..., TrainingEvents],
 ) -> None:
-    trainer = make_trainer(N_EPOCHS=5)
+    trainer = make_trainer(n_epochs=5)
     events = record_mocked_training(trainer, val_losses=[3.0, 1.0, 1.0, 0.5, 2.0])
 
     trainer.train()
@@ -287,7 +287,7 @@ def test_the_trained_model_has_the_weights_of_the_best_epoch(
     make_trainer: Callable[..., Trainer],
     record_mocked_training: Callable[..., TrainingEvents],
 ) -> None:
-    trainer = make_trainer(N_EPOCHS=3)
+    trainer = make_trainer(n_epochs=3)
     events = record_mocked_training(trainer, val_losses=[2.0, 1.0, 3.0])
 
     trainer.train()
@@ -301,7 +301,9 @@ def test_the_plateau_scheduler_steps_after_each_validation_with_its_loss(
     make_trainer: Callable[..., Trainer],
     record_mocked_training: Callable[..., TrainingEvents],
 ) -> None:
-    trainer = make_trainer(N_EPOCHS=7, VALIDATE_EVERY=3, LR_SCHEDULER="plateau")
+    trainer = make_trainer(
+        n_epochs=7, validate_every_n_epochs=3, LR_SCHEDULER="plateau"
+    )
     val_losses = [4.0, 3.0, 2.0, 1.0]
     events = record_mocked_training(trainer, val_losses=val_losses)
 
@@ -314,7 +316,7 @@ def test_the_cosine_scheduler_anneals_the_learning_rate_to_0_over_the_epochs(
     make_trainer: Callable[..., Trainer],
     record_mocked_training: Callable[..., TrainingEvents],
 ) -> None:
-    trainer = make_trainer(N_EPOCHS=7, VALIDATE_EVERY=3, LR_SCHEDULER="cosine")
+    trainer = make_trainer(n_epochs=7, validate_every_n_epochs=3, LR_SCHEDULER="cosine")
     events = record_mocked_training(trainer)
 
     trainer.train()
@@ -332,7 +334,7 @@ def test_the_epoch_loss_is_the_mean_over_the_samples(
     # Without steps, the epoch gives the loss of one model on all batches
     train_loader = synthetic_loader(10, 4)  # batches of 4, 4 and 2 samples
     val_loader = TensorBatchLoader(train_loader.tensors, 10, shuffle=False)
-    trainer = make_trainer(val_loader, LEARNING_RATE=0.0)
+    trainer = make_trainer(val_loader, learning_rate=0.0)
 
     total, signal, dT1, dT2 = trainer.train_epoch(train_loader)
 
@@ -360,7 +362,7 @@ def test_a_train_step_gives_the_losses_of_the_configured_function_before_the_ste
 ) -> None:
     # Not the default function of Loss: a trainer that ignores the
     # configuration gives other losses
-    trainer = make_trainer(LOSS_FUNCTION="relative_l2")
+    trainer = make_trainer(loss_function="relative_l2")
     x, signal, dT1, dT2 = synthetic_loader(4, 4).tensors
     before = copy_weights(trainer.model)
     with torch.no_grad():
@@ -378,7 +380,7 @@ def test_a_compiled_train_step_is_not_used_on_cpu(
 ) -> None:
     # config/training.yaml asks for it, and without CUDA the training runs on
     # CPU. The compiled step needs CUDA graphs.
-    trainer = make_trainer(COMPILE_TRAIN_STEP=True)
+    trainer = make_trainer(compile_train_step=True)
     before = copy_weights(trainer.model)
 
     trainer.train(synthetic_loader(10, 4))
@@ -393,7 +395,7 @@ def test_a_first_validation_loss_that_is_not_finite_stops_the_training(
     make_trainer: Callable[..., Trainer],
     record_mocked_training: Callable[..., TrainingEvents],
 ) -> None:
-    trainer = make_trainer(N_EPOCHS=3)
+    trainer = make_trainer(n_epochs=3)
     events = record_mocked_training(trainer, val_losses=[loss] * 3)
 
     with pytest.raises(
@@ -406,7 +408,7 @@ def test_a_first_validation_loss_that_is_not_finite_stops_the_training(
         trainer.train()
 
     assert len(events.trained_on) == 1
-    assert not Path(config["experiment"]["PT_FILE_PATH"]).exists()
+    assert not Path(config["experiment"]["pt_file_path"]).exists()
 
 
 def test_a_nan_after_a_finite_validation_loss_keeps_the_checkpoint(
@@ -414,9 +416,9 @@ def test_a_nan_after_a_finite_validation_loss_keeps_the_checkpoint(
     make_trainer: Callable[..., Trainer],
     record_mocked_training: Callable[..., TrainingEvents],
 ) -> None:
-    trainer = make_trainer(N_EPOCHS=3)
+    trainer = make_trainer(n_epochs=3)
     events = record_mocked_training(trainer, val_losses=[1.0, math.nan, 0.5])
-    path = config["experiment"]["PT_FILE_PATH"]
+    path = config["experiment"]["pt_file_path"]
 
     # The message says where the checkpoint of this run is
     with pytest.raises(
@@ -442,7 +444,7 @@ def test_a_first_training_loss_that_is_not_finite_stops_the_training(
 ) -> None:
     # NaN in the training data makes the weights NaN. The error must name the
     # training, not the validation after it
-    trainer = make_trainer(N_EPOCHS=3)
+    trainer = make_trainer(n_epochs=3)
     events = record_mocked_training(trainer)
     x, signal, _, _ = synthetic_loader(8, 4).tensors
     nan = torch.full_like(signal, math.nan)
@@ -458,7 +460,7 @@ def test_a_first_training_loss_that_is_not_finite_stops_the_training(
 
     assert len(events.trained_on) == 1
     assert events.weights == {}
-    assert not Path(config["experiment"]["PT_FILE_PATH"]).exists()
+    assert not Path(config["experiment"]["pt_file_path"]).exists()
 
 
 @pytest.mark.parametrize("loss", [math.nan, math.inf, -math.inf])
@@ -474,11 +476,11 @@ def test_a_training_loss_that_is_not_finite_stops_the_training_in_its_epoch(
 ) -> None:
     # Of epochs 1 to 3, only 1 and 3 are validated. A bad loss of epoch 2 does
     # not wait for the validation of epoch 3, and one of epoch 3 stops before it
-    trainer = make_trainer(N_EPOCHS=5, VALIDATE_EVERY=3)
+    trainer = make_trainer(n_epochs=5, validate_every_n_epochs=3)
     train_losses = [1.0] * 5
     train_losses[bad_epoch - 1] = loss
     events = record_mocked_training(trainer, train_losses=train_losses)
-    path = config["experiment"]["PT_FILE_PATH"]
+    path = config["experiment"]["pt_file_path"]
 
     with pytest.raises(
         RuntimeError,
@@ -505,7 +507,7 @@ def test_weights_that_are_not_finite_after_an_epoch_stop_the_training(
     # The losses come from before each step. When the last step of epoch 2
     # makes the weights NaN, the training loss of epoch 2 is finite, and the
     # validation of epoch 2 would give the error of the validation
-    trainer = make_trainer(N_EPOCHS=3)
+    trainer = make_trainer(n_epochs=3)
     events = record_mocked_training(trainer, train_losses=[1.0, 1.0, 1.0])
     train_epoch = trainer.train_epoch
 
@@ -519,7 +521,7 @@ def test_weights_that_are_not_finite_after_an_epoch_stop_the_training(
         return losses
 
     monkeypatch.setattr(trainer, "train_epoch", last_step_makes_nan)
-    path = config["experiment"]["PT_FILE_PATH"]
+    path = config["experiment"]["pt_file_path"]
 
     with pytest.raises(
         RuntimeError,
@@ -540,7 +542,7 @@ def test_a_checkpoint_of_an_earlier_run_is_not_loaded_after_a_nan(
     make_trainer: Callable[..., Trainer],
     synthetic_loader: Callable[..., TensorBatchLoader],
 ) -> None:
-    path = Path(config["experiment"]["PT_FILE_PATH"])
+    path = Path(config["experiment"]["pt_file_path"])
     written = path.read_bytes()
     x, signal, _, _ = synthetic_loader(8, 8).tensors
     nan = torch.full_like(signal, math.nan)
@@ -558,7 +560,7 @@ def test_a_checkpoint_of_an_earlier_run_is_not_loaded_without_epochs(
     make_trainer: Callable[..., Trainer],
     synthetic_loader: Callable[..., TensorBatchLoader],
 ) -> None:
-    trainer = make_trainer(N_EPOCHS=0)
+    trainer = make_trainer(n_epochs=0)
 
     with pytest.raises(RuntimeError, match="saved no checkpoint"):
         trainer.train(synthetic_loader(10, 4))

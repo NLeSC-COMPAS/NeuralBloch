@@ -52,20 +52,20 @@ def export(
     checkpoint = source / "model.pt"
     # A copy, because the tests stamp and change the ONNX models
     onnx = {t: Path(shutil.copy(path, source)) for t, path in onnx_models.items()}
-    bundle = Path(export_config["BUNDLE_DIR"])
+    bundle = Path(export_config["bundle_dir"])
     config = {
-        "experiment": {"PT_FILE_PATH": str(checkpoint)},
+        "experiment": {"pt_file_path": str(checkpoint)},
         "model": {},
         "data": {},
         "export": {
             **export_config,
-            "TARGETS": {
-                target: {"ONNX_FILE_PATH": str(path)} for target, path in onnx.items()
+            "targets": {
+                target: {"onnx_file_path": str(path)} for target, path in onnx.items()
             },
         },
     }
     tarball = bundle.with_name(
-        tarball_name(export_config["MODEL_FAMILY"], export_config["MODEL_VERSION"])
+        tarball_name(export_config["model_family"], export_config["model_version"])
     )
     write_checkpoint(checkpoint, exported_model, direct_config, data_config, epoch=7)
     setup = ExportSetup(checkpoint, onnx, bundle, config, tarball)
@@ -151,14 +151,14 @@ def test_a_checkpoint_without_its_configuration_is_refused(
 
 
 def test_a_family_with_another_rank_is_refused(export: ExportSetup) -> None:
-    export.config["export"]["MODEL_FAMILY"] = "fisp5-rank16"
+    export.config["export"]["model_family"] = "fisp5-rank16"
     assert_refused(export, "states rank 16")
 
 
 def test_rf_tables_changed_after_the_training_are_refused(
     export: ExportSetup, data_config: dict[str, Any]
 ) -> None:
-    path = Path(data_config["RF_PHASE_FILE"])
+    path = Path(data_config["rf_phase_file"])
     path.write_text(path.read_text().replace("0.5", "9.5"))
     assert_refused(export, "is not the RF table of the training")
 

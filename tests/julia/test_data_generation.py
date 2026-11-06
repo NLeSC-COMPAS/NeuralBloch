@@ -30,7 +30,7 @@ from juliacall import Main as jl  # before torch, as in run.py
 from neuralbloch.config import load_config
 from neuralbloch.data import DATA_GENERATION_JL
 config = load_config(sys.argv[1])
-seed = config["experiment"]["SEED"]
+seed = config["experiment"]["seed"]
 jl.seval(f"begin using Random; Random.seed!({seed}); true end")
 jl.include(DATA_GENERATION_JL)
 import torch
@@ -61,9 +61,9 @@ def test_the_julia_training_data_have_the_layout_of_the_model(
     saved = torch.load(output)
     params, *targets = saved["tensors"]
     data = config["data"]
-    NTR = len(np.loadtxt(pytestconfig.rootpath / data["RF_ANGLE_FILE"]))
+    NTR = len(np.loadtxt(pytestconfig.rootpath / data["rf_angle_file"]))
     training = config["training"]
-    n_sampled = training["ONLINE_BATCH_SIZE"] * training["REGEN_EVERY"]
+    n_sampled = training["online_samples_per_epoch"] * training["regen_every_n_epochs"]
     # generate_data keeps the samples with T1 > T2. NTR is not a possible
     # number of samples, so a target with the axes of the Julia arrays,
     # (NTR, N), fails
@@ -76,7 +76,7 @@ def test_the_julia_training_data_have_the_layout_of_the_model(
         assert data[f"{name}_lower"] * (1 - 1e-6) <= values.min()
         assert values.max() <= data[f"{name}_upper"] * (1 + 1e-6)
     assert (params[:, 0] > params[:, 1]).all()
-    assert saved["batch_size"] == training["TRAIN_BATCH_SIZE"]
+    assert saved["batch_size"] == training["train_batch_size"]
     assert saved["shuffle"]
 
 
@@ -119,29 +119,29 @@ def test_the_generate_task_writes_the_validation_and_test_datasets(
 
     experiment, data = config["experiment"], config["data"]
     params, signal, dT1, dT2, N, NTR = load_data_from_h5_file(
-        experiment["DATASET_UNSPLIT_PATH"]
+        experiment["dataset_unsplit_path"]
     )
-    # The grid of N_SAMPLES, without the points with T1 <= T2
-    side = round(data["N_SAMPLES"] ** (1 / 3))
+    # The grid of n_samples, without the points with T1 <= T2
+    side = round(data["n_samples"] ** (1 / 3))
     T1 = np.geomspace(data["T1_lower"], data["T1_upper"], side)
     T2 = np.geomspace(data["T2_lower"], data["T2_upper"], side)
     assert N == side * (T1[:, None] > T2[None, :]).sum()
-    assert NTR == len(np.loadtxt(pytestconfig.rootpath / data["RF_ANGLE_FILE"]))
+    assert NTR == len(np.loadtxt(pytestconfig.rootpath / data["rf_angle_file"]))
     for target in (signal, dT1, dT2):
         assert target.shape == (N, NTR)
         assert np.iscomplexobj(target)
     assert (params[:, 0] > params[:, 1]).all()
 
     # Each sample is in one of the two datasets of split_dataset
-    validation = load_data_from_h5_file(experiment["DATASET_FOR_VALIDATION_PATH"])
-    test = load_data_from_h5_file(experiment["DATASET_FOR_TESTING_PATH"])
+    validation = load_data_from_h5_file(experiment["dataset_for_validation_path"])
+    test = load_data_from_h5_file(experiment["dataset_for_testing_path"])
     assert test[4] == max(1, int(N * 0.15))
     assert sorted(map(tuple, np.concatenate([validation[0], test[0]]))) == sorted(
         map(tuple, params)
     )
     # HDF5.jl writes the attributes as bytes
-    with h5py.File(experiment["DATASET_FOR_VALIDATION_PATH"]) as file:
-        assert file.attrs["derivative_method"].decode() == data["DERIVATIVE_METHOD"]
+    with h5py.File(experiment["dataset_for_validation_path"]) as file:
+        assert file.attrs["derivative_method"].decode() == data["derivative_method"]
 
     # The validation loader gives the targets in the layout of the training data
     loader, _ = generate_val_loader(config)
