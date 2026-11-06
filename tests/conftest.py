@@ -54,19 +54,19 @@ def data_config(tmp_path: Path) -> dict[str, Any]:
         path.write_text("".join(f"{i}.5\n" for i in range(5)))
         rf_tables[key] = str(path)
     return {
-        "N_SAMPLES": 40000,
-        "DERIVATIVE_METHOD": "forward_sensitivity",
+        "n_samples": 40000,
+        "derivative_method": "forward_sensitivity",
         **rf_tables,
-        "TR_S": 0.00558,
-        "TE_S": 0.002745,
-        "TI_S": 0.01084,
-        "TW_S": 0.0,
-        "MAX_STATE": 64,
-        "REPETITIONS": 5,
-        "INVERSION_PREPULSE": True,
-        "WAIT_SPOILING": True,
-        "PY_UNDERSAMPLING_FACTOR": 1,
-        "DELTA_K_SPOIL_RAD_PER_M": 0.0,
+        "TR_s": 0.00558,
+        "TE_s": 0.002745,
+        "TI_s": 0.01084,
+        "TW_s": 0.0,
+        "max_state": 64,
+        "repetitions": 5,
+        "inversion_prepulse": True,
+        "wait_spoiling": True,
+        "py_undersampling_factor": 1,
+        "delta_k_spoil_rad_per_m": 0.0,
         "T1_lower": 0.1,
         "T1_upper": 6.0,
         "T2_lower": 0.01,
@@ -92,20 +92,20 @@ def config(
     """
     return {
         "experiment": {
-            "DEVICE": "cpu",
-            "PT_FILE_PATH": str(tmp_path / "model.pt"),
-            "LOG_FILE_PATH": str(tmp_path / "log"),
+            "device": "cpu",
+            "pt_file_path": str(tmp_path / "model.pt"),
+            "log_dir": str(tmp_path / "log"),
         },
         "training": {
-            "N_EPOCHS": 2,
-            "TRAIN_BATCH_SIZE": 4,
-            "LEARNING_RATE": 1e-3,
-            "VALIDATION_BATCH_SIZE": 8,
-            "VALIDATE_EVERY": 1,
-            "COMPILE_TRAIN_STEP": False,
+            "n_epochs": 2,
+            "train_batch_size": 4,
+            "learning_rate": 1e-3,
+            "validation_batch_size": 8,
+            "validate_every_n_epochs": 1,
+            "compile_train_step": False,
             "LR_SCHEDULER": "cosine",
-            "LOSS_FUNCTION": "nmae",
-            "REGEN_EVERY": 100,
+            "loss_function": "nmae",
+            "regen_every_n_epochs": 100,
         },
         "data": dict(data_config),
         "model": dict(direct_config),
@@ -223,17 +223,17 @@ def export_config(tmp_path: Path) -> dict[str, Any]:
     the rank of direct_config.
     """
     return {
-        "TARGETS": {
-            target: {"ONNX_FILE_PATH": str(tmp_path / "onnx" / spec.bundle_file)}
+        "targets": {
+            target: {"onnx_file_path": str(tmp_path / "onnx" / spec.bundle_file)}
             for target, spec in TARGETS.items()
         },
-        "OPSET_VERSION": 18,
-        "FP16": False,
-        "N_VERIFY_SAMPLES": 8,
-        "BUNDLE_DIR": str(tmp_path / "out" / "bundle"),
-        "MODEL_FAMILY": "fisp5-rank3",
-        "MODEL_VERSION": "0.1.0",
-        "OFFLINE": False,
+        "opset_version": 18,
+        "fp16": False,
+        "n_verify_samples": 8,
+        "bundle_dir": str(tmp_path / "out" / "bundle"),
+        "model_family": "fisp5-rank3",
+        "model_version": "0.1.0",
+        "offline": False,
     }
 
 

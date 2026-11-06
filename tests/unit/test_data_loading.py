@@ -115,7 +115,7 @@ def test_a_finite_validation_dataset_is_loaded(
 ) -> None:
     path = tmp_path / "validation.h5"
     write_dataset(path, **validation_arrays)
-    config["experiment"]["DATASET_FOR_VALIDATION_PATH"] = str(path)
+    config["experiment"]["dataset_for_validation_path"] = str(path)
 
     loader, NTR = generate_val_loader(config)
 
@@ -131,7 +131,7 @@ def test_the_validation_loader_has_the_samples_of_the_file_in_order(
 ) -> None:
     path = tmp_path / "validation.h5"
     write_dataset(path, **validation_arrays)
-    config["experiment"]["DATASET_FOR_VALIDATION_PATH"] = str(path)
+    config["experiment"]["dataset_for_validation_path"] = str(path)
 
     loader, _ = generate_val_loader(config)
 
@@ -146,7 +146,7 @@ def test_the_validation_loader_has_the_samples_of_the_file_in_order(
             target, np.stack([values.real, values.imag], axis=-1)
         )
     assert not loader.shuffle
-    assert loader.batch_size == config["training"]["VALIDATION_BATCH_SIZE"]
+    assert loader.batch_size == config["training"]["validation_batch_size"]
 
 
 def test_a_validation_dataset_without_samples_is_refused(
@@ -158,13 +158,13 @@ def test_a_validation_dataset_without_samples_is_refused(
     path = tmp_path / "validation.h5"
     targets = np.zeros((0, 5), dtype=np.complex64)
     write_dataset(path, np.zeros((0, 3)), targets, targets, targets)
-    config["experiment"]["DATASET_FOR_VALIDATION_PATH"] = str(path)
+    config["experiment"]["dataset_for_validation_path"] = str(path)
 
     with pytest.raises(
         ValueError,
         match=re.escape(
             f"The validation dataset {path} "
-            "(experiment.DATASET_FOR_VALIDATION_PATH) has no samples"
+            "(experiment.dataset_for_validation_path) has no samples"
         ),
     ):
         generate_val_loader(config)
@@ -193,13 +193,13 @@ def test_a_validation_dataset_with_values_that_are_not_finite_is_refused(
     path = tmp_path / "validation.h5"
     validation_arrays[key][2, 1] = value
     write_dataset(path, **validation_arrays)
-    config["experiment"]["DATASET_FOR_VALIDATION_PATH"] = str(path)
+    config["experiment"]["dataset_for_validation_path"] = str(path)
 
     with pytest.raises(
         ValueError,
         match=re.escape(
             f"The validation dataset {path} "
-            "(experiment.DATASET_FOR_VALIDATION_PATH) has values that are not "
+            "(experiment.dataset_for_validation_path) has values that are not "
             f"finite in {name}: 1 of 6 samples, the first is sample 2 (T1, T2, B1"
         ),
     ):
@@ -220,13 +220,13 @@ def test_a_validation_dataset_with_t1_or_t2_that_are_not_positive_is_refused(
     path = tmp_path / "validation.h5"
     validation_arrays["params"][4, column] = value
     write_dataset(path, **validation_arrays)
-    config["experiment"]["DATASET_FOR_VALIDATION_PATH"] = str(path)
+    config["experiment"]["dataset_for_validation_path"] = str(path)
 
     with pytest.raises(
         ValueError,
         match=re.escape(
             f"The validation dataset {path} "
-            "(experiment.DATASET_FOR_VALIDATION_PATH) has values of T1 or T2 "
+            "(experiment.dataset_for_validation_path) has values of T1 or T2 "
             "that are not positive: 1 of 6 samples, the first is sample 4"
         ),
     ):
@@ -266,7 +266,7 @@ def test_the_julia_arrays_become_the_samples_of_the_training_loader(
             target, np.stack([values.real, values.imag], axis=-1)
         )
     assert loader.shuffle
-    assert loader.batch_size == config["training"]["TRAIN_BATCH_SIZE"]
+    assert loader.batch_size == config["training"]["train_batch_size"]
 
 
 def test_julia_data_without_samples_are_refused(

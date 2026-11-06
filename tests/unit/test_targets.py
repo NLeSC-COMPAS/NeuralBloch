@@ -105,28 +105,28 @@ def test_fp16_runs_in_half_behind_an_fp32_interface(
 
 
 def test_every_target_needs_its_paths() -> None:
-    targets = {name: {"ONNX_FILE_PATH": f"{name}.onnx"} for name in TARGETS}
-    paths = target_paths({"TARGETS": targets})
+    targets = {name: {"onnx_file_path": f"{name}.onnx"} for name in TARGETS}
+    paths = target_paths({"targets": targets})
     assert list(paths) == list(TARGETS)
     assert paths["signal"] == Path("signal.onnx")
 
     del targets["coeffs"]
     with pytest.raises(ValueError, match="it names signal_and_derivs"):
-        target_paths({"TARGETS": targets})
+        target_paths({"targets": targets})
     with pytest.raises(ValueError, match="it names none"):
-        target_paths({"ONNX_FILE_PATH": "outputs/model.onnx"})
+        target_paths({"onnx_file_path": "outputs/model.onnx"})
 
 
 def test_each_path_is_a_different_file() -> None:
-    targets = {name: {"ONNX_FILE_PATH": f"{name}.onnx"} for name in TARGETS}
+    targets = {name: {"onnx_file_path": f"{name}.onnx"} for name in TARGETS}
     # For example, a copied entry that keeps the ONNX file of another target
-    targets["coeffs"]["ONNX_FILE_PATH"] = "./signal_and_derivs.onnx"
+    targets["coeffs"]["onnx_file_path"] = "./signal_and_derivs.onnx"
     with pytest.raises(
         ValueError,
-        match="coeffs.ONNX_FILE_PATH and signal_and_derivs.ONNX_FILE_PATH "
+        match="coeffs.onnx_file_path and signal_and_derivs.onnx_file_path "
         "are the same file",
     ):
-        target_paths({"TARGETS": targets})
+        target_paths({"targets": targets})
 
 
 def test_outputs_need_the_pytorch_shape_and_finite_values(
