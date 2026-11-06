@@ -54,15 +54,12 @@ def sample_parameters(config: dict[str, Any], n_samples: int) -> torch.Tensor:
     Returns:
         A float32 tensor of shape ``(n_samples, 3)``.
     """
-    data = config["data"]
+    ranges = config["data"]["parameter_ranges"]
+    T1, T2, B1_range = ranges["T1_s"], ranges["T2_s"], ranges["B1"]
 
-    log_T1 = torch.empty(n_samples).uniform_(
-        np.log(data["T1_lower"]), np.log(data["T1_upper"])
-    )
-    log_T2 = torch.empty(n_samples).uniform_(
-        np.log(data["T2_lower"]), np.log(data["T2_upper"])
-    )
-    B1 = torch.empty(n_samples).uniform_(data["B1_lower"], data["B1_upper"])
+    log_T1 = torch.empty(n_samples).uniform_(np.log(T1["lower"]), np.log(T1["upper"]))
+    log_T2 = torch.empty(n_samples).uniform_(np.log(T2["lower"]), np.log(T2["upper"]))
+    B1 = torch.empty(n_samples).uniform_(B1_range["lower"], B1_range["upper"])
 
     return torch.stack([log_T1.exp(), log_T2.exp(), B1], dim=1)
 
