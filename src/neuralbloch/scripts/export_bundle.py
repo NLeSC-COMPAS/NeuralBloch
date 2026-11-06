@@ -63,11 +63,12 @@ DERIVATIVE_METHODS = {
 CONSTRAINT = "T2 < T1"
 
 
-# The training domain: (card key, lower key, upper key, how it was sampled).
+# The training domain: (card key, key in data.parameter_ranges, how it was
+# sampled).
 DOMAIN_FIELDS = (
-    ("T1", "T1_lower", "T1_upper", "seconds, sampled log-uniformly"),
-    ("T2", "T2_lower", "T2_upper", "seconds, sampled log-uniformly"),
-    ("B1", "B1_lower", "B1_upper", "relative to nominal, sampled uniformly"),
+    ("T1", "T1_s", "seconds, sampled log-uniformly"),
+    ("T2", "T2_s", "seconds, sampled log-uniformly"),
+    ("B1", "B1", "relative to nominal, sampled uniformly"),
 )
 
 # The name of a family has the form <sequence><ntr>-rank<rank>[-<qualifier>], for
@@ -491,11 +492,14 @@ def card_text(inputs: CardInputs) -> str:
         field("sha256", inputs.onnx_sha256[target])
 
     table("domain", "where the network was trained: data_config")
-    for key, lower, upper, comment in DOMAIN_FIELDS:
-        low, high = number(data[lower], lower), number(data[upper], upper)
+    for key, name, comment in DOMAIN_FIELDS:
+        bounds = data["parameter_ranges"][name]
+        where = f"parameter_ranges.{name}"
+        low = number(bounds["lower"], f"{where}.lower")
+        high = number(bounds["upper"], f"{where}.upper")
         if not low < high:
-            raise ValueError(f"{lower} = {low} must be below {upper} = {high}")
-        field(key, [low, high], f"{lower}, {upper}: {comment}")
+            raise ValueError(f"{where}.lower = {low} must be below upper = {high}")
+        field(key, [low, high], f"{where}: {comment}")
     field("constraint", CONSTRAINT, "data_generation.jl keeps only T1 > T2")
 
     table("derivatives", "how the training targets were computed")

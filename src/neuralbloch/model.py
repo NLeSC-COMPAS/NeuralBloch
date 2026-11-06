@@ -127,19 +127,13 @@ class InputTransform(nn.Module):
         if normalize:
             if data_config is None:
                 raise ValueError("data_config is required when normalizing inputs")
+            ranges = data_config["parameter_ranges"]
+            T1, T2, B1 = ranges["T1_s"], ranges["T2_s"], ranges["B1"]
             lower = torch.tensor(
-                [
-                    math.log(data_config["T1_lower"]),
-                    math.log(data_config["T2_lower"]),
-                    data_config["B1_lower"],
-                ]
+                [math.log(T1["lower"]), math.log(T2["lower"]), B1["lower"]]
             )
             upper = torch.tensor(
-                [
-                    math.log(data_config["T1_upper"]),
-                    math.log(data_config["T2_upper"]),
-                    data_config["B1_upper"],
-                ]
+                [math.log(T1["upper"]), math.log(T2["upper"]), B1["upper"]]
             )
             offset = 0.5 * (lower + upper)
             scale = 2.0 / (upper - lower)
