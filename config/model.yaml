@@ -3,59 +3,41 @@
 # the copy in the checkpoint. A change in this file has no effect on a trained
 # model. To use the change, train again.
 
+# Hidden-layer activation: "relu", "silu", "gelu", "tanh", or "softplus".
+# "relu" is only valid when derivative.mode is "direct".
+activation: "relu"
+
+# Scale the network inputs [log(T1), log(T2), B1] to [-1, 1] with the parameter
+# ranges in data.yaml (parameter_ranges). If false, the sub-networks get
+# [log(T1), log(T2), B1] without scaling.
+normalize_inputs: false
+
+# The signal sub-network and its decoder.
+#   rank:        Number of basis coefficients of the signal: the rank of the
+#                signal decoder. In "derived" mode, all three outputs share this
+#                decoder, so this is the total rank.
+#   hidden_size: Number of neurons in each hidden layer.
+#   num_layers:  Number of fully connected layers.
+signal: {rank: 16, hidden_size: 64, num_layers: 4}
+
 # How the model gets dT1 and dT2, the T1/T2 derivatives of the signal.
 #   "direct":  Three independent sub-networks predict the signal, dT1 and dT2,
 #              and each output has its own decoder. Training makes dT1 and dT2
 #              approximate the true derivatives, but they are not the
 #              derivatives of the predicted signal.
-#              This mode needs all keys below, including the *_dT1 / *_dT2 keys.
+#              This mode needs the dT1 and dT2 blocks, with the keys of signal.
 #   "derived": One sub-network predicts the signal. dT1 and dT2 are the exact
 #              T1/T2 derivatives of the predicted signal, which forward
 #              sensitivity calculates. All three outputs use the signal decoder.
-#              This mode needs a smooth activation (not "relu"). It ignores the
-#              *_dT1 / *_dT2 keys.
-derivative_mode: "direct"
-
-# Hidden-layer activation: "relu", "silu", "gelu", "tanh", or "softplus".
-# "relu" is only valid when derivative_mode is "direct".
-activation: "relu"
-
-# Scale the network inputs [log(T1), log(T2), B1] to [-1, 1] with the parameter
-# ranges in data.yaml (T1_lower to B1_upper). If false, the sub-networks get
-# [log(T1), log(T2), B1] without scaling.
-normalize_inputs: false
-
-# How the signal decoder is initialized before training.
-#   "learned":   random initialization.
-#   "joint_pca": the leading singular vectors of the row-normalized signal, dT1
-#                and dT2 targets of the first training set. This mode needs
-#                derivative_mode "derived".
-# In both modes, training updates the decoder.
-basis_initialization: "learned"
-
-# --- Always required (signal network) ---
-
-# Number of basis coefficients of the signal: the rank of the signal decoder.
-# In "derived" mode, all three outputs share this decoder, so this is the total rank.
-NB_signal: 16
-
-# Number of neurons in each hidden layer.
-hidden_size_signal: 64
-
-# Number of fully connected layers.
-num_layers_signal: 4
-
-# --- Required only when derivative_mode is "direct" ---
-# When derivative_mode is "derived", the model ignores these keys. You can remove them.
-
-# Number of basis coefficients of each derivative: the rank of its decoder.
-NB_dT1: 32
-NB_dT2: 32
-
-# Number of neurons in each hidden layer.
-hidden_size_dT1: 128
-hidden_size_dT2: 128
-
-# Number of fully connected layers.
-num_layers_dT1: 6
-num_layers_dT2: 6
+#              This mode needs a smooth activation (not "relu"). Instead of the
+#              dT1 and dT2 blocks, it needs basis_initialization, the initial
+#              signal decoder:
+#                "learned":   random initialization.
+#                "joint_pca": the leading singular vectors of the row-normalized
+#                             signal, dT1 and dT2 targets of the first training
+#                             set.
+#              Training then updates the decoder.
+derivative:
+  mode: "direct"
+  dT1: {rank: 32, hidden_size: 128, num_layers: 6}
+  dT2: {rank: 32, hidden_size: 128, num_layers: 6}

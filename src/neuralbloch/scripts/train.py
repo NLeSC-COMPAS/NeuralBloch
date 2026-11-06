@@ -64,12 +64,7 @@ def train(config: dict[str, Any]) -> None:
 
     initial_train_loader = None
     basis_initialization_seconds = 0.0
-    basis_mode = config["model"]["basis_initialization"]
-    if basis_mode == "joint_pca":
-        if model.derivative_mode != "derived":
-            raise ValueError(
-                "joint_pca basis initialization requires derivative_mode='derived'"
-            )
+    if model.basis_initialization == "joint_pca":
         started = time.perf_counter()
         initial_train_loader = generate_train_loader(config)
         initialize_joint_pca_basis(model, initial_train_loader)
@@ -77,11 +72,6 @@ def train(config: dict[str, Any]) -> None:
         print(
             "  Initialized trainable joint PCA basis in "
             f"{basis_initialization_seconds:.2f} s"
-        )
-    elif basis_mode != "learned":
-        raise ValueError(
-            "model.basis_initialization must be 'learned' or 'joint_pca', got "
-            f"{basis_mode!r}"
         )
 
     # Print the number of trainable parameters

@@ -84,7 +84,7 @@ def export_onnx(config: dict[str, Any]) -> None:
     """Export the trained surrogate model to ONNX, one model per target.
 
     The function loads the trained checkpoint. It exports each target
-    (``TARGETS``) to the ONNX model that ``export.TARGETS`` gives for it, with a
+    (``TARGETS``) to the ONNX model that ``export.targets`` gives for it, with a
     dynamic batch dimension, and records the sha256 of the checkpoint in the
     model (``stamp_checkpoint``). Then it uses ONNX Runtime to compare each ONNX
     model with the PyTorch model. A model replaces the old file only if it
@@ -99,14 +99,14 @@ def export_onnx(config: dict[str, Any]) -> None:
     # The exported ONNX model is device independent, so export on CPU
     model, checkpoint = load_model(config, "cpu")
 
-    fp16 = export_config["FP16"]
+    fp16 = export_config["fp16"]
     precision = "FP16" if fp16 else "FP32"
 
     x = sample_parameters(
-        training_domain(checkpoint), export_config["N_VERIFY_SAMPLES"]
+        training_domain(checkpoint), export_config["n_verify_samples"]
     )
 
-    checkpoint_sha256 = file_sha256(config["experiment"]["PT_FILE_PATH"])
+    checkpoint_sha256 = file_sha256(config["experiment"]["pt_file_path"])
 
     for target, onnx_path in paths.items():
         with staged(onnx_path) as staged_path:
@@ -116,7 +116,7 @@ def export_onnx(config: dict[str, Any]) -> None:
                 target,
                 staged_path,
                 example=x[:2],
-                opset=export_config["OPSET_VERSION"],
+                opset=export_config["opset_version"],
                 fp16=fp16,
             )
             stamp_checkpoint(staged_path, checkpoint_sha256)
@@ -206,7 +206,7 @@ def require_checkpoint(
 
 
 def target_paths(export_config: dict[str, Any]) -> dict[str, Path]:
-    """Return the ONNX path of each target from ``export.TARGETS``.
+    """Return the ONNX path of each target from ``export.targets``.
 
     Args:
         export_config: The ``export`` configuration.
@@ -215,23 +215,23 @@ def target_paths(export_config: dict[str, Any]) -> dict[str, Path]:
         The ONNX path of each target, in ``TARGETS`` order.
 
     Raises:
-        ValueError: If ``export.TARGETS`` does not name all targets and only
+        ValueError: If ``export.targets`` does not name all targets and only
             them, or two of the paths are the same file.
     """
-    configured = export_config.get("TARGETS") or {}
+    configured = export_config.get("targets") or {}
     if set(configured) != set(TARGETS):
         raise ValueError(
-            f"export.TARGETS must name the targets {', '.join(TARGETS)}; "
+            f"export.targets must name the targets {', '.join(TARGETS)}; "
             f"it names {', '.join(configured) or 'none'}"
         )
-    paths = {target: Path(configured[target]["ONNX_FILE_PATH"]) for target in TARGETS}
+    paths = {target: Path(configured[target]["onnx_file_path"]) for target in TARGETS}
     # Each export writes its file, so two exports to one file keep only the last
     seen: dict[Path, str] = {}
     for target, path in paths.items():
-        name = f"{target}.ONNX_FILE_PATH"
+        name = f"{target}.onnx_file_path"
         if (other := seen.setdefault(path.resolve(), name)) != name:
             raise ValueError(
-                f"export.TARGETS {name} and {other} are the same file, {path}"
+                f"export.targets {name} and {other} are the same file, {path}"
             )
     return paths
 

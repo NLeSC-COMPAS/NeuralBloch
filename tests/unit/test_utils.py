@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 import torch
 from neuralbloch.utils import complex_to_real_imag
+from neuralbloch.utils import model_from_checkpoint
 from neuralbloch.utils import sample_parameters
 
 
@@ -30,13 +31,42 @@ def test_parameter_sampling_is_physical_and_log_uniform(
     samples = sample_parameters({"data": data_config}, 20_000)
 
     assert samples.shape == (20_000, 3)
-    for column, name in enumerate(("T1", "T2", "B1")):
-        assert torch.all(samples[:, column] >= data_config[f"{name}_lower"])
-        assert torch.all(samples[:, column] <= data_config[f"{name}_upper"])
+    ranges = data_config["parameter_ranges"]
+    for column, name in enumerate(("T1_s", "T2_s", "B1")):
+        assert torch.all(samples[:, column] >= ranges[name]["lower"])
+        assert torch.all(samples[:, column] <= ranges[name]["upper"])
 
-    for column, name in enumerate(("T1", "T2")):
-        lower = math.log(data_config[f"{name}_lower"])
-        upper = math.log(data_config[f"{name}_upper"])
+    for column, name in enumerate(("T1_s", "T2_s")):
+        lower = math.log(ranges[name]["lower"])
+        upper = math.log(ranges[name]["upper"])
         assert torch.log(samples[:, column]).mean().item() == pytest.approx(
             (lower + upper) / 2, abs=0.03
         )
+
+
+@pytest.mark.parametrize(
+    ("model_config", "data_config"),
+    [
+        (
+            {"derivative_mode": "direct", "NB_signal": 3},
+            {"T1_lower": 0.1, "T1_upper": 6.0},
+        ),
+        # Only the model blocks are old
+        (
+            {"derivative_mode": "direct", "signal": {"rank": 3}},
+            {"parameter_ranges": {}},
+        ),
+    ],
+    ids=["old", "partly-new"],
+)
+def test_a_checkpoint_with_the_old_config_keys_is_refused(
+    model_config: dict[str, Any], data_config: dict[str, Any]
+) -> None:
+    checkpoint = {
+        "NTR": 5,
+        "model_config": model_config,
+        "data_config": data_config,
+        "model_state": {},
+    }
+    with pytest.raises(ValueError, match="Train the model again"):
+        model_from_checkpoint(checkpoint, "cpu")

@@ -30,7 +30,7 @@ def sizes(config: Mapping[str, Any]) -> dict[str, tuple[int, ...]]:
         "signal": (NTR, 2),
         "dT1": (NTR, 2),
         "dT2": (NTR, 2),
-        "coeffs": (config["NB_signal"],),
+        "coeffs": (config["signal"]["rank"],),
     }
 
 

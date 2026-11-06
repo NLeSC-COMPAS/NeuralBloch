@@ -136,7 +136,7 @@ def generate_val_loader(
     """
     device = get_device(config)
 
-    path = config["experiment"]["DATASET_FOR_VALIDATION_PATH"]
+    path = config["experiment"]["dataset_for_validation_path"]
     params, signal, dT1, dT2, _, NTR = load_data_from_h5_file(path)
 
     # Stack complex-valued data into paired real and imaginary channels
@@ -146,12 +146,12 @@ def generate_val_loader(
 
     # Check the data here, where the file is known
     check_dataset(
-        f"The validation dataset {path} (experiment.DATASET_FOR_VALIDATION_PATH)",
+        f"The validation dataset {path} (experiment.dataset_for_validation_path)",
         params,
         {"signal": sig_split, "deriv_T1": dT1_split, "deriv_T2": dT2_split},
     )
 
-    batchsize = config["training"]["VALIDATION_BATCH_SIZE"]
+    batchsize = config["training"]["validation_batch_size"]
 
     val_loader = make_loader(
         params, sig_split, dT1_split, dT2_split, batchsize, device, shuffle=False
@@ -207,7 +207,7 @@ def generate_train_loader(
         {"signal": sig_split, "dM_dT1": dT1_split, "dM_dT2": dT2_split},
     )
 
-    batch_size = config["training"]["TRAIN_BATCH_SIZE"]
+    batch_size = config["training"]["train_batch_size"]
 
     train_loader = make_loader(
         params, sig_split, dT1_split, dT2_split, batch_size, device, shuffle=True
