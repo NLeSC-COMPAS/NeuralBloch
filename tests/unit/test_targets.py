@@ -36,7 +36,7 @@ def sizes(config: Mapping[str, Any]) -> dict[str, tuple[int, ...]]:
         "signal": (NTR, 2),
         "dT1": (NTR, 2),
         "dT2": (NTR, 2),
-        "coeffs": (config["NB_signal"],),
+        "coeffs": (config["signal"]["rank"],),
     }
 
 
@@ -80,7 +80,7 @@ def test_output_shapes(
     output_name: str,
 ) -> None:
     model = make_model(NTR, direct_config).eval()
-    assert model.rank == direct_config["NB_signal"]
+    assert model.rank == direct_config["signal"]["rank"]
     with torch.no_grad():
         outputs = TargetModel(model, name)(X)
     output = dict(zip(TARGETS[name].outputs, outputs, strict=True))[output_name]

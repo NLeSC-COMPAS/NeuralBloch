@@ -6,6 +6,7 @@ each test. Then a change of the configuration, of the FCModel signature or of
 the checkpoint format changes only this file of the tests.
 """
 
+import copy
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -106,8 +107,8 @@ def config(
             "loss_function": "nmae",
             "regen_every_n_epochs": 100,
         },
-        "data": dict(data_config),
-        "model": dict(direct_config),
+        "data": copy.deepcopy(data_config),
+        "model": copy.deepcopy(direct_config),
     }
 
 
@@ -260,18 +261,14 @@ def direct_config() -> dict[str, Any]:
     onnx_models needs it, so all tests share this dict: do not change it.
     """
     return {
-        "derivative_mode": "direct",
         "activation": "relu",
         "normalize_inputs": False,
-        "NB_signal": 3,
-        "NB_dT1": 2,
-        "NB_dT2": 2,
-        "hidden_size_signal": 4,
-        "hidden_size_dT1": 4,
-        "hidden_size_dT2": 4,
-        "num_layers_signal": 2,
-        "num_layers_dT1": 2,
-        "num_layers_dT2": 2,
+        "signal": {"rank": 3, "hidden_size": 4, "num_layers": 2},
+        "derivative": {
+            "mode": "direct",
+            "dT1": {"rank": 2, "hidden_size": 4, "num_layers": 2},
+            "dT2": {"rank": 2, "hidden_size": 4, "num_layers": 2},
+        },
     }
 
 
@@ -279,12 +276,10 @@ def direct_config() -> dict[str, Any]:
 def derived_config() -> dict[str, Any]:
     """A small model that derives dT1 and dT2 from its signal network."""
     return {
-        "derivative_mode": "derived",
         "activation": "gelu",
         "normalize_inputs": False,
-        "NB_signal": 3,
-        "hidden_size_signal": 4,
-        "num_layers_signal": 3,
+        "signal": {"rank": 3, "hidden_size": 4, "num_layers": 3},
+        "derivative": {"mode": "derived", "basis_initialization": "learned"},
     }
 
 
@@ -305,7 +300,7 @@ def make_model() -> Callable[..., FCModel]:
 @pytest.fixture
 def rank4_config(derived_config: dict[str, Any]) -> dict[str, Any]:
     """A derived model of rank 4, for the tests of the shared basis."""
-    return {**derived_config, "NB_signal": 4, "hidden_size_signal": 8}
+    return {**derived_config, "signal": {"rank": 4, "hidden_size": 8, "num_layers": 3}}
 
 
 @pytest.fixture
