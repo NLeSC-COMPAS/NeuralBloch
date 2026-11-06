@@ -37,7 +37,7 @@ def set_seed(seed: int) -> None:
 
 def get_device(config: dict[str, Any]) -> str:
     """Select computation device."""
-    device: str = config["experiment"]["DEVICE"]
+    device: str = config["experiment"]["device"]
     return device if torch.cuda.is_available() else "cpu"
 
 
@@ -81,9 +81,9 @@ def load_model(
 
 
 def load_checkpoint(config: dict[str, Any], device: str) -> dict[str, Any]:
-    """Load the checkpoint file that ``experiment.PT_FILE_PATH`` gives."""
+    """Load the checkpoint file that ``experiment.pt_file_path`` gives."""
     checkpoint: dict[str, Any] = torch.load(
-        config["experiment"]["PT_FILE_PATH"],
+        config["experiment"]["pt_file_path"],
         map_location=device,
     )
     return checkpoint
@@ -115,7 +115,7 @@ def file_sha256(path: str | Path) -> str:
 
 # The keys of the data configuration that give the RF tables of the training
 # sequence (data_generation.jl)
-RF_TABLE_KEYS = ("RF_ANGLE_FILE", "RF_PHASE_FILE")
+RF_TABLE_KEYS = ("rf_angle_file", "rf_phase_file")
 
 
 def rf_sha256(data_config: Mapping[str, Any]) -> dict[str, str]:

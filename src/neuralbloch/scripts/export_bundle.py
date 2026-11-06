@@ -48,11 +48,11 @@ CARD = "model_card.toml"
 # The RF tables of the bundle, by card key: (file in the bundle, key of the source
 # file in the data configuration, contents of the table).
 RF_FILES = {
-    "rf_angle": ("rf_data/rf_angle_list.txt", "RF_ANGLE_FILE", "flip angles, degrees"),
-    "rf_phase": ("rf_data/rf_phase_list.txt", "RF_PHASE_FILE", "phases, degrees"),
+    "rf_angle": ("rf_data/rf_angle_list.txt", "rf_angle_file", "flip angles, degrees"),
+    "rf_phase": ("rf_data/rf_phase_list.txt", "rf_phase_file", "phases, degrees"),
 }
 
-# Each DERIVATIVE_METHOD name in data_generation.jl -> the name in the card.
+# Each derivative_method name in data_generation.jl -> the name in the card.
 DERIVATIVE_METHODS = {
     "forward_sensitivity": "forward sensitivity",
     "finite_difference": "forward difference",
@@ -221,7 +221,7 @@ def check_family(family: str, model_rank: int) -> None:
     if stated != model_rank:
         raise ValueError(
             f"Model family {family!r} states rank {stated}, but the checkpoint's "
-            f"signal decoder has rank {model_rank}: set export.MODEL_FAMILY to a "
+            f"signal decoder has rank {model_rank}: set export.model_family to a "
             f"rank{model_rank} family"
         )
 
@@ -234,12 +234,12 @@ def check_version(version: object) -> str:
     """
     if not isinstance(version, str):
         raise ValueError(
-            "export.MODEL_VERSION must be a semantic version in quotes, such as "
+            "export.model_version must be a semantic version in quotes, such as "
             f'"0.1.0-beta.1", not {version!r}'
         )
     if not SEMVER.fullmatch(version):
         raise ValueError(
-            f"export.MODEL_VERSION {version!r} must be a semantic version "
+            f"export.model_version {version!r} must be a semantic version "
             "MAJOR.MINOR.PATCH, optionally with a pre-release such as -beta.1, "
             "and without build metadata"
         )
@@ -250,28 +250,28 @@ def derivative_method(data_config: Mapping[str, Any]) -> str:
     """Return the method that calculated the training derivatives, as the card names it.
 
     The data configuration must give the method. data_generation.jl uses
-    forward sensitivity if DERIVATIVE_METHOD is missing, but before commit
+    forward sensitivity if derivative_method is missing, but before commit
     088ba08 it used only finite differences, and its configurations did not
-    give DERIVATIVE_METHOD. Thus, a missing method does not tell which method
+    give derivative_method. Thus, a missing method does not tell which method
     calculated the derivatives.
 
     Raises:
         ValueError: If the data configuration does not give the method, or
             names an unknown method.
     """
-    if "DERIVATIVE_METHOD" not in data_config:
+    if "derivative_method" not in data_config:
         raise ValueError(
-            "The checkpoint's data_config does not give DERIVATIVE_METHOD, so the "
+            "The checkpoint's data_config does not give derivative_method, so the "
             "card cannot state the derivative method. Checkpoints from before "
             "commit 088ba08 were trained with finite_difference. Add the method "
             "of the training to the checkpoint yourself "
-            "(checkpoint['data_config']['DERIVATIVE_METHOD'] = ..., "
+            "(checkpoint['data_config']['derivative_method'] = ..., "
             "torch.save(checkpoint, path))."
         )
-    method = data_config["DERIVATIVE_METHOD"]
+    method = data_config["derivative_method"]
     if method not in DERIVATIVE_METHODS:
         raise ValueError(
-            f"Unknown DERIVATIVE_METHOD {method!r}; "
+            f"Unknown derivative_method {method!r}; "
             f"known: {', '.join(DERIVATIVE_METHODS)}"
         )
     return DERIVATIVE_METHODS[method]
@@ -318,19 +318,19 @@ def check_rf_provenance(
 def check_undersampling(data_config: Mapping[str, Any]) -> None:
     """Raise an error if the training sequence is undersampled.
 
-    With PY_UNDERSAMPLING_FACTOR R, BlochSimulators gives R readouts for each RF
+    With py_undersampling_factor R, BlochSimulators gives R readouts for each RF
     pulse, so NTR = R * (length of the RF tables). Schema 1.0 and NeuralBloch.jl
     require one RF table value for each readout, thus R = 1.
 
     Raises:
-        ValueError: If PY_UNDERSAMPLING_FACTOR is not the integer 1.
+        ValueError: If py_undersampling_factor is not the integer 1.
     """
-    factor = integer(data_config["PY_UNDERSAMPLING_FACTOR"], "PY_UNDERSAMPLING_FACTOR")
+    factor = integer(data_config["py_undersampling_factor"], "py_undersampling_factor")
     if factor != 1:
         raise ValueError(
-            f"PY_UNDERSAMPLING_FACTOR is {factor!r}. A bundle requires 1, because "
+            f"py_undersampling_factor is {factor!r}. A bundle requires 1, because "
             f"the RF tables of schema {SCHEMA_VERSION} have one value for each "
-            "readout, and BlochSimulators gives PY_UNDERSAMPLING_FACTOR readouts "
+            "readout, and BlochSimulators gives py_undersampling_factor readouts "
             "for each RF pulse"
         )
 
@@ -429,16 +429,16 @@ def boolean(value: object, name: str) -> bool:
 # from these fields of the data configuration: (card key, data key, type, unit).
 SEQUENCE_KIND = "FISP3D"
 SEQUENCE_FIELDS = (
-    ("TR", "TR_S", number, "seconds"),
-    ("TE", "TE_S", number, "seconds"),
-    ("TI", "TI_S", number, "seconds"),
-    ("TW", "TW_S", number, "seconds"),
-    ("max_state", "MAX_STATE", integer, ""),
-    ("repetitions", "REPETITIONS", integer, ""),
-    ("inversion_prepulse", "INVERSION_PREPULSE", boolean, ""),
-    ("wait_spoiling", "WAIT_SPOILING", boolean, ""),
-    ("undersampling_factor", "PY_UNDERSAMPLING_FACTOR", integer, ""),
-    ("delta_k_spoil", "DELTA_K_SPOIL_RAD_PER_M", number, "rad/m"),
+    ("TR", "TR_s", number, "seconds"),
+    ("TE", "TE_s", number, "seconds"),
+    ("TI", "TI_s", number, "seconds"),
+    ("TW", "TW_s", number, "seconds"),
+    ("max_state", "max_state", integer, ""),
+    ("repetitions", "repetitions", integer, ""),
+    ("inversion_prepulse", "inversion_prepulse", boolean, ""),
+    ("wait_spoiling", "wait_spoiling", boolean, ""),
+    ("undersampling_factor", "py_undersampling_factor", integer, ""),
+    ("delta_k_spoil", "delta_k_spoil_rad_per_m", number, "rad/m"),
 )
 
 
@@ -480,8 +480,8 @@ def card_text(inputs: CardInputs) -> str:
     )
 
     table("model")
-    field("family", inputs.family, "export.MODEL_FAMILY: <sequence><ntr>-rank<rank>")
-    field("version", inputs.version, "export.MODEL_VERSION: semantic version")
+    field("family", inputs.family, "export.model_family: <sequence><ntr>-rank<rank>")
+    field("version", inputs.version, "export.model_version: semantic version")
     field("ntr", inputs.ntr, "readouts per voxel: the checkpoint's NTR")
     field("rank", inputs.rank, "basis coefficients per voxel: U_signal's rank")
 
@@ -499,7 +499,7 @@ def card_text(inputs: CardInputs) -> str:
     field("constraint", CONSTRAINT, "data_generation.jl keeps only T1 > T2")
 
     table("derivatives", "how the training targets were computed")
-    field("method", method, "data_config DERIVATIVE_METHOD")
+    field("method", method, "data_config derivative_method")
     if inputs.finite_difference_steps is not None:
         dT1, dT2 = inputs.finite_difference_steps
         field("dT1_step", dT1, "BlochSimulators.DEFAULT_ΔT₁")
@@ -564,18 +564,18 @@ def write_bundle(
     if bundle_dir.is_symlink():
         raise ValueError(
             f"{bundle_dir} is a symbolic link, so it is not replaced. Set "
-            f"export.BUNDLE_DIR to the directory itself, {bundle_dir.resolve()}"
+            f"export.bundle_dir to the directory itself, {bundle_dir.resolve()}"
         )
     if bundle_dir.exists() and not (bundle_dir / CARD).is_file():
         raise ValueError(
             f"{bundle_dir} is not a bundle (it has no {CARD}), so it is not "
-            "replaced. Set export.BUNDLE_DIR to a new directory or to a bundle"
+            "replaced. Set export.bundle_dir to a new directory or to a bundle"
         )
     for source in files.values():
         if Path(source).resolve().is_relative_to(bundle_dir.resolve()):
             raise ValueError(
                 f"{source} is inside {bundle_dir}, which the new bundle replaces. "
-                "Keep the sources of the bundle outside export.BUNDLE_DIR"
+                "Keep the sources of the bundle outside export.bundle_dir"
             )
     bundle_dir.parent.mkdir(parents=True, exist_ok=True)
     new = Path(tempfile.mkdtemp(prefix=f".{bundle_dir.name}-", dir=bundle_dir.parent))
@@ -795,7 +795,7 @@ def release_command(card: Mapping[str, Any], tarball: Path, sha256: str) -> list
 def export_bundle(config: dict[str, Any]) -> None:
     """Write the model bundle that NeuralBloch.jl reads, from the exported targets.
 
-    The bundle (``export.BUNDLE_DIR``) contains the ONNX model of each target,
+    The bundle (``export.bundle_dir``) contains the ONNX model of each target,
     the RF tables of the training sequence and ``model_card.toml``. The card
     gives the family and version of the model, its shapes, the training domain,
     the derivative method, the sequence and the provenance (see ``card_text``).
@@ -816,14 +816,14 @@ def export_bundle(config: dict[str, Any]) -> None:
         config: Full configuration dictionary.
     """
     export_config = config["export"]
-    checkpoint_path = Path(config["experiment"]["PT_FILE_PATH"])
+    checkpoint_path = Path(config["experiment"]["pt_file_path"])
     # Check the configurations before the model is made from them
     checkpoint = load_checkpoint(config, "cpu")
     require_configs(checkpoint, checkpoint_path)
     model = model_from_checkpoint(checkpoint, "cpu")
 
-    family = export_config["MODEL_FAMILY"]
-    version = check_version(export_config["MODEL_VERSION"])
+    family = export_config["model_family"]
+    version = check_version(export_config["model_version"])
     check_family(family, model.rank)
 
     commit = clean_commit()
@@ -838,7 +838,7 @@ def export_bundle(config: dict[str, Any]) -> None:
             print(f"\nWARNING: {warning}")
             warnings.append(warning)
 
-    warn(require_unreleased(release_tag(family, version), export_config["OFFLINE"]))
+    warn(require_unreleased(release_tag(family, version), export_config["offline"]))
 
     data_config = checkpoint["data_config"]
     method = derivative_method(data_config)
@@ -862,7 +862,7 @@ def export_bundle(config: dict[str, Any]) -> None:
         require_checkpoint(onnx_path, checkpoint_sha256, checkpoint_path)
     precision = onnx_precision(list(onnx_paths.values()))
     x = sample_parameters(
-        training_domain(checkpoint), export_config["N_VERIFY_SAMPLES"]
+        training_domain(checkpoint), export_config["n_verify_samples"]
     )
     for target, onnx_path in onnx_paths.items():
         verify_onnx(model, target, onnx_path, x, precision)
@@ -891,7 +891,7 @@ def export_bundle(config: dict[str, Any]) -> None:
     }
     files |= {name: data_config[data_key] for name, data_key, _ in RF_FILES.values()}
 
-    bundle_dir = Path(export_config["BUNDLE_DIR"])
+    bundle_dir = Path(export_config["bundle_dir"])
     parsed = write_bundle(bundle_dir, card, files)
 
     # Write the release file next to the bundle
@@ -957,7 +957,7 @@ def require_unreleased(tag: str, offline: bool) -> str | None:
     """
     exists = RuntimeError(
         f"The release {tag} exists, and a published version does not change. "
-        "Increase export.MODEL_VERSION"
+        "Increase export.model_version"
     )
     if git("tag", "--list", tag):
         raise exists
@@ -983,7 +983,7 @@ def require_unreleased(tag: str, offline: bool) -> str | None:
         if not offline:
             raise RuntimeError(
                 f"The export {unknown}. Correct the access to origin, or set "
-                "export.OFFLINE to true to continue without this check"
+                "export.offline to true to continue without this check"
             ) from error
         return f"{unknown}. Do not publish a version that exists"
     if remote:
