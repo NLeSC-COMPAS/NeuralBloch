@@ -281,7 +281,7 @@ def test_versions_that_are_not_semantic_are_refused(version: str) -> None:
 # YAML reads an unquoted 1 or 1.0 as a number
 @pytest.mark.parametrize("version", [1, 1.0, True])
 def test_unquoted_yaml_versions_are_refused(version: object) -> None:
-    with pytest.raises(TypeError, match="in quotes"):
+    with pytest.raises(ValueError, match="in quotes"):
         check_version(version)
 
 
