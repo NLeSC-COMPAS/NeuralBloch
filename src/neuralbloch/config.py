@@ -14,15 +14,16 @@ def load_config(config_dir: str | Path) -> dict[str, Any]:
         config_dir: Directory containing the YAML configuration files.
 
     Returns:
-        A dictionary mapping each config name (``data``, ``experiment``,
-        ``model``, ``training``, ``testing``, ``export``) to its parsed
-        contents.
+        A dictionary mapping each section of ``Config`` (``data``,
+        ``experiment``, ``model``, ``training``, ``testing``, ``export``) to
+        the parsed contents of its file.
     """
     config_dir = Path(config_dir)
 
     config: dict[str, Any] = {}
 
-    for name in ["data", "experiment", "model", "training", "testing", "export"]:
+    # One file for each section of the schema
+    for name in Config.model_fields:
         config_file = config_dir / f"{name}.yaml"
         with config_file.open() as f:
             config[name] = yaml.safe_load(f)
