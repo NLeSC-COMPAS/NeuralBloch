@@ -110,6 +110,8 @@ preview = true
 [tool.ruff.lint.per-file-ignores]
 # Ignore docstrings in all test files
 "tests/**/*.py" = ["D"]
+# The pytest style rules only make sense for tests (cli.py has test_* commands)
+"src/**/*.py" = ["PT"]
 
 [tool.ruff.lint.isort]
 force-single-line = true
