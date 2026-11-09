@@ -3,7 +3,6 @@ import hashlib
 import json
 import math
 import os
-import re
 import shlex
 import shutil
 import subprocess
@@ -21,6 +20,8 @@ from neuralbloch.scripts.export_onnx import require_exported
 from neuralbloch.scripts.export_onnx import target_paths
 from neuralbloch.scripts.export_onnx import training_domain
 from neuralbloch.scripts.export_onnx import verify_onnx
+from neuralbloch.types import check_family
+from neuralbloch.types import check_version
 from neuralbloch.utils import RF_TABLE_KEYS
 from neuralbloch.utils import file_sha256
 from neuralbloch.utils import load_checkpoint
@@ -71,27 +72,6 @@ DOMAIN_FIELDS = (
     ("B1", "B1", "relative to nominal, sampled uniformly"),
 )
 
-# The name of a family has the form <sequence><ntr>-rank<rank>[-<qualifier>], for
-# example fisp600-rank16 or fisp600-rank16-narrow. A qualifier makes the names of
-# two families different. The checks are only these: the name is lowercase words
-# with hyphens between them, and exactly one of these words is rank<N>, with the
-# rank of the model.
-# The checks use fullmatch, because $ also matches before a final newline.
-FAMILY_PATTERN = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*")
-RANK_WORD = re.compile(r"rank([1-9][0-9]*)")
-
-# The version of a family is a semantic version (semver.org): MAJOR.MINOR.PATCH,
-# with an optional pre-release part such as -beta.1. PATCH counts new exports of
-# the same weights. MINOR counts new weights or a wider domain. MAJOR stays 0
-# until the family is stable. Build metadata (+...) is not permitted, because the
-# version is part of the release tag and the download URL. The patterns use
-# [0-9] and not \d, because \d also matches other Unicode digits.
-PRERELEASE_PART = r"(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)"
-SEMVER = re.compile(
-    r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
-    rf"(?:-{PRERELEASE_PART}(?:\.{PRERELEASE_PART})*)?"
-)
-
 
 @dataclass(frozen=True)
 class CardInputs:
@@ -99,7 +79,7 @@ class CardInputs:
 
     Attributes:
         family: The model family, ``<sequence><ntr>-rank<rank>[-qualifier]``.
-        version: The family's semantic version (``SEMVER``), e.g.
+        version: The family's semantic version (``types.SEMVER``), e.g.
             ``0.1.0-beta.1``.
         ntr: The number of readouts per voxel.
         rank: The number of signal basis coefficients per voxel.
@@ -183,68 +163,6 @@ def require_configs(checkpoint: Mapping[str, Any], path: str | Path) -> None:
             "(checkpoint['model_config'] = ..., checkpoint['data_config'] = ..., "
             "torch.save(checkpoint, path))."
         )
-
-
-def family_rank(family: str) -> int:
-    """Return the rank that a family name gives.
-
-    Args:
-        family: A family name, e.g. ``fisp600-rank16``.
-
-    Returns:
-        The number after ``rank``.
-
-    Raises:
-        ValueError: If the name does not follow the pattern.
-    """
-    ranks = [
-        match.group(1)
-        for word in family.split("-")
-        if (match := RANK_WORD.fullmatch(word)) is not None
-    ]
-    if not FAMILY_PATTERN.fullmatch(family) or len(ranks) != 1:
-        raise ValueError(
-            f"Model family {family!r} must be lowercase words with hyphens between "
-            "them, and exactly one word must be rank<N>. The form is "
-            "<sequence><ntr>-rank<rank>, for example fisp600-rank16, with an "
-            "optional qualifier (fisp600-rank16-narrow)"
-        )
-    return int(ranks[0])
-
-
-def check_family(family: str, model_rank: int) -> None:
-    """Raise an error if the rank in a family name is not the rank of the model.
-
-    Raises:
-        ValueError: If the name is not valid or gives a different rank.
-    """
-    stated = family_rank(family)
-    if stated != model_rank:
-        raise ValueError(
-            f"Model family {family!r} states rank {stated}, but the checkpoint's "
-            f"signal decoder has rank {model_rank}: set export.model_family to a "
-            f"rank{model_rank} family"
-        )
-
-
-def check_version(version: object) -> str:
-    """Return the family version if it is a semantic version (``SEMVER``).
-
-    Raises:
-        ValueError: If the version is not a semantic version.
-    """
-    if not isinstance(version, str):
-        raise ValueError(
-            "export.model_version must be a semantic version in quotes, such as "
-            f'"0.1.0-beta.1", not {version!r}'
-        )
-    if not SEMVER.fullmatch(version):
-        raise ValueError(
-            f"export.model_version {version!r} must be a semantic version "
-            "MAJOR.MINOR.PATCH, optionally with a pre-release such as -beta.1, "
-            "and without build metadata"
-        )
-    return version
 
 
 def derivative_method(data_config: Mapping[str, Any]) -> str:
