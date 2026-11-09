@@ -5,6 +5,7 @@ description = "Neural network surrogate model for Bloch simulations in MR-STAT"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "cyclopts>=5.4.0",
     "h5py>=3.16.0",
     "juliacall>=0.9.35",
     "numpy>=2.5.1",
