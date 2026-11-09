@@ -76,11 +76,10 @@ def check_version(version: object) -> str:
     """Return the family version if it is a semantic version (``SEMVER``).
 
     Raises:
-        TypeError: If the version is not a string.
-        ValueError: If the version is not a semantic version.
+        ValueError: If the version is not a string or not a semantic version.
     """
     if not isinstance(version, str):
-        raise TypeError(
+        raise ValueError(
             "export.model_version must be a semantic version in quotes, such as "
             f'"0.1.0-beta.1", not {version!r}'
         )
