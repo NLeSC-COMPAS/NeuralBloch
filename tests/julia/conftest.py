@@ -1,7 +1,7 @@
 """Fixtures of the tests that run Julia.
 
-These tests run Julia in a new Python process that imports juliacall before
-torch, as run.py does. The pytest process has already imported torch.
+The plugin juliacall_first imports juliacall before torch in the pytest
+process, so these tests can run Julia directly.
 """
 
 import subprocess
@@ -11,6 +11,16 @@ from pathlib import Path
 import pytest
 import yaml
 from neuralbloch.config import load_config
+from neuralbloch.data import DATA_GENERATION_JL
+
+
+@pytest.fixture(scope="session")
+def julia_data_generation() -> None:
+    """Include data_generation.jl in Julia Main, once for all tests."""
+    # the import starts Julia and pytest willimport this file
+    from juliacall import Main
+
+    Main.include(DATA_GENERATION_JL)
 
 
 @pytest.fixture

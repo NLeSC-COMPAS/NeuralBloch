@@ -43,7 +43,15 @@ dev = [
 [tool.pytest]
 testpaths = ["tests"]
 # The tests that need Julia or a GPU run only on request (-m julia, -m gpu)
-addopts = ["-ra", "--import-mode=importlib", "-m", "not julia and not gpu"]
+addopts = [
+    "-ra",
+    "--import-mode=importlib",
+    "-m",
+    "not julia and not gpu",
+    "-p",
+    "juliacall_first",
+]
+pythonpath = ["tests/plugins"]
 strict = true
 markers = [
     "julia: needs Julia and BlochSimulators (the simulations need a CUDA GPU)",
