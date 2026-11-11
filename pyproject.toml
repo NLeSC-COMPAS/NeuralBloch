@@ -11,6 +11,7 @@ dependencies = [
     "onnx>=1.22.0",
     "onnxruntime>=1.29.0",
     "onnxscript>=0.7.1",
+    "pydantic>=2.14.3",
     "pyyaml>=6.0.3",
     "tensorboard>=2.21.0",
     "torch==2.13.0",
@@ -82,6 +83,7 @@ ignore = [
     # alias are conventional in this domain and match data_generation.jl
     "N803", # Argument name should be lowercase
     "N806", # Variable in function should be lowercase
+    "N815", # Variable in class scope should not be mixedCase
     "N813", # Camelcase imported as lowercase
     # The following list excludes rules irrelevant to the Google style
     "D203",

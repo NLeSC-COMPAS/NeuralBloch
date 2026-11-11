@@ -35,12 +35,13 @@ def main() -> None:
     parser.add_argument("--config-dir", default="config")
     args = parser.parse_args()
 
+    # Before Julia starts, so that a bad config fails fast
+    config = load_config(args.config_dir)
+
     # juliacall must be imported before torch. The import starts Julia, so it
     # waits until the arguments are parsed.
     from juliacall import Main as jl  # ruff: noqa: PLC0415
 
-    # Load configuration files and set random seed
-    config = load_config(args.config_dir)
     # Online samples are drawn by Julia, so Python's RNG seed alone does not
     # make training runs reproducible.
     julia_seed = int(config["experiment"]["seed"])
