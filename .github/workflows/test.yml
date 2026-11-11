@@ -1,4 +1,4 @@
-name: Test
+name: test
 
 on:
   push:
@@ -20,7 +20,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  pytest:
+  test:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -37,12 +37,12 @@ jobs:
 
       - run: uv sync --locked
 
-      - name: Unit tests
+      - name: unit tests
         run: uv run pytest tests/unit -ra --cov --cov-report=
 
-      - name: Integration tests
+      - name: integration tests
         run: uv run pytest tests/integration -ra --cov --cov-append --cov-report=
 
-      - name: Coverage
+      - name: coverage
         run: |
-          echo "Coverage: $(uv run coverage report --format=total)%"
+          echo "coverage: $(uv run coverage report --format=total)%"
