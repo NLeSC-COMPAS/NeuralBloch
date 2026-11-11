@@ -1,17 +1,3 @@
-"""``neuralbloch`` command line interface.
-
-Runs one task of the pipeline with the configuration in ``--config-dir``
-(default ``config``)::
-
-    uv run neuralbloch generate
-    uv run neuralbloch train
-    uv run neuralbloch export-bundle --config-dir path/to/config
-
-The imports of juliacall and the task modules are inside the commands on
-purpose. juliacall must be imported before torch, and its import starts Julia,
-so it waits until the arguments are parsed.
-"""
-
 from pathlib import Path
 from typing import Annotated
 from typing import Any
@@ -22,6 +8,12 @@ from neuralbloch.data import DATA_GENERATION_JL
 
 
 app = App(name="neuralbloch", help="Train and export the NeuralBloch surrogate.")
+
+
+def main() -> None:
+    """The entry point of the ``neuralbloch`` command."""
+    app()
+
 
 # TODO: re-use from `types`
 ConfigDir = Annotated[Path, Parameter(help="Directory of the YAML config files.")]
@@ -37,6 +29,8 @@ def _start(config_dir: Path, *, seed_python: bool = True) -> tuple[Any, dict[str
     Returns:
         The Julia ``Main`` module and the loaded configuration.
     """
+    # juliacall must be imported before torch, and the import starts Julia.
+    # So keep this import and the task imports inside the commands.
     from juliacall import Main as jl  # ruff: noqa: PLC0415
 
     config = load_config(config_dir)
@@ -115,12 +109,3 @@ def export_bundle(*, config_dir: ConfigDir = Path("config")) -> None:
     from neuralbloch.scripts.export_bundle import export_bundle
 
     export_bundle(config)
-
-
-def main() -> None:
-    """The entry point of the ``neuralbloch`` command."""
-    app()
-
-
-if __name__ == "__main__":
-    main()
