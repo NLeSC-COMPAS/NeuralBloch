@@ -5,6 +5,7 @@ description = "Neural network surrogate model for Bloch simulations in MR-STAT"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "cyclopts>=5.4.0",
     "h5py>=3.16.0",
     "juliacall>=0.9.35",
     "numpy>=2.5.1",
@@ -113,6 +114,8 @@ preview = true
 [tool.ruff.lint.per-file-ignores]
 # Ignore docstrings in all test files
 "tests/**/*.py" = ["D"]
+# The pytest style rules only make sense for tests (cli.py has test_* commands)
+"src/**/*.py" = ["PT"]
 
 [tool.ruff.lint.isort]
 force-single-line = true
