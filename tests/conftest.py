@@ -14,6 +14,15 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import Mock
 from unittest.mock import create_autospec
+from helpers import HAS_GPU
+
+
+# Julia can crash if torch is imported before juliacall
+# (https://github.com/pytorch/pytorch/issues/78829). Only with a GPU: the
+# import starts Julia, and only the tests with has_gpu need it
+if HAS_GPU:
+    import juliacall  # noqa: F401
+
 import h5py
 import numpy as np
 import numpy.typing as npt

@@ -7,12 +7,16 @@ kernels.
 """
 
 import subprocess
+import sys
 from collections.abc import Callable
 from pathlib import Path
 import h5py
 import numpy as np
 import pytest
+import yaml
+from helpers import has_gpu
 from neuralbloch.config import load_config
+from neuralbloch.data import DATA_GENERATION_JL
 from neuralbloch.data.data_loading import generate_train_loader
 from neuralbloch.data.data_loading import generate_val_loader
 from neuralbloch.data.data_loading import load_data_from_h5_file
@@ -21,6 +25,75 @@ from neuralbloch.data.data_loading import load_data_from_h5_file
 pytestmark = pytest.mark.julia
 
 
+@pytest.fixture(scope="session")
+def julia_data_generation() -> None:
+    """Include data_generation.jl in Julia Main, once for all tests."""
+    # Not at the top: the import starts Julia, and pytest imports this file
+    # also on a machine without a GPU
+    from juliacall import Main
+
+    Main.include(DATA_GENERATION_JL)
+
+
+@pytest.fixture
+def julia_config_dir(tmp_path: Path, pytestconfig: pytest.Config) -> Path:
+    """A copy of config/ for a small data generation, in tmp_path.
+
+    The Julia code reads the configuration keys by name, so the copy keeps all
+    keys and values of config/. Only the sizes are smaller, and the datasets
+    and the outputs are in tmp_path. The RF tables stay the tables of the
+    repository, with paths relative to the repository root.
+    """
+    config = load_config(pytestconfig.rootpath / "config")
+    config["experiment"].update(
+        DATASET_UNSPLIT_PATH=str(tmp_path / "dataset_unsplit.h5"),
+        DATASET_FOR_VALIDATION_PATH=str(tmp_path / "dataset_for_validation.h5"),
+        DATASET_FOR_TESTING_PATH=str(tmp_path / "dataset_for_testing.h5"),
+        PT_FILE_PATH=str(tmp_path / "model.pt"),
+        LOG_FILE_PATH=str(tmp_path / "log"),
+    )
+    # A grid of 5 values of T1, T2 and B1
+    config["data"]["N_SAMPLES"] = 125
+    # 100 samples of the online training data
+    config["training"].update(ONLINE_BATCH_SIZE=50, REGEN_EVERY=2)
+
+    directory = tmp_path / "config"
+    directory.mkdir()
+    for name, section in config.items():
+        (directory / f"{name}.yaml").write_text(yaml.safe_dump(section))
+    return directory
+
+
+@pytest.fixture
+def run_python(
+    pytestconfig: pytest.Config,
+) -> Callable[..., subprocess.CompletedProcess[str]]:
+    """Return a function that runs Python in the repository root.
+
+    The function takes the arguments of the Python command (for example -m
+    and a module) and fails the test with the output of a failed run. With
+    succeeds=False, it fails the test with the output of a run that succeeds.
+    A run that takes more than 30 minutes fails: the first run in a new
+    virtual environment installs the Julia packages (a few minutes), but a
+    run that hangs, for example on the GPU, must not stop the tests.
+    """
+
+    def run(*args: str, succeeds: bool = True) -> subprocess.CompletedProcess[str]:
+        result = subprocess.run(
+            [sys.executable, *args],
+            cwd=pytestconfig.rootpath,
+            capture_output=True,
+            text=True,
+            timeout=1800,
+        )
+        output = result.stdout[-2000:] + result.stderr[-5000:]
+        assert (result.returncode == 0) == succeeds, output
+        return result
+
+    return run
+
+
+@has_gpu
 @pytest.mark.usefixtures("julia_data_generation")
 def test_the_julia_training_data_have_the_layout_of_the_model(
     julia_config_dir: Path,
@@ -51,6 +124,7 @@ def test_the_julia_training_data_have_the_layout_of_the_model(
     assert loader.shuffle
 
 
+@has_gpu
 @pytest.mark.usefixtures("julia_data_generation")
 def test_ranges_without_a_sample_with_t1_above_t2_give_an_error_that_names_them(
     julia_config_dir: Path,
@@ -73,6 +147,7 @@ def test_ranges_without_a_sample_with_t1_above_t2_give_an_error_that_names_them(
     ) in str(error.value)
 
 
+@has_gpu
 def test_the_generate_task_writes_the_validation_and_test_datasets(
     julia_config_dir: Path,
     run_python: Callable[..., subprocess.CompletedProcess[str]],
