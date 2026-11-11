@@ -6,15 +6,14 @@ simulates takes about a minute, because the first simulation compiles the CUDA
 kernels.
 """
 
-import subprocess
 import sys
-from collections.abc import Callable
 from pathlib import Path
 import h5py
 import numpy as np
 import pytest
 import yaml
 from helpers import has_gpu
+from neuralbloch.cli import main
 from neuralbloch.config import load_config
 from neuralbloch.data import DATA_GENERATION_JL
 from neuralbloch.data.data_loading import generate_train_loader
@@ -59,35 +58,6 @@ def julia_config_dir(tmp_path: Path, pytestconfig: pytest.Config) -> Path:
     for name, section in config.items():
         (directory / f"{name}.yaml").write_text(yaml.safe_dump(section))
     return directory
-
-
-@pytest.fixture
-def run_python(
-    pytestconfig: pytest.Config,
-) -> Callable[..., subprocess.CompletedProcess[str]]:
-    """Return a function that runs Python in the repository root.
-
-    The function takes the arguments of the Python command (for example -m
-    and a module) and fails the test with the output of a failed run. With
-    succeeds=False, it fails the test with the output of a run that succeeds.
-    A run that takes more than 30 minutes fails: the first run in a new
-    virtual environment installs the Julia packages (a few minutes), but a
-    run that hangs, for example on the GPU, must not stop the tests.
-    """
-
-    def run(*args: str, succeeds: bool = True) -> subprocess.CompletedProcess[str]:
-        result = subprocess.run(
-            [sys.executable, *args],
-            cwd=pytestconfig.rootpath,
-            capture_output=True,
-            text=True,
-            timeout=1800,
-        )
-        output = result.stdout[-2000:] + result.stderr[-5000:]
-        assert (result.returncode == 0) == succeeds, output
-        return result
-
-    return run
 
 
 @has_gpu
@@ -147,14 +117,17 @@ def test_ranges_without_a_sample_with_t1_above_t2_give_an_error_that_names_them(
 @has_gpu
 def test_the_generate_task_writes_the_validation_and_test_datasets(
     julia_config_dir: Path,
-    run_python: Callable[..., subprocess.CompletedProcess[str]],
     pytestconfig: pytest.Config,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config = load_config(julia_config_dir)
-
-    run_python(
-        "-m", "neuralbloch.cli", "generate", "--config-dir", str(julia_config_dir)
+    # The RF table paths in the config are relative to the repository root
+    monkeypatch.chdir(pytestconfig.rootpath)
+    monkeypatch.setattr(
+        sys, "argv", ["neuralbloch", "generate", "--config-dir", str(julia_config_dir)]
     )
+
+    main()
 
     experiment, data = config["experiment"], config["data"]
     params, signal, dT1, dT2, N, NTR = load_data_from_h5_file(
