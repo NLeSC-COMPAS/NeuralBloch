@@ -274,7 +274,7 @@ def test_julia_data_without_samples_are_refused(
     julia_batch_mock: SimpleNamespace,
 ) -> None:
     # data_generation.jl raises an error before it gives 0 samples (a
-    # test with the marker julia checks it). This check is for the data that
+    # test with has_gpu checks it). This check is for the data that
     # Python gets
     julia_batch_mock.T1 = julia_batch_mock.T2 = julia_batch_mock.B1 = np.zeros(0)
     for key in ("signal", "dM_dT1", "dM_dT2"):

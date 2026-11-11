@@ -38,18 +38,6 @@ from neuralbloch.utils import rf_sha256
 from neuralbloch.utils import sample_parameters
 
 
-@pytest.fixture(autouse=True)
-def no_julia(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Make an import of juliacall fail in each test without the marker julia.
-
-    The import starts Julia, and installs it at the first use. A test that
-    needs Julia must have the marker; another test can replace juliacall with
-    a mock (julia_batch_mock).
-    """
-    if request.node.get_closest_marker("julia") is None:
-        monkeypatch.setitem(sys.modules, "juliacall", None)
-
-
 @pytest.fixture
 def data_config(tmp_path: Path) -> dict[str, Any]:
     """The data configuration of config/data.yaml, with small RF tables.
