@@ -21,3 +21,6 @@ outputs
 
 # Coverage data
 .coverage
+
+# MkDocs build output
+site/
