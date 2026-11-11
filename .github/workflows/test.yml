@@ -24,12 +24,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      # setup-uv has no major version tags, so pin the commit of a release.
-      # Its cache keeps the torch wheels and their CUDA libraries (several
-      # GB) until uv.lock or pyproject.toml changes.
+
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
       - run: uv sync --locked
-      # Runs the unit and integration tests, not the tests with the markers
-      # julia and gpu. These tests cannot import juliacall, so Julia is not
-      # installed. Raise the coverage floor when the coverage goes up.
-      - run: uv run pytest --cov --cov-fail-under=80
+
+      - name: Unit tests
+        run: uv run pytest tests/unit -ra --cov --cov-report=
+
+      - name: Integration tests
+        run: >-
+          uv run pytest tests/integration -ra --cov --cov-append
+          --cov-report=term-missing
+          --cov-report=markdown-append:"$GITHUB_STEP_SUMMARY"
