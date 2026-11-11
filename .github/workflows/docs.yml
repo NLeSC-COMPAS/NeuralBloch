@@ -1,0 +1,29 @@
+name: Docs
+
+on:
+  push:
+    branches: [main]
+    paths: &docs
+      - "docs/**"
+      - "mkdocs.yml"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/docs.yml"
+  pull_request:
+    paths: *docs
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      # Only the docs group, so the job skips torch and its CUDA libraries.
+      # --no-install-project because building the docs does not import the package.
+      - run: uv sync --locked --only-group docs --no-install-project
+      # --strict turns warnings (broken links, missing pages) into errors.
+      - run: uv run --no-sync mkdocs build --strict
