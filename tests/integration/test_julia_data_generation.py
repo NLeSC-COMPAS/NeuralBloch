@@ -22,9 +22,6 @@ from neuralbloch.data.data_loading import generate_val_loader
 from neuralbloch.data.data_loading import load_data_from_h5_file
 
 
-pytestmark = pytest.mark.julia
-
-
 @pytest.fixture(scope="session")
 def julia_data_generation() -> None:
     """Include data_generation.jl in Julia Main, once for all tests."""
