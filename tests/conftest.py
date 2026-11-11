@@ -14,6 +14,15 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import Mock
 from unittest.mock import create_autospec
+from helpers import HAS_GPU
+
+
+# Julia can crash if torch is imported before juliacall
+# (https://github.com/pytorch/pytorch/issues/78829). Only with a GPU: the
+# import starts Julia, and only the tests with has_gpu need it
+if HAS_GPU:
+    import juliacall  # noqa: F401
+
 import h5py
 import numpy as np
 import numpy.typing as npt
@@ -27,18 +36,6 @@ from neuralbloch.scripts.export_onnx import export_target
 from neuralbloch.utils import RF_TABLE_KEYS
 from neuralbloch.utils import rf_sha256
 from neuralbloch.utils import sample_parameters
-
-
-@pytest.fixture(autouse=True)
-def no_julia(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Make an import of juliacall fail in each test without the marker julia.
-
-    The import starts Julia, and installs it at the first use. A test that
-    needs Julia must have the marker; another test can replace juliacall with
-    a mock (julia_batch_mock).
-    """
-    if request.node.get_closest_marker("julia") is None:
-        monkeypatch.setitem(sys.modules, "juliacall", None)
 
 
 @pytest.fixture

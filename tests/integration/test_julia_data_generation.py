@@ -6,60 +6,75 @@ simulates takes about a minute, because the first simulation compiles the CUDA
 kernels.
 """
 
-import subprocess
-from collections.abc import Callable
+import sys
 from pathlib import Path
 import h5py
 import numpy as np
 import pytest
-import torch
 import yaml
+from helpers import has_gpu
+from neuralbloch.cli import main
 from neuralbloch.config import load_config
+from neuralbloch.data import DATA_GENERATION_JL
+from neuralbloch.data.data_loading import generate_train_loader
 from neuralbloch.data.data_loading import generate_val_loader
 from neuralbloch.data.data_loading import load_data_from_h5_file
 
 
-pytestmark = pytest.mark.julia
+@pytest.fixture(scope="session")
+def julia_data_generation() -> None:
+    """Include data_generation.jl in Julia Main, once for all tests."""
+    # Not at the top: the import starts Julia, and pytest imports this file
+    # also on a machine without a GPU
+    from juliacall import Main
 
-# Make the training data as neuralbloch.scripts.train does after run.py, with
-# the seed of run.py, and save the tensors, the batch size and the shuffle of
-# the loader in the file of the second argument
-TRAIN_LOADER = """\
-import sys
-from juliacall import Main as jl  # before torch, as in run.py
-from neuralbloch.config import load_config
-from neuralbloch.data import DATA_GENERATION_JL
-config = load_config(sys.argv[1])
-seed = config["experiment"]["SEED"]
-jl.seval(f"begin using Random; Random.seed!({seed}); true end")
-jl.include(DATA_GENERATION_JL)
-import torch
-from neuralbloch.data.data_loading import generate_train_loader
-loader = generate_train_loader(config)
-torch.save(
-    {
-        "tensors": [tensor.cpu() for tensor in loader.tensors],
-        "batch_size": loader.batch_size,
-        "shuffle": loader.shuffle,
-    },
-    sys.argv[2],
-)
-"""
+    Main.include(DATA_GENERATION_JL)
 
 
+@pytest.fixture
+def julia_config_dir(
+    tmp_path: Path, pytestconfig: pytest.Config, monkeypatch: pytest.MonkeyPatch
+) -> Path:
+    """A copy of config/ for a small data generation, in tmp_path.
+
+    The Julia code reads the configuration keys by name, so the copy keeps all
+    keys and values of config/. Only the sizes are smaller, and the datasets
+    and the outputs are in tmp_path. The RF tables stay the tables of the
+    repository, with paths relative to the repository root.
+    """
+    # The RF table paths are relative, so pytest can run from any folder
+    monkeypatch.chdir(pytestconfig.rootpath)
+    config = load_config(pytestconfig.rootpath / "config")
+    config["experiment"].update(
+        DATASET_UNSPLIT_PATH=str(tmp_path / "dataset_unsplit.h5"),
+        DATASET_FOR_VALIDATION_PATH=str(tmp_path / "dataset_for_validation.h5"),
+        DATASET_FOR_TESTING_PATH=str(tmp_path / "dataset_for_testing.h5"),
+        PT_FILE_PATH=str(tmp_path / "model.pt"),
+        LOG_FILE_PATH=str(tmp_path / "log"),
+    )
+    # A grid of 5 values of T1, T2 and B1
+    config["data"]["N_SAMPLES"] = 125
+    # 100 samples of the online training data
+    config["training"].update(ONLINE_BATCH_SIZE=50, REGEN_EVERY=2)
+
+    directory = tmp_path / "config"
+    directory.mkdir()
+    for name, section in config.items():
+        (directory / f"{name}.yaml").write_text(yaml.safe_dump(section))
+    return directory
+
+
+@has_gpu
+@pytest.mark.usefixtures("julia_data_generation")
 def test_the_julia_training_data_have_the_layout_of_the_model(
     julia_config_dir: Path,
-    run_python: Callable[..., subprocess.CompletedProcess[str]],
-    tmp_path: Path,
     pytestconfig: pytest.Config,
 ) -> None:
     config = load_config(julia_config_dir)
-    output = tmp_path / "train_loader.pt"
 
-    run_python("-c", TRAIN_LOADER, str(julia_config_dir), str(output))
+    loader = generate_train_loader(config)
 
-    saved = torch.load(output)
-    params, *targets = saved["tensors"]
+    params, *targets = (tensor.cpu() for tensor in loader.tensors)
     data = config["data"]
     NTR = len(np.loadtxt(pytestconfig.rootpath / data["RF_ANGLE_FILE"]))
     training = config["training"]
@@ -76,46 +91,45 @@ def test_the_julia_training_data_have_the_layout_of_the_model(
         assert data[f"{name}_lower"] * (1 - 1e-6) <= values.min()
         assert values.max() <= data[f"{name}_upper"] * (1 + 1e-6)
     assert (params[:, 0] > params[:, 1]).all()
-    assert saved["batch_size"] == training["TRAIN_BATCH_SIZE"]
-    assert saved["shuffle"]
+    assert loader.batch_size == training["TRAIN_BATCH_SIZE"]
+    assert loader.shuffle
 
 
+@has_gpu
+@pytest.mark.usefixtures("julia_data_generation")
 def test_ranges_without_a_sample_with_t1_above_t2_give_an_error_that_names_them(
     julia_config_dir: Path,
-    run_python: Callable[..., subprocess.CompletedProcess[str]],
-    tmp_path: Path,
 ) -> None:
+    from juliacall import JuliaError  # noqa: PLC0415
+
     # generate_data keeps only the samples with T1 > T2. Without a sample, the
     # simulation on the GPU fails with a CUDA error that does not give the
     # cause, so generate_data must raise an error before it
-    path = julia_config_dir / "data.yaml"
-    data = yaml.safe_load(path.read_text())
-    data.update(T1_lower=0.1, T1_upper=0.2, T2_lower=0.3, T2_upper=2.0)
-    path.write_text(yaml.safe_dump(data))
+    config = load_config(julia_config_dir)
+    config["data"].update(T1_lower=0.1, T1_upper=0.2, T2_lower=0.3, T2_upper=2.0)
 
-    result = run_python(
-        "-c",
-        TRAIN_LOADER,
-        str(julia_config_dir),
-        str(tmp_path / "train_loader.pt"),
-        succeeds=False,
-    )
+    with pytest.raises(JuliaError) as error:
+        generate_train_loader(config)
 
     assert (
         "None of the 100 samples has T1 > T2: check the ranges data.T1_lower to "
         "data.T1_upper (0.1 to 0.2) and data.T2_lower to data.T2_upper (0.3 to "
         "2.0)"
-    ) in result.stderr
+    ) in str(error.value)
 
 
+@has_gpu
 def test_the_generate_task_writes_the_validation_and_test_datasets(
     julia_config_dir: Path,
-    run_python: Callable[..., subprocess.CompletedProcess[str]],
     pytestconfig: pytest.Config,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config = load_config(julia_config_dir)
+    monkeypatch.setattr(
+        sys, "argv", ["neuralbloch", "generate", "--config-dir", str(julia_config_dir)]
+    )
 
-    run_python("run.py", "generate", "--config-dir", str(julia_config_dir))
+    main()
 
     experiment, data = config["experiment"], config["data"]
     params, signal, dT1, dT2, N, NTR = load_data_from_h5_file(

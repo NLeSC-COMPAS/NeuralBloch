@@ -6,7 +6,7 @@ import pytest
 
 def test_no_module_starts_julia_at_import(pytestconfig: pytest.Config) -> None:
     # The import of juliacall starts Julia, and installs it at the first use.
-    # Only run.py imports it at module level, before torch.
+    # Only neuralbloch.cli imports it, in main(), before torch.
     root: Path = pytestconfig.rootpath
     src = root / "src"
     modules = sorted(

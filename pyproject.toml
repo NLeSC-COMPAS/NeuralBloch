@@ -4,6 +4,13 @@ version = "0.1.0"
 description = "Neural network surrogate model for Bloch simulations in MR-STAT"
 readme = "README.md"
 requires-python = ">=3.12"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
 dependencies = [
     "h5py>=3.16.0",
     "juliacall>=0.9.35",
@@ -42,13 +49,9 @@ dev = [
 
 [tool.pytest]
 testpaths = ["tests"]
-# The tests that need Julia or a GPU run only on request (-m julia, -m gpu)
-addopts = ["-ra", "--import-mode=importlib", "-m", "not julia and not gpu"]
+# For the shared module tests/helpers.py
+pythonpath = ["tests"]
 strict = true
-markers = [
-    "julia: needs Julia and BlochSimulators (the simulations need a CUDA GPU)",
-    "gpu: needs a CUDA GPU",
-]
 
 [tool.coverage.run]
 source = ["neuralbloch"]
