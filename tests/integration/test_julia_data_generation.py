@@ -32,7 +32,9 @@ def julia_data_generation() -> None:
 
 
 @pytest.fixture
-def julia_config_dir(tmp_path: Path, pytestconfig: pytest.Config) -> Path:
+def julia_config_dir(
+    tmp_path: Path, pytestconfig: pytest.Config, monkeypatch: pytest.MonkeyPatch
+) -> Path:
     """A copy of config/ for a small data generation, in tmp_path.
 
     The Julia code reads the configuration keys by name, so the copy keeps all
@@ -40,6 +42,8 @@ def julia_config_dir(tmp_path: Path, pytestconfig: pytest.Config) -> Path:
     and the outputs are in tmp_path. The RF tables stay the tables of the
     repository, with paths relative to the repository root.
     """
+    # The RF table paths are relative, so pytest can run from any folder
+    monkeypatch.chdir(pytestconfig.rootpath)
     config = load_config(pytestconfig.rootpath / "config")
     config["experiment"].update(
         DATASET_UNSPLIT_PATH=str(tmp_path / "dataset_unsplit.h5"),
@@ -121,8 +125,6 @@ def test_the_generate_task_writes_the_validation_and_test_datasets(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config = load_config(julia_config_dir)
-    # The RF table paths in the config are relative to the repository root
-    monkeypatch.chdir(pytestconfig.rootpath)
     monkeypatch.setattr(
         sys, "argv", ["neuralbloch", "generate", "--config-dir", str(julia_config_dir)]
     )

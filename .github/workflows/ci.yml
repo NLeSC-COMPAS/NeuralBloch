@@ -68,4 +68,5 @@ jobs:
 
       - name: coverage
         run: |
-          echo "coverage: $(uv run coverage report --format=total)%"
+          total=$(uv run coverage report --format=total)
+          echo "coverage: ${total}%"
