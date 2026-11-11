@@ -27,7 +27,7 @@ def orthogonalize_shared_basis(model: FCModel, params: torch.Tensor) -> None:
     physical parameters and allows meaningful truncation afterward.
     """
     if model.derivative_mode != "derived":
-        raise ValueError("Basis reordering requires derivative_mode='derived'")
+        raise ValueError("Basis reordering requires derivative.mode='derived'")
     if params.ndim != 2 or params.shape[0] == 0 or params.shape[1] != 3:
         raise ValueError("params must have shape (n_samples, 3) with n_samples > 0")
 
@@ -66,6 +66,11 @@ def orthogonalize_shared_basis(model: FCModel, params: torch.Tensor) -> None:
         decoder.weight.copy_(orthonormal_raw @ rotation)
 
 
+def with_signal_rank(model_config: dict[str, Any], rank: int) -> dict[str, Any]:
+    """Return a copy of a model configuration with another signal rank."""
+    return {**model_config, "signal": {**model_config["signal"], "rank": rank}}
+
+
 def truncate_shared_basis(
     model: FCModel,
     model_config: dict[str, Any],
@@ -78,14 +83,12 @@ def truncate_shared_basis(
     the full-rank basis rewrite itself does not.
     """
     if model.derivative_mode != "derived":
-        raise ValueError("Basis truncation requires derivative_mode='derived'")
+        raise ValueError("Basis truncation requires derivative.mode='derived'")
     full_rank = model.rank
     if not 0 < rank <= full_rank:
         raise ValueError(f"rank must be in (0, {full_rank}], got {rank}")
 
-    smaller_config = dict(model_config)
-    smaller_config["NB_signal"] = rank
-    smaller = FCModel(model.NTR, smaller_config, data_config)
+    smaller = FCModel(model.NTR, with_signal_rank(model_config, rank), data_config)
     state = {key: value.clone() for key, value in model.state_dict().items()}
     state["U_signal.0.weight"] = state["U_signal.0.weight"][:, :rank]
     last_layer_key = f"subnet_signal.net.{len(model.subnet_signal.net) - 1}"

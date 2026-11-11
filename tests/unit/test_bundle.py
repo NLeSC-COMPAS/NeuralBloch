@@ -34,27 +34,28 @@ from neuralbloch.utils import RF_TABLE_KEYS
 from neuralbloch.utils import rf_sha256
 
 
+RANGES = {
+    "T1_s": {"lower": 0.1, "upper": 6},
+    "T2_s": {"lower": 0.01, "upper": 2.0},
+    "B1": {"lower": 0.5, "upper": 1.5},
+}
+
 DATA_CONFIG = {
-    "N_SAMPLES": 40000,
-    "DERIVATIVE_METHOD": "forward_sensitivity",
-    "RF_ANGLE_FILE": "data/rf_data/rf_angle_list.txt",
-    "RF_PHASE_FILE": "data/rf_data/rf_phase_list.txt",
-    "TR_S": 0.00558,
-    "TE_S": 0.002745,
-    "TI_S": 0.01084,
-    "TW_S": 0.0,
-    "MAX_STATE": 64,
-    "REPETITIONS": 5,
-    "INVERSION_PREPULSE": True,
-    "WAIT_SPOILING": True,
-    "PY_UNDERSAMPLING_FACTOR": 1,
-    "DELTA_K_SPOIL_RAD_PER_M": 0.0,
-    "T1_lower": 0.1,
-    "T1_upper": 6,
-    "T2_lower": 0.01,
-    "T2_upper": 2.0,
-    "B1_lower": 0.5,
-    "B1_upper": 1.5,
+    "n_samples": 40000,
+    "derivative_method": "forward_sensitivity",
+    "rf_angle_file": "data/rf_data/rf_angle_list.txt",
+    "rf_phase_file": "data/rf_data/rf_phase_list.txt",
+    "TR_s": 0.00558,
+    "TE_s": 0.002745,
+    "TI_s": 0.01084,
+    "TW_s": 0.0,
+    "max_state": 64,
+    "repetitions": 5,
+    "inversion_prepulse": True,
+    "wait_spoiling": True,
+    "py_undersampling_factor": 1,
+    "delta_k_spoil_rad_per_m": 0.0,
+    "parameter_ranges": RANGES,
 }
 
 INPUTS = CardInputs(
@@ -121,7 +122,7 @@ def test_card_states_every_field() -> None:
 
 def test_integers_floats_and_booleans_keep_their_types() -> None:
     card = tomllib.loads(card_text(INPUTS))
-    # The card writes an integer bound (T1_upper: 6) with a decimal point
+    # The card writes an integer bound (T1_s upper: 6) with a decimal point
     assert isinstance(card["domain"]["T1"][1], float)
     assert isinstance(card["sequence"]["max_state"], int)
     assert isinstance(card["sequence"]["TW"], float)
@@ -137,7 +138,7 @@ def test_every_field_names_its_source() -> None:
 def test_finite_differences_state_their_steps() -> None:
     inputs = replace(
         INPUTS,
-        data_config={**DATA_CONFIG, "DERIVATIVE_METHOD": "finite_difference"},
+        data_config={**DATA_CONFIG, "derivative_method": "finite_difference"},
         finite_difference_steps=(0.02, 0.0025),
     )
     card = tomllib.loads(card_text(inputs))
@@ -151,7 +152,7 @@ def test_finite_differences_state_their_steps() -> None:
 def test_steps_belong_to_finite_differences_only() -> None:
     with pytest.raises(ValueError, match="Finite-difference steps"):
         card_text(replace(INPUTS, finite_difference_steps=(0.02, 0.0025)))
-    fd = {**DATA_CONFIG, "DERIVATIVE_METHOD": "finite_difference"}
+    fd = {**DATA_CONFIG, "derivative_method": "finite_difference"}
     with pytest.raises(ValueError, match="Finite-difference steps"):
         card_text(replace(INPUTS, data_config=fd))
 
@@ -172,13 +173,11 @@ def test_card_inputs_agree(change: dict[str, object], words: str) -> None:
 
 
 def test_the_derivative_method_is_required() -> None:
-    # Old configurations without DERIVATIVE_METHOD used finite differences,
-    # but data_generation.jl now defaults to forward sensitivity
-    config = {k: v for k, v in DATA_CONFIG.items() if k != "DERIVATIVE_METHOD"}
-    with pytest.raises(ValueError, match="does not give DERIVATIVE_METHOD"):
+    config = {k: v for k, v in DATA_CONFIG.items() if k != "derivative_method"}
+    with pytest.raises(ValueError, match="does not give derivative_method"):
         derivative_method(config)
-    with pytest.raises(ValueError, match="Unknown DERIVATIVE_METHOD 'adjoint'"):
-        derivative_method({"DERIVATIVE_METHOD": "adjoint"})
+    with pytest.raises(ValueError, match="Unknown derivative_method 'adjoint'"):
+        derivative_method({"derivative_method": "adjoint"})
 
 
 def test_a_sequence_without_undersampling_is_bundled() -> None:
@@ -193,7 +192,7 @@ def test_a_sequence_without_undersampling_is_bundled() -> None:
 def test_undersampling_factors_other_than_1_are_refused(
     factor: object, message: str
 ) -> None:
-    data = {**DATA_CONFIG, "PY_UNDERSAMPLING_FACTOR": factor}
+    data = {**DATA_CONFIG, "py_undersampling_factor": factor}
     with pytest.raises(ValueError, match=message):
         check_undersampling(data)
 
@@ -201,13 +200,16 @@ def test_undersampling_factors_other_than_1_are_refused(
 @pytest.mark.parametrize(
     ("change", "words"),
     [
-        ({"MAX_STATE": 64.0}, "MAX_STATE must be an integer"),
-        ({"WAIT_SPOILING": "yes"}, "WAIT_SPOILING must be true or false"),
-        ({"TR_S": "5.58 ms"}, "TR_S must be a number"),
-        ({"T1_lower": 6.0}, "T1_lower = 6.0 must be below T1_upper"),
-        ({"TE_S": float("nan")}, "must be finite"),
+        ({"max_state": 64.0}, "max_state must be an integer"),
+        ({"wait_spoiling": "yes"}, "wait_spoiling must be true or false"),
+        ({"TR_s": "5.58 ms"}, "TR_s must be a number"),
+        (
+            {"parameter_ranges": {**RANGES, "T1_s": {"lower": 6.0, "upper": 6}}},
+            "parameter_ranges.T1_s.lower = 6.0 must be below upper",
+        ),
+        ({"TE_s": float("nan")}, "must be finite"),
     ],
-    ids=["MAX_STATE", "WAIT_SPOILING", "TR_S", "T1_lower", "TE_S"],
+    ids=["max_state", "wait_spoiling", "TR_s", "T1_s", "TE_s"],
 )
 def test_malformed_configuration_is_refused(
     change: dict[str, object], words: str
@@ -607,7 +609,7 @@ def test_a_released_version_is_refused(local: str, remote: str) -> None:
 def test_without_origin_the_export_stops_unless_offline(
     failure: Exception, reason: str
 ) -> None:
-    with pytest.raises(RuntimeError, match="export.OFFLINE") as raised:
+    with pytest.raises(RuntimeError, match="export.offline") as raised:
         run_git("", failure)
     assert reason in str(raised.value)
     warning = run_git("", failure, offline=True)
@@ -653,9 +655,9 @@ def test_the_rf_tables_must_be_the_tables_of_the_training(tmp_path: Path) -> Non
         data[key].write_text("1.0\n2.0\n")
     checkpoint = {"rf_sha256": rf_sha256(data)}
     assert check_rf_provenance(checkpoint, data) is None
-    data["RF_PHASE_FILE"].write_text("1.0\n3.0\n")
+    data["rf_phase_file"].write_text("1.0\n3.0\n")
     with pytest.raises(
-        ValueError, match="RF_PHASE_FILE.txt \\(RF_PHASE_FILE\\) is not the RF table"
+        ValueError, match="rf_phase_file.txt \\(rf_phase_file\\) is not the RF table"
     ):
         check_rf_provenance(checkpoint, data)
     # An old checkpoint does not record the tables: only a warning

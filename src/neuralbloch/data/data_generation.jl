@@ -35,9 +35,9 @@ end
 
 function generate_data(config; for_training)
 
-    derivative_method = config["data"]["DERIVATIVE_METHOD"]
+    derivative_method = config["data"]["derivative_method"]
     derivative_method in ("forward_sensitivity", "finite_difference") || error(
-        "data.DERIVATIVE_METHOD must be 'forward_sensitivity' or 'finite_difference'; " *
+        "data.derivative_method must be 'forward_sensitivity' or 'finite_difference'; " *
         "found $derivative_method"
     )
     if derivative_method == "forward_sensitivity"
@@ -56,27 +56,29 @@ function generate_data(config; for_training)
         BlochSimulators.CUDA.reclaim()
     end
 
-    T1_lower = config["data"]["T1_lower"]
-    T1_upper = config["data"]["T1_upper"]
+    ranges = config["data"]["parameter_ranges"]
 
-    T2_lower = config["data"]["T2_lower"]
-    T2_upper = config["data"]["T2_upper"]
+    T1_lower = ranges["T1_s"]["lower"]
+    T1_upper = ranges["T1_s"]["upper"]
 
-    B1_lower = config["data"]["B1_lower"]
-    B1_upper = config["data"]["B1_upper"]
+    T2_lower = ranges["T2_s"]["lower"]
+    T2_upper = ranges["T2_s"]["upper"]
+
+    B1_lower = ranges["B1"]["lower"]
+    B1_upper = ranges["B1"]["upper"]
 
 
     # Generate tissue parameter samples
     if for_training
-        batchsize = config["training"]["ONLINE_BATCH_SIZE"]*config["training"]["REGEN_EVERY"]
+        batchsize = config["training"]["online_samples_per_epoch"]*config["training"]["regen_every_n_epochs"]
         T₁ = exp.(rand(batchsize) .* (log(T1_upper)-log(T1_lower)) .+ log(T1_lower))
         T₂ = exp.(rand(batchsize) .* (log(T2_upper)-log(T2_lower)) .+ log(T2_lower))
         B₁ = rand(batchsize).*(B1_upper-B1_lower) .+ B1_lower
     else
 
-         # 3D parameter grid: N_SAMPLES ≈ batchsize³, so use the cubic root for points per dimension.
-        N_SAMPLES = config["data"]["N_SAMPLES"]
-        batchsize = Int64(round(cbrt(N_SAMPLES)))
+         # 3D parameter grid: n_samples ≈ batchsize³, so use the cubic root for points per dimension.
+        n_samples = config["data"]["n_samples"]
+        batchsize = Int64(round(cbrt(n_samples)))
 
         # Generate structured grid for evaluation datasets.
         T₁_vec = collect(logrange(T1_lower, T1_upper, batchsize))
@@ -105,29 +107,29 @@ function generate_data(config; for_training)
     # does not give the cause
     isempty(parameters) && error(
         "None of the $n_sampled samples has T1 > T2: check the ranges " *
-        "data.T1_lower to data.T1_upper ($T1_lower to $T1_upper) and " *
-        "data.T2_lower to data.T2_upper ($T2_lower to $T2_upper)"
+        "data.parameter_ranges.T1_s ($T1_lower to $T1_upper) and " *
+        "data.parameter_ranges.T2_s ($T2_lower to $T2_upper)"
     )
 
     # Load RF train definition.
     rf_train, _, _ = build_rf_train(
-        config["data"]["RF_ANGLE_FILE"],
-        config["data"]["RF_PHASE_FILE"]
+        config["data"]["rf_angle_file"],
+        config["data"]["rf_phase_file"]
         )
 
     # Define the FISP sequence using parameters from config.
     sequence = FISP3D(
         rf_train,
-        config["data"]["TR_S"],
-        config["data"]["TE_S"],
-        config["data"]["MAX_STATE"],
-        config["data"]["TI_S"],
-        config["data"]["TW_S"],
-        config["data"]["REPETITIONS"],
-        config["data"]["INVERSION_PREPULSE"],
-        config["data"]["WAIT_SPOILING"],
-        config["data"]["PY_UNDERSAMPLING_FACTOR"],
-        config["data"]["DELTA_K_SPOIL_RAD_PER_M"]
+        config["data"]["TR_s"],
+        config["data"]["TE_s"],
+        config["data"]["max_state"],
+        config["data"]["TI_s"],
+        config["data"]["TW_s"],
+        config["data"]["repetitions"],
+        config["data"]["inversion_prepulse"],
+        config["data"]["wait_spoiling"],
+        config["data"]["py_undersampling_factor"],
+        config["data"]["delta_k_spoil_rad_per_m"]
     )
 
     # Move data to GPU
@@ -187,12 +189,12 @@ function save_dataset(config)
 
     data = generate_data(config, for_training = false)
 
-    filename = config["experiment"]["DATASET_UNSPLIT_PATH"]
+    filename = config["experiment"]["dataset_unsplit_path"]
 
     # Store all quantities required for training/testing.
     h5open(filename, "w") do f
         attributes(f)["blochsimulators_version"] = string(pkgversion(BlochSimulators))
-        attributes(f)["derivative_method"] = config["data"]["DERIVATIVE_METHOD"]
+        attributes(f)["derivative_method"] = config["data"]["derivative_method"]
         attributes(f)["derivative_parameters"] = "T1,T2"
 
         write(f, "T1", data.T1)

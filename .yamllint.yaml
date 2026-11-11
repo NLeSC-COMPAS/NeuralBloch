@@ -1,0 +1,18 @@
+# Style of the files in config/ (issue #20).
+extends: "default"
+
+rules:
+  document-start: "disable"
+  line-length:
+    max: 88
+  # Only true and false, not yes, no, on or off.
+  truthy:
+    allowed-values: ["true", "false"]
+    check-keys: false
+  quoted-strings:
+    quote-type: "double"
+    required: true
+  float-values:
+    require-numeral-before-decimal: true
+    forbid-nan: true
+    forbid-inf: true

@@ -24,16 +24,16 @@ def julia_config_dir(tmp_path: Path, pytestconfig: pytest.Config) -> Path:
     """
     config = load_config(pytestconfig.rootpath / "config")
     config["experiment"].update(
-        DATASET_UNSPLIT_PATH=str(tmp_path / "dataset_unsplit.h5"),
-        DATASET_FOR_VALIDATION_PATH=str(tmp_path / "dataset_for_validation.h5"),
-        DATASET_FOR_TESTING_PATH=str(tmp_path / "dataset_for_testing.h5"),
-        PT_FILE_PATH=str(tmp_path / "model.pt"),
-        LOG_FILE_PATH=str(tmp_path / "log"),
+        dataset_unsplit_path=str(tmp_path / "dataset_unsplit.h5"),
+        dataset_for_validation_path=str(tmp_path / "dataset_for_validation.h5"),
+        dataset_for_testing_path=str(tmp_path / "dataset_for_testing.h5"),
+        pt_file_path=str(tmp_path / "model.pt"),
+        log_dir=str(tmp_path / "log"),
     )
     # A grid of 5 values of T1, T2 and B1
-    config["data"]["N_SAMPLES"] = 125
+    config["data"]["n_samples"] = 125
     # 100 samples of the online training data
-    config["training"].update(ONLINE_BATCH_SIZE=50, REGEN_EVERY=2)
+    config["training"].update(online_samples_per_epoch=50, regen_every_n_epochs=2)
 
     directory = tmp_path / "config"
     directory.mkdir()

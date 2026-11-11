@@ -1,5 +1,6 @@
 from collections.abc import Callable
 from typing import Any
+import pytest
 import torch
 from neuralbloch.model import FCModel
 
@@ -70,9 +71,9 @@ def test_forward_coeffs_reproduce_the_signal_through_the_basis(
         coefficients = model.forward_coeffs(x)
         signal = model.forward_signal(x)
 
-    assert coefficients.shape == (2, derived_config["NB_signal"])
+    assert coefficients.shape == (2, derived_config["signal"]["rank"])
     decoder = model.U_signal[0].weight
-    assert decoder.shape == (2 * model.NTR, derived_config["NB_signal"])
+    assert decoder.shape == (2 * model.NTR, derived_config["signal"]["rank"])
     reconstructed = (coefficients @ decoder.T).unflatten(-1, (model.NTR, 2))
     torch.testing.assert_close(reconstructed, signal)
 
@@ -105,7 +106,7 @@ def test_decoder_rows_interleave_real_and_imaginary_parts(
     model = make_model(5, derived_config).eval()
     decoder = model.U_signal[0].weight.detach()
     basis = torch.complex(decoder[0::2, :], decoder[1::2, :])
-    assert basis.shape == (model.NTR, derived_config["NB_signal"])
+    assert basis.shape == (model.NTR, derived_config["signal"]["rank"])
 
     x = torch.tensor([[0.8, 0.07, 1.0], [1.2, 0.1, 0.9]])
     with torch.no_grad():
@@ -192,3 +193,36 @@ def test_model_output_contract_supports_multiple_batch_sizes(
             outputs = model(x)
         for output in outputs:
             assert output.shape == (batch_size, 5, 2)
+
+
+NETWORK = {"rank": 2, "hidden_size": 4, "num_layers": 2}
+
+
+def test_a_direct_model_always_has_a_learned_basis(
+    direct_config: dict[str, Any], make_model: Callable[..., FCModel]
+) -> None:
+    assert make_model(5, direct_config).basis_initialization == "learned"
+
+
+@pytest.mark.parametrize(
+    ("derivative", "words"),
+    [
+        (
+            {"mode": "derived"},
+            r"mode 'derived' needs the keys \['basis_initialization'\], got \[\]",
+        ),
+        (
+            {"mode": "derived", "basis_initialization": "learned", "dT1": NETWORK},
+            r"mode 'derived' needs the keys \['basis_initialization'\]",
+        ),
+    ],
+    ids=["derived-without-basis", "derived-with-dT1"],
+)
+def test_a_derivative_block_must_have_the_keys_of_its_mode(
+    derivative: dict[str, Any],
+    words: str,
+    derived_config: dict[str, Any],
+    make_model: Callable[..., FCModel],
+) -> None:
+    with pytest.raises(ValueError, match=words):
+        make_model(5, {**derived_config, "derivative": derivative})

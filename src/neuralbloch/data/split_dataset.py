@@ -9,11 +9,11 @@ def split_dataset(config: dict[str, Any]) -> None:
     Args:
         config: The ``experiment`` section of the configuration dictionary.
     """
-    with h5py.File(config["DATASET_UNSPLIT_PATH"], "r") as f:
+    with h5py.File(config["dataset_unsplit_path"], "r") as f:
         N = f["T1"].shape[0]
 
         # Randomly select samples for validation and testing reproducibly.
-        rng = np.random.default_rng(config["SEED"])
+        rng = np.random.default_rng(config["seed"])
         idx = rng.permutation(N)
 
         n_test = max(1, int(N * 0.15))
@@ -30,8 +30,8 @@ def split_dataset(config: dict[str, Any]) -> None:
         keys = list(f.keys())
 
         # Create separate validation and test datasets
-        with h5py.File(config["DATASET_FOR_VALIDATION_PATH"], "w") as f_va:
-            with h5py.File(config["DATASET_FOR_TESTING_PATH"], "w") as f_te:
+        with h5py.File(config["dataset_for_validation_path"], "w") as f_va:
+            with h5py.File(config["dataset_for_testing_path"], "w") as f_te:
                 for key, value in f.attrs.items():
                     f_va.attrs[key] = value
                     f_te.attrs[key] = value
@@ -46,5 +46,5 @@ def split_dataset(config: dict[str, Any]) -> None:
                         f_va.create_dataset(key, data=data[va_idx_sorted, :])
                         f_te.create_dataset(key, data=data[te_idx_sorted, :])
 
-    print(f"Saved validation dataset → {config['DATASET_FOR_VALIDATION_PATH']}")
-    print(f"Saved test dataset  → {config['DATASET_FOR_TESTING_PATH']}")
+    print(f"Saved validation dataset → {config['dataset_for_validation_path']}")
+    print(f"Saved test dataset  → {config['dataset_for_testing_path']}")

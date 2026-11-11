@@ -14,6 +14,10 @@ from neuralbloch.utils import get_device
 from neuralbloch.utils import rf_sha256
 
 
+# The keys of training.lr_scheduler for name "plateau", besides "name"
+PLATEAU_KEYS = {"patience_epochs", "factor", "min_lr"}
+
+
 def _not_finite_error(
     problem: str,
     best_epoch: int | None,
@@ -53,9 +57,9 @@ class Trainer:
         self.config = config
 
         # Optimizer
-        compile_train_step = config["training"]["COMPILE_TRAIN_STEP"]
+        compile_train_step = config["training"]["compile_train_step"]
         compile_train_step = compile_train_step and self.device.startswith("cuda")
-        initial_learning_rate = float(config["training"]["LEARNING_RATE"])
+        initial_learning_rate = float(config["training"]["learning_rate"])
         if compile_train_step:
             # A device-resident learning rate prevents torch.compile from
             # specializing and recompiling the Adam step after every scheduler
@@ -78,31 +82,38 @@ class Trainer:
         # Learning rate scheduler
         self.scheduler: LRScheduler
 
-        validate_every = config["training"]["VALIDATE_EVERY"]
+        validate_every = config["training"]["validate_every_n_epochs"]
         if validate_every <= 0:
-            raise ValueError("training.VALIDATE_EVERY must be positive")
+            raise ValueError("training.validate_every_n_epochs must be positive")
 
-        if config["training"]["LR_SCHEDULER"] == "plateau":
-            # ReduceLROnPlateau counts calls rather than epochs.  Keep its
-            # original 100-epoch patience when validation is less frequent.
+        lr_scheduler = config["training"]["lr_scheduler"]
+        if lr_scheduler["name"] == "plateau":
+            missing = PLATEAU_KEYS - set(lr_scheduler)
+            if missing:
+                raise ValueError(
+                    "training.lr_scheduler with name 'plateau' needs the keys "
+                    f"{sorted(missing)}"
+                )
+            # ReduceLROnPlateau counts validations, not epochs. PyYAML reads
+            # 1e-5 as a string, so cast the floats.
             self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
                 self.optimizer,
-                patience=math.ceil(100 / validate_every),
-                factor=0.5,
-                min_lr=1e-5,
+                patience=math.ceil(lr_scheduler["patience_epochs"] / validate_every),
+                factor=float(lr_scheduler["factor"]),
+                min_lr=float(lr_scheduler["min_lr"]),
             )
-        elif config["training"]["LR_SCHEDULER"] == "cosine":
+        elif lr_scheduler["name"] == "cosine":
             self.scheduler = optim.lr_scheduler.CosineAnnealingLR(
-                self.optimizer, T_max=config["training"]["N_EPOCHS"]
+                self.optimizer, T_max=config["training"]["n_epochs"]
             )
         else:
             raise ValueError(
-                "training.LR_SCHEDULER must be 'plateau' or 'cosine', got "
-                f"{config['training']['LR_SCHEDULER']!r}"
+                "training.lr_scheduler.name must be 'plateau' or 'cosine', got "
+                f"{lr_scheduler['name']!r}"
             )
 
         # Loss function
-        self.criterion = Loss(config["training"]["LOSS_FUNCTION"])
+        self.criterion = Loss(config["training"]["loss_function"])
 
         # Validation data remains fixed during training
         self.val_loader = val_loader
@@ -120,7 +131,7 @@ class Trainer:
             )
 
         # TensorBoard logger
-        self.writer = SummaryWriter(log_dir=config["experiment"]["LOG_FILE_PATH"])
+        self.writer = SummaryWriter(log_dir=config["experiment"]["log_dir"])
 
     def train(
         self,
@@ -141,12 +152,12 @@ class Trainer:
         best_val_loss = float("inf")
         best_epoch: int | None = None
 
-        pt_file_path = self.config["experiment"]["PT_FILE_PATH"]
+        pt_file_path = self.config["experiment"]["pt_file_path"]
         # The training data come from the RF tables. Record their sha256 in the
         # checkpoint, so that export_bundle can check the tables of a bundle
         rf_tables = rf_sha256(self.config["data"])
-        n_epochs = self.config["training"]["N_EPOCHS"]
-        validate_every = self.config["training"]["VALIDATE_EVERY"]
+        n_epochs = self.config["training"]["n_epochs"]
+        validate_every = self.config["training"]["validate_every_n_epochs"]
         training_started = time.perf_counter()
         train_loader = initial_train_loader
 
@@ -154,7 +165,8 @@ class Trainer:
             generation_time = 0.0
             # Generate new Bloch simulation data periodically
             needs_regeneration = (epoch == 1 and train_loader is None) or (
-                epoch > 1 and (epoch - 1) % self.config["training"]["REGEN_EVERY"] == 0
+                epoch > 1
+                and (epoch - 1) % self.config["training"]["regen_every_n_epochs"] == 0
             )
             if needs_regeneration:
                 print(f"Generating training data for epoch {epoch} ...", flush=True)
@@ -268,7 +280,7 @@ class Trainer:
         if best_epoch is None:
             raise RuntimeError(
                 f"No epoch was validated, so this run saved no checkpoint in "
-                f"{pt_file_path}. Is training.N_EPOCHS positive?"
+                f"{pt_file_path}. Is training.n_epochs positive?"
             )
 
         elapsed = time.perf_counter() - training_started

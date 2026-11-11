@@ -6,6 +6,7 @@ each test. Then a change of the configuration, of the FCModel signature or of
 the checkpoint format changes only this file of the tests.
 """
 
+import copy
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -54,25 +55,24 @@ def data_config(tmp_path: Path) -> dict[str, Any]:
         path.write_text("".join(f"{i}.5\n" for i in range(5)))
         rf_tables[key] = str(path)
     return {
-        "N_SAMPLES": 40000,
-        "DERIVATIVE_METHOD": "forward_sensitivity",
+        "n_samples": 40000,
+        "derivative_method": "forward_sensitivity",
         **rf_tables,
-        "TR_S": 0.00558,
-        "TE_S": 0.002745,
-        "TI_S": 0.01084,
-        "TW_S": 0.0,
-        "MAX_STATE": 64,
-        "REPETITIONS": 5,
-        "INVERSION_PREPULSE": True,
-        "WAIT_SPOILING": True,
-        "PY_UNDERSAMPLING_FACTOR": 1,
-        "DELTA_K_SPOIL_RAD_PER_M": 0.0,
-        "T1_lower": 0.1,
-        "T1_upper": 6.0,
-        "T2_lower": 0.01,
-        "T2_upper": 2.0,
-        "B1_lower": 0.5,
-        "B1_upper": 1.5,
+        "TR_s": 0.00558,
+        "TE_s": 0.002745,
+        "TI_s": 0.01084,
+        "TW_s": 0.0,
+        "max_state": 64,
+        "repetitions": 5,
+        "inversion_prepulse": True,
+        "wait_spoiling": True,
+        "py_undersampling_factor": 1,
+        "delta_k_spoil_rad_per_m": 0.0,
+        "parameter_ranges": {
+            "T1_s": {"lower": 0.1, "upper": 6.0},
+            "T2_s": {"lower": 0.01, "upper": 2.0},
+            "B1": {"lower": 0.5, "upper": 1.5},
+        },
     }
 
 
@@ -92,23 +92,23 @@ def config(
     """
     return {
         "experiment": {
-            "DEVICE": "cpu",
-            "PT_FILE_PATH": str(tmp_path / "model.pt"),
-            "LOG_FILE_PATH": str(tmp_path / "log"),
+            "device": "cpu",
+            "pt_file_path": str(tmp_path / "model.pt"),
+            "log_dir": str(tmp_path / "log"),
         },
         "training": {
-            "N_EPOCHS": 2,
-            "TRAIN_BATCH_SIZE": 4,
-            "LEARNING_RATE": 1e-3,
-            "VALIDATION_BATCH_SIZE": 8,
-            "VALIDATE_EVERY": 1,
-            "COMPILE_TRAIN_STEP": False,
-            "LR_SCHEDULER": "cosine",
-            "LOSS_FUNCTION": "nmae",
-            "REGEN_EVERY": 100,
+            "n_epochs": 2,
+            "train_batch_size": 4,
+            "learning_rate": 1e-3,
+            "validation_batch_size": 8,
+            "validate_every_n_epochs": 1,
+            "compile_train_step": False,
+            "lr_scheduler": {"name": "cosine"},
+            "loss_function": "nmae",
+            "regen_every_n_epochs": 100,
         },
-        "data": dict(data_config),
-        "model": dict(direct_config),
+        "data": copy.deepcopy(data_config),
+        "model": copy.deepcopy(direct_config),
     }
 
 
@@ -223,17 +223,17 @@ def export_config(tmp_path: Path) -> dict[str, Any]:
     the rank of direct_config.
     """
     return {
-        "TARGETS": {
-            target: {"ONNX_FILE_PATH": str(tmp_path / "onnx" / spec.bundle_file)}
+        "targets": {
+            target: {"onnx_file_path": str(tmp_path / "onnx" / spec.bundle_file)}
             for target, spec in TARGETS.items()
         },
-        "OPSET_VERSION": 18,
-        "FP16": False,
-        "N_VERIFY_SAMPLES": 8,
-        "BUNDLE_DIR": str(tmp_path / "out" / "bundle"),
-        "MODEL_FAMILY": "fisp5-rank3",
-        "MODEL_VERSION": "0.1.0",
-        "OFFLINE": False,
+        "opset_version": 18,
+        "fp16": False,
+        "n_verify_samples": 8,
+        "bundle_dir": str(tmp_path / "out" / "bundle"),
+        "model_family": "fisp5-rank3",
+        "model_version": "0.1.0",
+        "offline": False,
     }
 
 
@@ -261,18 +261,14 @@ def direct_config() -> dict[str, Any]:
     onnx_models needs it, so all tests share this dict: do not change it.
     """
     return {
-        "derivative_mode": "direct",
         "activation": "relu",
         "normalize_inputs": False,
-        "NB_signal": 3,
-        "NB_dT1": 2,
-        "NB_dT2": 2,
-        "hidden_size_signal": 4,
-        "hidden_size_dT1": 4,
-        "hidden_size_dT2": 4,
-        "num_layers_signal": 2,
-        "num_layers_dT1": 2,
-        "num_layers_dT2": 2,
+        "signal": {"rank": 3, "hidden_size": 4, "num_layers": 2},
+        "derivative": {
+            "mode": "direct",
+            "dT1": {"rank": 2, "hidden_size": 4, "num_layers": 2},
+            "dT2": {"rank": 2, "hidden_size": 4, "num_layers": 2},
+        },
     }
 
 
@@ -280,12 +276,10 @@ def direct_config() -> dict[str, Any]:
 def derived_config() -> dict[str, Any]:
     """A small model that derives dT1 and dT2 from its signal network."""
     return {
-        "derivative_mode": "derived",
         "activation": "gelu",
         "normalize_inputs": False,
-        "NB_signal": 3,
-        "hidden_size_signal": 4,
-        "num_layers_signal": 3,
+        "signal": {"rank": 3, "hidden_size": 4, "num_layers": 3},
+        "derivative": {"mode": "derived", "basis_initialization": "learned"},
     }
 
 
@@ -306,7 +300,7 @@ def make_model() -> Callable[..., FCModel]:
 @pytest.fixture
 def rank4_config(derived_config: dict[str, Any]) -> dict[str, Any]:
     """A derived model of rank 4, for the tests of the shared basis."""
-    return {**derived_config, "NB_signal": 4, "hidden_size_signal": 8}
+    return {**derived_config, "signal": {"rank": 4, "hidden_size": 8, "num_layers": 3}}
 
 
 @pytest.fixture
