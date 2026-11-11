@@ -80,7 +80,9 @@ def test_the_generate_task_writes_the_validation_and_test_datasets(
 ) -> None:
     config = load_config(julia_config_dir)
 
-    run_python("run.py", "generate", "--config-dir", str(julia_config_dir))
+    run_python(
+        "-m", "neuralbloch.cli", "generate", "--config-dir", str(julia_config_dir)
+    )
 
     experiment, data = config["experiment"], config["data"]
     params, signal, dT1, dT2, N, NTR = load_data_from_h5_file(

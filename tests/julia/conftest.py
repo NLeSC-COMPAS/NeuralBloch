@@ -58,8 +58,8 @@ def run_python(
 ) -> Callable[..., subprocess.CompletedProcess[str]]:
     """Return a function that runs Python in the repository root.
 
-    The function takes the arguments of the Python command (a script, or -c
-    and the code) and fails the test with the output of a failed run. With
+    The function takes the arguments of the Python command (for example -m
+    and a module) and fails the test with the output of a failed run. With
     succeeds=False, it fails the test with the output of a run that succeeds.
     A run that takes more than 30 minutes fails: the first run in a new
     virtual environment installs the Julia packages (a few minutes), but a

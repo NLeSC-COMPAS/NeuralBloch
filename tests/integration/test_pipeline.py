@@ -53,7 +53,7 @@ def test_the_bundle_describes_the_checkpoint_of_the_training(
 ) -> None:
     config = pipeline_config
 
-    # The tasks of run.py: train, export_onnx and export_bundle
+    # The tasks of neuralbloch.cli: train, export_onnx and export_bundle
     train(config)
     export_onnx(config)
     export_bundle(config)
