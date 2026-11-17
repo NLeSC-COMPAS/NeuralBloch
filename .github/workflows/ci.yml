@@ -70,3 +70,13 @@ jobs:
         run: |
           total=$(uv run coverage report --format=total)
           echo "coverage: ${total}%"
+          uv run coverage xml
+
+      # One upload is enough: the matrix runs the same tests on each version
+      - name: upload coverage to Codecov
+        if: matrix.python-version == '3.12'
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.xml
+          fail_ci_if_error: false
