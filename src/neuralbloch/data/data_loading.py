@@ -134,7 +134,7 @@ def generate_val_loader(
         A tuple of the validation loader and ``NTR``, the number of
         readout time points in the signal.
     """
-    device = get_device(config)
+    device = get_device(config["experiment"]["device"])
 
     path = config["experiment"]["dataset_for_validation_path"]
     params, signal, dT1, dT2, _, NTR = load_data_from_h5_file(path)
@@ -178,7 +178,7 @@ def generate_train_loader(
     # functions of this module do not use Julia.
     from juliacall import Main as jl
 
-    device = get_device(config)
+    device = get_device(config["experiment"]["device"])
 
     # Generate a fresh batch of Bloch simulations in Julia
     batch = jl.generate_data(config, for_training=True)

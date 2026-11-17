@@ -13,8 +13,8 @@ def test_accuracy(config: dict[str, Any]) -> None:
     Args:
         config: Full configuration dictionary.
     """
-    device = get_device(config)
-    model, _ = load_model(config, device)
+    device = get_device(config["experiment"]["device"])
+    model, _ = load_model(config["experiment"]["pt_file_path"], device)
     params, signal, dT1, dT2, N, _ = load_data_from_h5_file(
         config["experiment"]["dataset_for_testing_path"]
     )

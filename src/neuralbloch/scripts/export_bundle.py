@@ -732,7 +732,7 @@ def export_bundle(config: dict[str, Any]) -> None:
     export_config = config["export"]
     checkpoint_path = Path(config["experiment"]["pt_file_path"])
     # Check the configurations before the model is made from them
-    checkpoint = load_checkpoint(config, "cpu")
+    checkpoint = load_checkpoint(checkpoint_path, "cpu")
     require_configs(checkpoint, checkpoint_path)
     model = model_from_checkpoint(checkpoint, "cpu")
 

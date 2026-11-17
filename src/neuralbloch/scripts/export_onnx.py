@@ -13,6 +13,7 @@ import onnx
 import onnxruntime as ort
 import torch
 import torch.nn as nn
+from neuralbloch.config_schema import ParameterRanges
 from neuralbloch.metrics import nrmse
 from neuralbloch.model import FCModel
 from neuralbloch.utils import file_sha256
@@ -97,7 +98,7 @@ def export_onnx(config: dict[str, Any]) -> None:
     paths = target_paths(export_config)
 
     # The exported ONNX model is device independent, so export on CPU
-    model, checkpoint = load_model(config, "cpu")
+    model, checkpoint = load_model(config["experiment"]["pt_file_path"], "cpu")
 
     fp16 = export_config["fp16"]
     precision = "FP16" if fp16 else "FP32"
@@ -252,8 +253,8 @@ def require_exported(paths: dict[str, Path]) -> None:
             )
 
 
-def training_domain(checkpoint: dict[str, Any]) -> dict[str, Any]:
-    """Return the configuration from which to sample the verification parameters.
+def training_domain(checkpoint: dict[str, Any]) -> ParameterRanges:
+    """Return the ranges from which to sample the verification parameters.
 
     Checkpoints contain the data configuration of their training. Thus, the
     verification samples the training domain of the model.
@@ -262,9 +263,9 @@ def training_domain(checkpoint: dict[str, Any]) -> dict[str, Any]:
         checkpoint: The checkpoint the model was loaded from.
 
     Returns:
-        A configuration ``sample_parameters`` accepts.
+        The ``data.parameter_ranges`` of the training.
     """
-    return {"data": checkpoint["data_config"]}
+    return ParameterRanges.model_validate(checkpoint["data_config"]["parameter_ranges"])
 
 
 def export_target(

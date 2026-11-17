@@ -84,9 +84,9 @@ def test_inference(config: dict[str, Any]) -> None:
     infer_batch_size = config["testing"]["infer_batch_size"]
     batch_size = config["testing"]["batch_size"]
 
-    device = get_device(config)
+    device = get_device(config["experiment"]["device"])
 
-    model, _ = load_model(config, device)
+    model, _ = load_model(config["experiment"]["pt_file_path"], device)
     model.eval()
 
     T1 = 0.8

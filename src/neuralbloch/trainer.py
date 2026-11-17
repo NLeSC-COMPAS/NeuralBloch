@@ -51,7 +51,7 @@ class Trainer:
     ) -> None:
 
         # Set device and move model to GPU/CPU
-        self.device = get_device(config)
+        self.device = get_device(config["experiment"]["device"])
         self.model = model.to(self.device)
 
         self.config = config
