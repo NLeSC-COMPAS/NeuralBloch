@@ -6,6 +6,7 @@ from typing import Annotated
 from typing import Literal
 from typing import Self
 from pydantic import BaseModel
+from pydantic import BeforeValidator
 from pydantic import ConfigDict
 from pydantic import Field
 from pydantic import NonNegativeFloat
@@ -108,8 +109,22 @@ class Section(BaseModel):
     )
 
 
+def refuse_empty_path(value: object) -> object:
+    """Refuse a blank path, because ``Path("")`` quietly becomes ``.``.
+
+    Returns:
+        The value, unchanged.
+
+    Raises:
+        ValueError: If the value is an empty or blank string.
+    """
+    if isinstance(value, str) and not value.strip():
+        raise ValueError("path must not be empty")
+    return value
+
+
 # A path that may not exist yet. YAML gives paths as strings.
-ConfigPath = Annotated[Path, Field(strict=False)]
+ConfigPath = Annotated[Path, BeforeValidator(refuse_empty_path), Field(strict=False)]
 
 
 # =============================================================================
