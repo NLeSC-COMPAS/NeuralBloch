@@ -4,34 +4,30 @@
 # model. To use the change, train again.
 
 # Approximate size of the parameter grid of the validation and test datasets.
-# The grid has round(cbrt(N_SAMPLES))^3 points; points with T2 >= T1 are removed.
-N_SAMPLES: 40000
+# The grid has round(cbrt(n_samples))^3 points; points with T2 >= T1 are removed.
+n_samples: 40000
 
 # BlochSimulators method for the T1 and T2 derivatives.
 # Options: "forward_sensitivity", "finite_difference".
-DERIVATIVE_METHOD: "forward_sensitivity"
+derivative_method: "forward_sensitivity"
 
 # FISP3D Sequence related settings
 # RF train: flip angles and phases, one value per TR, both in degrees.
-RF_ANGLE_FILE: "data/rf_data/rf_angle_list.txt"
-RF_PHASE_FILE: "data/rf_data/rf_phase_list.txt"
-TR_S: 0.00558
-TE_S: 0.002745
-TI_S: 0.01084
-TW_S: 0.000
-MAX_STATE: 64
-REPETITIONS: 5
-INVERSION_PREPULSE: true
-WAIT_SPOILING: true
-PY_UNDERSAMPLING_FACTOR: 1
-DELTA_K_SPOIL_RAD_PER_M: 0.0
+rf_angle_file: "data/rf_data/rf_angle_list.txt"
+rf_phase_file: "data/rf_data/rf_phase_list.txt"
+TR_s: 0.00558
+TE_s: 0.002745
+TI_s: 0.01084
+TW_s: 0.0
+max_state: 64
+repetitions: 5
+inversion_prepulse: true
+wait_spoiling: true
+py_undersampling_factor: 1
+delta_k_spoil_rad_per_m: 0.0
 
 # Lower bounds and upper bounds of generated T1, T2, B1 samples
-T1_lower: 0.1
-T1_upper: 6.0
-
-T2_lower: 0.01
-T2_upper: 2.0
-
-B1_lower: 0.5
-B1_upper: 1.5
+parameter_ranges:
+  T1_s: {lower: 0.1, upper: 6.0}
+  T2_s: {lower: 0.01, upper: 2.0}
+  B1: {lower: 0.5, upper: 1.5}

@@ -40,8 +40,7 @@ def pipeline_config(
     )
     path = tmp_path / "validation.h5"
     write_dataset(path, params, *targets)
-    config["experiment"]["DATASET_FOR_VALIDATION_PATH"] = str(path)
-    config["model"]["basis_initialization"] = "learned"
+    config["experiment"]["dataset_for_validation_path"] = str(path)
     config["export"] = export_config
     return config
 
@@ -58,7 +57,7 @@ def test_the_bundle_describes_the_checkpoint_of_the_training(
     export_onnx(config)
     export_bundle(config)
 
-    card = check_bundle(config["export"]["BUNDLE_DIR"])
+    card = check_bundle(config["export"]["bundle_dir"])
     model = card["model"]
     assert (model["family"], model["version"], model["ntr"], model["rank"]) == (
         "fisp5-rank3",
@@ -66,9 +65,9 @@ def test_the_bundle_describes_the_checkpoint_of_the_training(
         5,
         3,
     )
-    checkpoint = torch.load(config["experiment"]["PT_FILE_PATH"])
+    checkpoint = torch.load(config["experiment"]["pt_file_path"])
     assert card["provenance"]["checkpoint_epoch"] == checkpoint["epoch"]
-    for target, paths in config["export"]["TARGETS"].items():
-        assert model[target]["sha256"] == file_sha256(paths["ONNX_FILE_PATH"])
+    for target, paths in config["export"]["targets"].items():
+        assert model[target]["sha256"] == file_sha256(paths["onnx_file_path"])
     # export_bundle goes on with a warning for a checkpoint without rf_sha256
     assert "WARNING" not in capsys.readouterr().out

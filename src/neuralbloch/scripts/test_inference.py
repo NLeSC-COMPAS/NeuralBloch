@@ -80,9 +80,9 @@ def test_inference(config: dict[str, Any]) -> None:
     Args:
         config: Full configuration dictionary.
     """
-    n_runs = config["testing"]["N_RUNS"]
-    infer_batch_size = config["testing"]["INFER_BATCH_SIZE"]
-    batch_size = config["testing"]["BATCH_SIZE"]
+    n_runs = config["testing"]["n_runs"]
+    infer_batch_size = config["testing"]["infer_batch_size"]
+    batch_size = config["testing"]["batch_size"]
 
     device = get_device(config)
 

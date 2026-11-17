@@ -10,7 +10,7 @@ from neuralbloch.loss import relative_l2_squared_loss
 
 LossFunction = Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
 
-# The functions of Loss by their name (training.LOSS_FUNCTION)
+# The functions of Loss by their name (training.loss_function)
 FUNCTIONS: dict[str, LossFunction] = {
     "nmae": nmae_loss,
     "relative_l2": relative_l2_loss,
