@@ -36,7 +36,7 @@ def sizes(config: Mapping[str, Any]) -> dict[str, tuple[int, ...]]:
         "signal": (NTR, 2),
         "dT1": (NTR, 2),
         "dT2": (NTR, 2),
-        "coeffs": (config["NB_signal"],),
+        "coeffs": (config["signal"]["rank"],),
     }
 
 
@@ -80,7 +80,7 @@ def test_output_shapes(
     output_name: str,
 ) -> None:
     model = make_model(NTR, direct_config).eval()
-    assert model.rank == direct_config["NB_signal"]
+    assert model.rank == direct_config["signal"]["rank"]
     with torch.no_grad():
         outputs = TargetModel(model, name)(X)
     output = dict(zip(TARGETS[name].outputs, outputs, strict=True))[output_name]
@@ -105,28 +105,28 @@ def test_fp16_runs_in_half_behind_an_fp32_interface(
 
 
 def test_every_target_needs_its_paths() -> None:
-    targets = {name: {"ONNX_FILE_PATH": f"{name}.onnx"} for name in TARGETS}
-    paths = target_paths({"TARGETS": targets})
+    targets = {name: {"onnx_file_path": f"{name}.onnx"} for name in TARGETS}
+    paths = target_paths({"targets": targets})
     assert list(paths) == list(TARGETS)
     assert paths["signal"] == Path("signal.onnx")
 
     del targets["coeffs"]
     with pytest.raises(ValueError, match="it names signal_and_derivs"):
-        target_paths({"TARGETS": targets})
+        target_paths({"targets": targets})
     with pytest.raises(ValueError, match="it names none"):
-        target_paths({"ONNX_FILE_PATH": "outputs/model.onnx"})
+        target_paths({"onnx_file_path": "outputs/model.onnx"})
 
 
 def test_each_path_is_a_different_file() -> None:
-    targets = {name: {"ONNX_FILE_PATH": f"{name}.onnx"} for name in TARGETS}
+    targets = {name: {"onnx_file_path": f"{name}.onnx"} for name in TARGETS}
     # For example, a copied entry that keeps the ONNX file of another target
-    targets["coeffs"]["ONNX_FILE_PATH"] = "./signal_and_derivs.onnx"
+    targets["coeffs"]["onnx_file_path"] = "./signal_and_derivs.onnx"
     with pytest.raises(
         ValueError,
-        match="coeffs.ONNX_FILE_PATH and signal_and_derivs.ONNX_FILE_PATH "
+        match="coeffs.onnx_file_path and signal_and_derivs.onnx_file_path "
         "are the same file",
     ):
-        target_paths({"TARGETS": targets})
+        target_paths({"targets": targets})
 
 
 def test_outputs_need_the_pytorch_shape_and_finite_values(

@@ -46,16 +46,16 @@ def julia_config_dir(
     monkeypatch.chdir(pytestconfig.rootpath)
     config = load_config(pytestconfig.rootpath / "config")
     config["experiment"].update(
-        DATASET_UNSPLIT_PATH=str(tmp_path / "dataset_unsplit.h5"),
-        DATASET_FOR_VALIDATION_PATH=str(tmp_path / "dataset_for_validation.h5"),
-        DATASET_FOR_TESTING_PATH=str(tmp_path / "dataset_for_testing.h5"),
-        PT_FILE_PATH=str(tmp_path / "model.pt"),
-        LOG_FILE_PATH=str(tmp_path / "log"),
+        dataset_unsplit_path=str(tmp_path / "dataset_unsplit.h5"),
+        dataset_for_validation_path=str(tmp_path / "dataset_for_validation.h5"),
+        dataset_for_testing_path=str(tmp_path / "dataset_for_testing.h5"),
+        pt_file_path=str(tmp_path / "model.pt"),
+        log_dir=str(tmp_path / "log"),
     )
     # A grid of 5 values of T1, T2 and B1
-    config["data"]["N_SAMPLES"] = 125
+    config["data"]["n_samples"] = 125
     # 100 samples of the online training data
-    config["training"].update(ONLINE_BATCH_SIZE=50, REGEN_EVERY=2)
+    config["training"].update(online_samples_per_epoch=50, regen_every_n_epochs=2)
 
     directory = tmp_path / "config"
     directory.mkdir()
@@ -76,9 +76,11 @@ def test_the_julia_training_data_have_the_layout_of_the_model(
 
     params, *targets = (tensor.cpu() for tensor in loader.tensors)
     data = config["data"]
-    NTR = len(np.loadtxt(pytestconfig.rootpath / data["RF_ANGLE_FILE"]))
+    NTR = len(np.loadtxt(pytestconfig.rootpath / data["rf_angle_file"]))
     training = config["training"]
-    n_sampled = training["ONLINE_BATCH_SIZE"] * training["REGEN_EVERY"]
+    n_sampled = (
+        training["online_samples_per_epoch"] * training["regen_every_n_epochs"]
+    )
     # generate_data keeps the samples with T1 > T2. NTR is not a possible
     # number of samples, so a target with the axes of the Julia arrays,
     # (NTR, N), fails
@@ -86,12 +88,12 @@ def test_the_julia_training_data_have_the_layout_of_the_model(
     for target in targets:
         assert target.shape == (len(params), NTR, 2)
     # Each column is in the range of its parameter: the order is T1, T2, B1
-    for column, name in enumerate(("T1", "T2", "B1")):
+    for column, name in enumerate(("T1_s", "T2_s", "B1")):
         values = params[:, column]
-        assert data[f"{name}_lower"] * (1 - 1e-6) <= values.min()
-        assert values.max() <= data[f"{name}_upper"] * (1 + 1e-6)
+        assert data["parameter_ranges"][name]["lower"] * (1 - 1e-6) <= values.min()
+        assert values.max() <= data["parameter_ranges"][name]["upper"] * (1 + 1e-6)
     assert (params[:, 0] > params[:, 1]).all()
-    assert loader.batch_size == training["TRAIN_BATCH_SIZE"]
+    assert loader.batch_size == training["train_batch_size"]
     assert loader.shuffle
 
 
@@ -106,15 +108,17 @@ def test_ranges_without_a_sample_with_t1_above_t2_give_an_error_that_names_them(
     # simulation on the GPU fails with a CUDA error that does not give the
     # cause, so generate_data must raise an error before it
     config = load_config(julia_config_dir)
-    config["data"].update(T1_lower=0.1, T1_upper=0.2, T2_lower=0.3, T2_upper=2.0)
+    config["data"]["parameter_ranges"].update(
+        T1_s={"lower": 0.1, "upper": 0.2}, T2_s={"lower": 0.3, "upper": 2.0}
+    )
 
     with pytest.raises(JuliaError) as error:
         generate_train_loader(config)
 
     assert (
-        "None of the 100 samples has T1 > T2: check the ranges data.T1_lower to "
-        "data.T1_upper (0.1 to 0.2) and data.T2_lower to data.T2_upper (0.3 to "
-        "2.0)"
+        "None of the 100 samples has T1 > T2: check the ranges "
+        "data.parameter_ranges.T1_s (0.1 to 0.2) and data.parameter_ranges.T2_s "
+        "(0.3 to 2.0)"
     ) in str(error.value)
 
 
@@ -133,29 +137,35 @@ def test_the_generate_task_writes_the_validation_and_test_datasets(
 
     experiment, data = config["experiment"], config["data"]
     params, signal, dT1, dT2, N, NTR = load_data_from_h5_file(
-        experiment["DATASET_UNSPLIT_PATH"]
+        experiment["dataset_unsplit_path"]
     )
-    # The grid of N_SAMPLES, without the points with T1 <= T2
-    side = round(data["N_SAMPLES"] ** (1 / 3))
-    T1 = np.geomspace(data["T1_lower"], data["T1_upper"], side)
-    T2 = np.geomspace(data["T2_lower"], data["T2_upper"], side)
+    # The grid of n_samples, without the points with T1 <= T2
+    side = round(data["n_samples"] ** (1 / 3))
+    T1, T2 = (
+        np.geomspace(
+            data["parameter_ranges"][name]["lower"],
+            data["parameter_ranges"][name]["upper"],
+            side,
+        )
+        for name in ("T1_s", "T2_s")
+    )
     assert N == side * (T1[:, None] > T2[None, :]).sum()
-    assert NTR == len(np.loadtxt(pytestconfig.rootpath / data["RF_ANGLE_FILE"]))
+    assert NTR == len(np.loadtxt(pytestconfig.rootpath / data["rf_angle_file"]))
     for target in (signal, dT1, dT2):
         assert target.shape == (N, NTR)
         assert np.iscomplexobj(target)
     assert (params[:, 0] > params[:, 1]).all()
 
     # Each sample is in one of the two datasets of split_dataset
-    validation = load_data_from_h5_file(experiment["DATASET_FOR_VALIDATION_PATH"])
-    test = load_data_from_h5_file(experiment["DATASET_FOR_TESTING_PATH"])
+    validation = load_data_from_h5_file(experiment["dataset_for_validation_path"])
+    test = load_data_from_h5_file(experiment["dataset_for_testing_path"])
     assert test[4] == max(1, int(N * 0.15))
     assert sorted(map(tuple, np.concatenate([validation[0], test[0]]))) == sorted(
         map(tuple, params)
     )
     # HDF5.jl writes the attributes as bytes
-    with h5py.File(experiment["DATASET_FOR_VALIDATION_PATH"]) as file:
-        assert file.attrs["derivative_method"].decode() == data["DERIVATIVE_METHOD"]
+    with h5py.File(experiment["dataset_for_validation_path"]) as file:
+        assert file.attrs["derivative_method"].decode() == data["derivative_method"]
 
     # The validation loader gives the targets in the layout of the training data
     loader, _ = generate_val_loader(config)

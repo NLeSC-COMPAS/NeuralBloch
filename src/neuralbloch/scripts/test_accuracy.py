@@ -16,7 +16,7 @@ def test_accuracy(config: dict[str, Any]) -> None:
     device = get_device(config)
     model, _ = load_model(config, device)
     params, signal, dT1, dT2, N, _ = load_data_from_h5_file(
-        config["experiment"]["DATASET_FOR_TESTING_PATH"]
+        config["experiment"]["dataset_for_testing_path"]
     )
 
     x = torch.tensor(params, dtype=torch.float32, device=device)

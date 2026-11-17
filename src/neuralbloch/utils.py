@@ -37,7 +37,7 @@ def set_seed(seed: int) -> None:
 
 def get_device(config: dict[str, Any]) -> str:
     """Select computation device."""
-    device: str = config["experiment"]["DEVICE"]
+    device: str = config["experiment"]["device"]
     return device if torch.cuda.is_available() else "cpu"
 
 
@@ -54,15 +54,12 @@ def sample_parameters(config: dict[str, Any], n_samples: int) -> torch.Tensor:
     Returns:
         A float32 tensor of shape ``(n_samples, 3)``.
     """
-    data = config["data"]
+    ranges = config["data"]["parameter_ranges"]
+    T1, T2, B1_range = ranges["T1_s"], ranges["T2_s"], ranges["B1"]
 
-    log_T1 = torch.empty(n_samples).uniform_(
-        np.log(data["T1_lower"]), np.log(data["T1_upper"])
-    )
-    log_T2 = torch.empty(n_samples).uniform_(
-        np.log(data["T2_lower"]), np.log(data["T2_upper"])
-    )
-    B1 = torch.empty(n_samples).uniform_(data["B1_lower"], data["B1_upper"])
+    log_T1 = torch.empty(n_samples).uniform_(np.log(T1["lower"]), np.log(T1["upper"]))
+    log_T2 = torch.empty(n_samples).uniform_(np.log(T2["lower"]), np.log(T2["upper"]))
+    B1 = torch.empty(n_samples).uniform_(B1_range["lower"], B1_range["upper"])
 
     return torch.stack([log_T1.exp(), log_T2.exp(), B1], dim=1)
 
@@ -81,9 +78,9 @@ def load_model(
 
 
 def load_checkpoint(config: dict[str, Any], device: str) -> dict[str, Any]:
-    """Load the checkpoint file that ``experiment.PT_FILE_PATH`` gives."""
+    """Load the checkpoint file that ``experiment.pt_file_path`` gives."""
     checkpoint: dict[str, Any] = torch.load(
-        config["experiment"]["PT_FILE_PATH"],
+        config["experiment"]["pt_file_path"],
         map_location=device,
     )
     return checkpoint
@@ -96,6 +93,16 @@ def model_from_checkpoint(checkpoint: dict[str, Any], device: str) -> "FCModel":
     ``config/``.
     """
     from neuralbloch.model import FCModel
+
+    model_config = checkpoint["model_config"]
+    if "parameter_ranges" not in checkpoint["data_config"] or not {
+        "signal",
+        "derivative",
+    } <= set(model_config):
+        raise ValueError(
+            "The checkpoint has the config keys of an earlier version of "
+            "NeuralBloch. Train the model again."
+        )
 
     NTR = checkpoint["NTR"]
 
@@ -115,7 +122,7 @@ def file_sha256(path: str | Path) -> str:
 
 # The keys of the data configuration that give the RF tables of the training
 # sequence (data_generation.jl)
-RF_TABLE_KEYS = ("RF_ANGLE_FILE", "RF_PHASE_FILE")
+RF_TABLE_KEYS = ("rf_angle_file", "rf_phase_file")
 
 
 def rf_sha256(data_config: Mapping[str, Any]) -> dict[str, str]:

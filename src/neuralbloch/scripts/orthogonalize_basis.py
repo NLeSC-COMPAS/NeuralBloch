@@ -11,21 +11,17 @@ import numpy as np
 import torch
 from neuralbloch.basis import orthogonalize_shared_basis
 from neuralbloch.basis import truncate_shared_basis
+from neuralbloch.basis import with_signal_rank
 from neuralbloch.basis import worst_relative_output_difference
 from neuralbloch.model import FCModel
 from neuralbloch.utils import get_device
+from neuralbloch.utils import model_from_checkpoint
 
 
 def load_checkpoint(path: Path, device: str) -> tuple[FCModel, dict[str, Any]]:
     """Load a shared-basis model and its checkpoint dictionary."""
     checkpoint: dict[str, Any] = torch.load(path, map_location=device)
-    model = FCModel(
-        checkpoint["NTR"], checkpoint["model_config"], checkpoint["data_config"]
-    )
-    model.load_state_dict(checkpoint["model_state"])
-    model.to(device)
-    model.eval()
-    return model, checkpoint
+    return model_from_checkpoint(checkpoint, device), checkpoint
 
 
 def postprocess_basis(
@@ -48,8 +44,8 @@ def postprocess_basis(
 
     model, checkpoint = load_checkpoint(checkpoint_path, device)
     if model.derivative_mode != "derived":
-        raise ValueError("Basis postprocessing requires derivative_mode='derived'")
-    full_rank = checkpoint["model_config"]["NB_signal"]
+        raise ValueError("Basis postprocessing requires derivative.mode='derived'")
+    full_rank = model.rank
     if any(rank > full_rank for rank in ranks):
         raise ValueError(f"--truncate ranks must not exceed full rank {full_rank}")
 
@@ -76,10 +72,9 @@ def postprocess_basis(
             model, checkpoint["model_config"], checkpoint["data_config"], rank
         )
         rank_checkpoint = dict(checkpoint)
-        rank_checkpoint["model_config"] = {
-            **checkpoint["model_config"],
-            "NB_signal": rank,
-        }
+        rank_checkpoint["model_config"] = with_signal_rank(
+            checkpoint["model_config"], rank
+        )
         rank_checkpoint["model_state"] = smaller.state_dict()
         torch.save(rank_checkpoint, rank_path)
         written.append(rank_path)
@@ -112,7 +107,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     """Run basis postprocessing from the command line."""
     args = parse_args()
-    device = get_device({"experiment": {"DEVICE": "cuda"}})
+    device = get_device({"experiment": {"device": "cuda"}})
     postprocess_basis(
         args.checkpoint, args.fit_dataset, args.output, args.truncate, device
     )
