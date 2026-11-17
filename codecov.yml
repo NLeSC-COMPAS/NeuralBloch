@@ -1,0 +1,10 @@
+coverage:
+  status:
+    project:
+      default:
+        # A small drop is noise; a bigger drop fails the check
+        threshold: 1%
+    # Codecov turns the patch check on by default
+    patch: off
+comment:
+  layout: "condensed_header, diff, files"
