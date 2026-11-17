@@ -1,6 +1,5 @@
 import hashlib
 import random
-from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import Any
@@ -138,10 +137,17 @@ def file_sha256(path: str | Path) -> str:
 RF_TABLE_KEYS = ("rf_angle_file", "rf_phase_file")
 
 
-def rf_sha256(data_config: Mapping[str, Any]) -> dict[str, str]:
-    """Return the sha256 of each RF table that a data configuration gives.
+def rf_sha256(rf_angle_file: str | Path, rf_phase_file: str | Path) -> dict[str, str]:
+    """Return the sha256 of the two RF tables of a sequence.
+
+    Args:
+        rf_angle_file: The RF angle table (``data.rf_angle_file``).
+        rf_phase_file: The RF phase table (``data.rf_phase_file``).
 
     Returns:
         The sha256 by key of the data configuration (``RF_TABLE_KEYS``).
     """
-    return {key: file_sha256(data_config[key]) for key in RF_TABLE_KEYS}
+    return {
+        "rf_angle_file": file_sha256(rf_angle_file),
+        "rf_phase_file": file_sha256(rf_phase_file),
+    }

@@ -216,7 +216,7 @@ def check_rf_provenance(
             "export cannot check that the RF tables are the tables of the "
             "training: " + ", ".join(str(data_config[k]) for k in RF_TABLE_KEYS)
         )
-    current = rf_sha256(data_config)
+    current = rf_sha256(data_config["rf_angle_file"], data_config["rf_phase_file"])
     for key in RF_TABLE_KEYS:
         if recorded.get(key) != current[key]:
             raise ValueError(

@@ -1,8 +1,6 @@
 import time
-from typing import Any
 import torch
-from neuralbloch.config_schema import ModelConfig
-from neuralbloch.config_schema import ParameterRanges
+from neuralbloch.config_schema import Config
 from neuralbloch.data import DATA_GENERATION_JL
 from neuralbloch.data.data_loading import TensorBatchLoader
 from neuralbloch.data.data_loading import generate_train_loader
@@ -47,26 +45,22 @@ def initialize_joint_pca_basis(
         decoder.weight.copy_(basis)
 
 
-def train(config: dict[str, Any]) -> None:
+def train(config: Config) -> None:
     """Build the model and run the training loop.
 
     Args:
-        config: Full configuration dictionary.
+        config: The validated configuration.
     """
+    device = get_device(config.experiment.device)
     # Create validation DataLoader and determine the number of time points
-    device = get_device(config["experiment"]["device"])
     val_loader, NTR = generate_val_loader(
-        config["experiment"]["dataset_for_validation_path"],
-        config["training"]["validation_batch_size"],
+        config.experiment.dataset_for_validation_path,
+        config.training.validation_batch_size,
         device,
     )
 
     # Initialize the model
-    model = FCModel(
-        NTR,
-        ModelConfig.model_validate(config["model"]),
-        ParameterRanges.model_validate(config["data"]["parameter_ranges"]),
-    )
+    model = FCModel(NTR, config.model, config.data.parameter_ranges)
 
     # Load Julia data generation functions (used for online training data).
     # Import juliacall only here, because the import starts Julia.
@@ -74,12 +68,15 @@ def train(config: dict[str, Any]) -> None:
 
     jl.include(DATA_GENERATION_JL)
 
+    # Julia reads a plain dict with string paths
+    julia_config = config.model_dump(mode="json")
+
     initial_train_loader = None
     basis_initialization_seconds = 0.0
     if model.basis_initialization == "joint_pca":
         started = time.perf_counter()
         initial_train_loader = generate_train_loader(
-            config, config["training"]["train_batch_size"], device
+            julia_config, config.training.train_batch_size, device
         )
         initialize_joint_pca_basis(model, initial_train_loader)
         basis_initialization_seconds = time.perf_counter() - started
@@ -93,7 +90,15 @@ def train(config: dict[str, Any]) -> None:
     print(f"  Model parameters: {n_params:,}")
 
     # Create the trainer
-    trainer = Trainer(model, val_loader, config)
+    trainer = Trainer(
+        model,
+        val_loader,
+        config.training,
+        config.experiment,
+        config.data,
+        config.model,
+        julia_config,
+    )
 
     # Train the model
     trainer.train(initial_train_loader)

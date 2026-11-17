@@ -73,7 +73,7 @@ def train(*, config_dir: ConfigDir = Path("config")) -> None:
 
     from neuralbloch.scripts.train import train
 
-    train(config.model_dump(mode="json"))
+    train(config)
 
 
 @app.command

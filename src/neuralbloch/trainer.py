@@ -1,11 +1,17 @@
 import math
 import time
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 import torch
 import torch.optim as optim
 from torch.optim.lr_scheduler import LRScheduler
 from torch.utils.tensorboard import SummaryWriter
+from neuralbloch.config_schema import DataConfig
+from neuralbloch.config_schema import ExperimentConfig
+from neuralbloch.config_schema import ModelConfig
+from neuralbloch.config_schema import PlateauScheduler
+from neuralbloch.config_schema import TrainingConfig
 from neuralbloch.data.data_loading import TensorBatchLoader
 from neuralbloch.data.data_loading import generate_train_loader
 from neuralbloch.loss import Loss
@@ -14,14 +20,10 @@ from neuralbloch.utils import get_device
 from neuralbloch.utils import rf_sha256
 
 
-# The keys of training.lr_scheduler for name "plateau", besides "name"
-PLATEAU_KEYS = {"patience_epochs", "factor", "min_lr"}
-
-
 def _not_finite_error(
     problem: str,
     best_epoch: int | None,
-    pt_file_path: str,
+    pt_file_path: Path,
 ) -> RuntimeError:
     """Return the error for a value of the training that is not finite.
 
@@ -47,19 +49,39 @@ class Trainer:
         self,
         model: FCModel,
         val_loader: TensorBatchLoader,
-        config: dict[str, Any],
+        training: TrainingConfig,
+        experiment: ExperimentConfig,
+        data: DataConfig,
+        model_config: ModelConfig,
+        julia_config: dict[str, Any],
     ) -> None:
+        """Set up the optimizer, the scheduler and the logger.
+
+        Args:
+            model: The model to train.
+            val_loader: The fixed validation data.
+            training: The training loop and optimizer settings.
+            experiment: The device and the output paths.
+            data: The data configuration, saved in each checkpoint.
+            model_config: The model configuration, saved in each checkpoint.
+            julia_config: The full configuration as a dict with string paths.
+                The Julia code that makes the training data reads it.
+        """
+        self.training = training
+        self.experiment = experiment
+        self.data = data
+        self.model_config = model_config
+        self.julia_config = julia_config
 
         # Set device and move model to GPU/CPU
-        self.device = get_device(config["experiment"]["device"])
+        self.device = get_device(experiment.device)
         self.model = model.to(self.device)
 
-        self.config = config
-
         # Optimizer
-        compile_train_step = config["training"]["compile_train_step"]
-        compile_train_step = compile_train_step and self.device.startswith("cuda")
-        initial_learning_rate = float(config["training"]["learning_rate"])
+        compile_train_step = training.compile_train_step and self.device.startswith(
+            "cuda"
+        )
+        initial_learning_rate = training.learning_rate
         if compile_train_step:
             # A device-resident learning rate prevents torch.compile from
             # specializing and recompiling the Adam step after every scheduler
@@ -82,38 +104,24 @@ class Trainer:
         # Learning rate scheduler
         self.scheduler: LRScheduler
 
-        validate_every = config["training"]["validate_every_n_epochs"]
-        if validate_every <= 0:
-            raise ValueError("training.validate_every_n_epochs must be positive")
-
-        lr_scheduler = config["training"]["lr_scheduler"]
-        if lr_scheduler["name"] == "plateau":
-            missing = PLATEAU_KEYS - set(lr_scheduler)
-            if missing:
-                raise ValueError(
-                    "training.lr_scheduler with name 'plateau' needs the keys "
-                    f"{sorted(missing)}"
-                )
-            # ReduceLROnPlateau counts validations, not epochs. PyYAML reads
-            # 1e-5 as a string, so cast the floats.
+        lr_scheduler = training.lr_scheduler
+        if isinstance(lr_scheduler, PlateauScheduler):
+            # ReduceLROnPlateau counts validations, not epochs
             self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
                 self.optimizer,
-                patience=math.ceil(lr_scheduler["patience_epochs"] / validate_every),
-                factor=float(lr_scheduler["factor"]),
-                min_lr=float(lr_scheduler["min_lr"]),
-            )
-        elif lr_scheduler["name"] == "cosine":
-            self.scheduler = optim.lr_scheduler.CosineAnnealingLR(
-                self.optimizer, T_max=config["training"]["n_epochs"]
+                patience=math.ceil(
+                    lr_scheduler.patience_epochs / training.validate_every_n_epochs
+                ),
+                factor=lr_scheduler.factor,
+                min_lr=lr_scheduler.min_lr,
             )
         else:
-            raise ValueError(
-                "training.lr_scheduler.name must be 'plateau' or 'cosine', got "
-                f"{lr_scheduler['name']!r}"
+            self.scheduler = optim.lr_scheduler.CosineAnnealingLR(
+                self.optimizer, T_max=training.n_epochs
             )
 
         # Loss function
-        self.criterion = Loss(config["training"]["loss_function"])
+        self.criterion = Loss(training.loss_function)
 
         # Validation data remains fixed during training
         self.val_loader = val_loader
@@ -131,7 +139,7 @@ class Trainer:
             )
 
         # TensorBoard logger
-        self.writer = SummaryWriter(log_dir=config["experiment"]["log_dir"])
+        self.writer = SummaryWriter(log_dir=str(experiment.log_dir))
 
     def train(
         self,
@@ -152,12 +160,12 @@ class Trainer:
         best_val_loss = float("inf")
         best_epoch: int | None = None
 
-        pt_file_path = self.config["experiment"]["pt_file_path"]
+        pt_file_path = self.experiment.pt_file_path
         # The training data come from the RF tables. Record their sha256 in the
         # checkpoint, so that export_bundle can check the tables of a bundle
-        rf_tables = rf_sha256(self.config["data"])
-        n_epochs = self.config["training"]["n_epochs"]
-        validate_every = self.config["training"]["validate_every_n_epochs"]
+        rf_tables = rf_sha256(self.data.rf_angle_file, self.data.rf_phase_file)
+        n_epochs = self.training.n_epochs
+        validate_every = self.training.validate_every_n_epochs
         training_started = time.perf_counter()
         train_loader = initial_train_loader
 
@@ -165,15 +173,14 @@ class Trainer:
             generation_time = 0.0
             # Generate new Bloch simulation data periodically
             needs_regeneration = (epoch == 1 and train_loader is None) or (
-                epoch > 1
-                and (epoch - 1) % self.config["training"]["regen_every_n_epochs"] == 0
+                epoch > 1 and (epoch - 1) % self.training.regen_every_n_epochs == 0
             )
             if needs_regeneration:
                 print(f"Generating training data for epoch {epoch} ...", flush=True)
                 started = time.perf_counter()
                 train_loader = generate_train_loader(
-                    self.config,
-                    self.config["training"]["train_batch_size"],
+                    self.julia_config,
+                    self.training.train_batch_size,
                     self.device,
                 )
                 generation_time = time.perf_counter() - started
@@ -247,8 +254,8 @@ class Trainer:
                         "model_state": self.model.state_dict(),
                         "epoch": epoch,
                         "NTR": self.model.NTR,
-                        "model_config": dict(self.config["model"]),
-                        "data_config": dict(self.config["data"]),
+                        "model_config": self.model_config.model_dump(mode="json"),
+                        "data_config": self.data.model_dump(mode="json"),
                         "rf_sha256": rf_tables,
                     },
                     pt_file_path,
