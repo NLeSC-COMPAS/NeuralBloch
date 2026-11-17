@@ -113,7 +113,14 @@ def export_onnx(*, config_dir: ConfigDir = Path("config")) -> None:
 
     from neuralbloch.scripts.export_onnx import export_onnx
 
-    export_onnx(config.model_dump(mode="json"))
+    export = config.export
+    export_onnx(
+        targets=export.targets,
+        fp16=export.fp16,
+        opset_version=export.opset_version,
+        n_verify_samples=export.n_verify_samples,
+        pt_file_path=config.experiment.pt_file_path,
+    )
 
 
 @app.command
@@ -123,4 +130,4 @@ def export_bundle(*, config_dir: ConfigDir = Path("config")) -> None:
 
     from neuralbloch.scripts.export_bundle import export_bundle
 
-    export_bundle(config.model_dump(mode="json"))
+    export_bundle(config.export, config.experiment.pt_file_path)

@@ -13,6 +13,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from neuralbloch.config_schema import ExportConfig
 from neuralbloch.config_schema import check_family
 from neuralbloch.config_schema import check_version
 from neuralbloch.scripts.export_onnx import TARGETS
@@ -706,7 +707,7 @@ def release_command(card: Mapping[str, Any], tarball: Path, sha256: str) -> list
     ]
 
 
-def export_bundle(config: dict[str, Any]) -> None:
+def export_bundle(export: ExportConfig, pt_file_path: Path) -> None:
     """Write the model bundle that NeuralBloch.jl reads, from the exported targets.
 
     The bundle (``export.bundle_dir``) contains the ONNX model of each target,
@@ -727,17 +728,17 @@ def export_bundle(config: dict[str, Any]) -> None:
     release of the family version exists (``require_unreleased``).
 
     Args:
-        config: Full configuration dictionary.
+        export: The ``export`` configuration.
+        pt_file_path: The checkpoint file (``experiment.pt_file_path``).
     """
-    export_config = config["export"]
-    checkpoint_path = Path(config["experiment"]["pt_file_path"])
+    checkpoint_path = pt_file_path
     # Check the configurations before the model is made from them
     checkpoint = load_checkpoint(checkpoint_path, "cpu")
     require_configs(checkpoint, checkpoint_path)
     model = model_from_checkpoint(checkpoint, "cpu")
 
-    family = export_config["model_family"]
-    version = check_version(export_config["model_version"])
+    family = export.model_family
+    version = export.model_version
     check_family(family, model.rank)
 
     commit = clean_commit()
@@ -752,7 +753,7 @@ def export_bundle(config: dict[str, Any]) -> None:
             print(f"\nWARNING: {warning}")
             warnings.append(warning)
 
-    warn(require_unreleased(release_tag(family, version), export_config["offline"]))
+    warn(require_unreleased(release_tag(family, version), export.offline))
 
     data_config = checkpoint["data_config"]
     method = derivative_method(data_config)
@@ -769,15 +770,13 @@ def export_bundle(config: dict[str, Any]) -> None:
 
     # The ONNX models must come from this checkpoint. Check the checkpoint that
     # export_onnx recorded in each model, then compare each model with it.
-    onnx_paths = target_paths(export_config)
+    onnx_paths = target_paths(export.targets)
     require_exported(onnx_paths)
     checkpoint_sha256 = file_sha256(checkpoint_path)
     for onnx_path in onnx_paths.values():
         require_checkpoint(onnx_path, checkpoint_sha256, checkpoint_path)
     precision = onnx_precision(list(onnx_paths.values()))
-    x = sample_parameters(
-        training_domain(checkpoint), export_config["n_verify_samples"]
-    )
+    x = sample_parameters(training_domain(checkpoint), export.n_verify_samples)
     for target, onnx_path in onnx_paths.items():
         verify_onnx(model, target, onnx_path, x, precision)
 
@@ -805,7 +804,7 @@ def export_bundle(config: dict[str, Any]) -> None:
     }
     files |= {name: data_config[data_key] for name, data_key, _ in RF_FILES.values()}
 
-    bundle_dir = Path(export_config["bundle_dir"])
+    bundle_dir = export.bundle_dir
     parsed = write_bundle(bundle_dir, card, files)
 
     # Write the release file next to the bundle
