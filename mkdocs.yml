@@ -1,0 +1,31 @@
+site_name: NeuralBloch
+site_description: Neural network surrogate model for Bloch simulations in MR-STAT
+repo_url: https://github.com/NLeSC-COMPAS/NeuralBloch
+repo_name: NLeSC-COMPAS/NeuralBloch
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Configuration: configuration.md
+  - Development: development.md
+  - API reference: api.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.superfences
+  - toc:
+      permalink: true
