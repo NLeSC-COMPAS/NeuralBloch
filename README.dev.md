@@ -1,21 +1,21 @@
 # Development
 
-Environment setup, tooling, and code style for working on this repository.
+This file tells you how to set up the development environment of this repository.
 See [README.md](README.md) for what the project does and how to run it.
 
 ## Environment setup
 
-Python dependencies are managed with [uv](https://docs.astral.sh/uv/) and specified in `pyproject.toml`:
+The project needs Python 3.12 or later. [uv](https://docs.astral.sh/uv/) manages the Python dependencies. To install them, use this command:
 
 ```bash
 uv sync
 ```
 
-This installs the runtime dependencies together with the `dev` group. Use `uv sync --no-dev` to skip the development tools.
+This command installs the runtime dependencies and the `dev` group. To skip the development tools, use `uv sync --no-dev`.
 
 ## Julia dependencies
 
-Julia is used for Bloch simulations through [JuliaCall](https://juliapy.github.io/PythonCall.jl/stable/juliacall/). Julia itself and the required packages are installed automatically on first use, based on `juliapkg.json`.
+The Bloch simulations use Julia through [JuliaCall](https://juliapy.github.io/PythonCall.jl/stable/juliacall/). At the first use, JuliaCall installs Julia and the Julia packages of `src/neuralbloch/juliapkg.json`. The simulations need an NVIDIA GPU with CUDA.
 
 ## Code style
 
@@ -26,14 +26,9 @@ uv run ruff check .    # lint
 uv run ruff format .   # format
 ```
 
-Two conventions are worth knowing before adding rules:
-
-- **MR-STAT notation is exempt from `pep8-naming`.** `N803`, `N806`, and `N813` are ignored so that domain names (`T1`, `T2`, `B1`, `dT1`, `dT2`, `NTR`) and the `from juliacall import Main as jl` alias keep the spelling used in the literature and in `data_generation.jl`. Class and function naming (`N801`, `N802`) is still enforced.
-- **Some docstring rules are deferred, not disabled.** `D100`, `D104`, `D105`, and `D107` are ignored; docstrings on public functions, classes, and methods (`D101`, `D102`, `D103`) are required. Drop entries from the `ignore` list as the remaining docstrings get written.
-
 ## Type checking
 
-Type checking is handled by [ty](https://docs.astral.sh/ty/), configured under `[tool.ty]` in `pyproject.toml`. The files it checks are listed there (`tool.ty.src`), so no arguments are needed:
+[ty](https://docs.astral.sh/ty/) does the type checking. The settings are in `[tool.ty]` in `pyproject.toml`.
 
 ```bash
 uv run ty check
@@ -41,16 +36,12 @@ uv run ty check
 
 ## Tests
 
-The tests use [pytest](https://docs.pytest.org/). The pytest configuration is in the `[tool.pytest]` table of `pyproject.toml`.
+The tests use [pytest](https://docs.pytest.org/). The settings are in `[tool.pytest]` in `pyproject.toml`. The tests are in two directories:
 
-The tests are in two directories:
+- `tests/unit/`: Each test checks one function or one class, with small inputs.
+- `tests/integration/`: Each test checks modules together, or a full command. It can use real external components.
 
-- `tests/unit/`: each test checks one function or one class, with small inputs that the test makes. These tests take a few seconds.
-- `tests/integration/`: each test checks modules together through their real interfaces (a checkpoint, an ONNX file, an HDF5 file), a full task, or a real external component: `torch.onnx.export`, ONNX Runtime, git or the files of the repository.
-
-`tests/integration/test_julia_data_generation.py` runs the Julia data generation. It needs a CUDA GPU, and pytest skips it without one.
-
-The fixtures in `tests/conftest.py` make the configurations, the models, the checkpoints and the datasets of the tests. Use them in new tests, so that a change of the configuration or of the checkpoint format changes only `conftest.py`.
+In new tests, use the fixtures of `tests/conftest.py`. Write new tests as pytest functions, not as `unittest.TestCase` classes.
 
 To run the tests, use these commands:
 
@@ -61,36 +52,29 @@ uv run pytest tests/unit/test_bundle.py   # run the tests in one file
 uv run pytest -k rf_table                 # run the tests that have "rf_table" in their names
 uv run pytest -x                          # stop after the first test that fails
 uv run pytest --lf                        # run only the tests that failed the last time
+uv run pytest --cov                       # also show the coverage
 ```
 
-A test that needs a CUDA GPU has the decorator `@has_gpu` (from `tests/helpers.py`). To skip it on a machine with a GPU, set `CUDA_VISIBLE_DEVICES=""`.
+### GPU and Julia
 
-The Julia code reads the configuration keys by name, and only the tests in `test_julia_data_generation.py` run it. Run them after a change of the configuration keys. A test that simulates takes about a minute. The first run in a new virtual environment also installs the Julia packages.
+A test that needs a CUDA GPU has the marker `@has_gpu` (from `tests/helpers.py`). Without a GPU, pytest skips it. To skip these tests on a machine with a GPU, set `CUDA_VISIBLE_DEVICES=""`.
 
-To see which lines the tests run, add `--cov`:
+The import of `juliacall` starts Julia. If torch loads before `juliacall`, Julia can crash ([pytorch#78829](https://github.com/pytorch/pytorch/issues/78829)). Obey these rules:
 
-```bash
-uv run pytest --cov   # the coverage of each file, and the lines that no test runs
-```
+- In `neuralbloch.cli`, do not import `juliacall` at module level. Do not import torch, or a module that loads torch, at module level. Each command calls `_start()` first, and `_start()` imports `juliacall`. Then the command imports the modules that load torch.
+- In the other modules, do not import `juliacall` at module level. Import it in the function that runs Julia.
+- A test without `@has_gpu` must not run Julia. To replace Julia, use the fixture `julia_batch_mock` or `git_and_julia_in_export_mock`.
 
-The coverage settings are in the `[tool.coverage]` tables of `pyproject.toml`. The coverage includes the branches, and the report also shows the files that no test imports.
-
-The tests that do not use `@has_gpu` do not start Julia. The import of `juliacall` starts Julia, so only `run.py` imports it at module level; the other modules import it in the functions that run Julia. A test checks this. In a test that does not use `@has_gpu`, an import of `juliacall` raises `ImportError`, so that the test cannot start Julia by mistake. Such a test can replace `juliacall` with a mock (`julia_batch_mock`).
-
-CI runs the tests (see [Continuous integration](#continuous-integration)). The git hooks do not run them.
-
-Write new tests as pytest functions. Do not write them as `unittest.TestCase` classes.
 
 ## Git hooks
 
-Git hooks are managed with [prek](https://prek.j178.dev/). The hooks are defined in `prek.toml`. Install them once per clone:
+[prek](https://prek.j178.dev/) manages the git hooks. `prek.toml` defines them. Install the hooks one time for each clone:
 
 ```bash
-uv run prek install          # install the git hooks (one-off)
-uv run prek uninstall        # uninstall the git hooks (one-off)
+uv run prek install
 ```
 
-Once installed, the hooks run automatically on every commit — except ty, which runs on `git push` instead.
+When you commit, all hooks except `ty` run. When you push, all hooks run, including `ty`. The hooks do not run the tests.
 
 
 > [!IMPORTANT]
@@ -99,15 +83,17 @@ Once installed, the hooks run automatically on every commit — except ty, which
 
 You can also run the hooks manually:
 
-```
-uv run prek run              # run the hooks on staged files (only pre-commit stage)
-uv run prek run --all-files  # run the hooks on all files
+```bash
+uv run prek run --all-files                    # all hooks except ty
+uv run prek run --all-files --stage pre-push   # all hooks, including ty
 ```
 
-To run ty together with the other hooks manually, ask for the stage explicitly:
+## Documentation
+
+The documentation uses [MkDocs](https://www.mkdocs.org/). To install the tools of the `docs` group, use this command:
 
 ```bash
-uv run prek run --all-files --stage pre-push
+uv sync --group docs
 ```
 
 ## Continuous integration
