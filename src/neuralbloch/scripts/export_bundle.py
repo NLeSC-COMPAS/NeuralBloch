@@ -13,6 +13,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from neuralbloch.config_schema import check_family
+from neuralbloch.config_schema import check_version
 from neuralbloch.scripts.export_onnx import TARGETS
 from neuralbloch.scripts.export_onnx import onnx_precision
 from neuralbloch.scripts.export_onnx import require_checkpoint
@@ -20,8 +22,6 @@ from neuralbloch.scripts.export_onnx import require_exported
 from neuralbloch.scripts.export_onnx import target_paths
 from neuralbloch.scripts.export_onnx import training_domain
 from neuralbloch.scripts.export_onnx import verify_onnx
-from neuralbloch.types import check_family
-from neuralbloch.types import check_version
 from neuralbloch.utils import RF_TABLE_KEYS
 from neuralbloch.utils import file_sha256
 from neuralbloch.utils import load_checkpoint

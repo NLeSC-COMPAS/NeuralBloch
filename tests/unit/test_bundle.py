@@ -7,6 +7,9 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import Mock
 import pytest
+from neuralbloch.config_schema import check_family
+from neuralbloch.config_schema import check_version
+from neuralbloch.config_schema import family_rank
 from neuralbloch.scripts.export_bundle import CARD
 from neuralbloch.scripts.export_bundle import RF_FILES
 from neuralbloch.scripts.export_bundle import SCHEMA_VERSION
@@ -27,9 +30,6 @@ from neuralbloch.scripts.export_bundle import tarball_name
 from neuralbloch.scripts.export_bundle import write_bundle
 from neuralbloch.scripts.export_bundle import write_tarball
 from neuralbloch.scripts.export_onnx import TARGETS
-from neuralbloch.types import check_family
-from neuralbloch.types import check_version
-from neuralbloch.types import family_rank
 from neuralbloch.utils import RF_TABLE_KEYS
 from neuralbloch.utils import rf_sha256
 

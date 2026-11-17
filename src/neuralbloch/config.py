@@ -1,13 +1,13 @@
 from pathlib import Path
 from typing import Any
 import yaml
-from neuralbloch.types import Config
+from neuralbloch.config_schema import Config
 
 
 def load_config(config_dir: str | Path) -> dict[str, Any]:
     """Load, merge and validate all YAML configuration files.
 
-    A configuration that does not follow the schema in ``types.py`` raises the
+    A configuration that does not follow the schema in ``config_schema.py`` raises the
     ``ValidationError`` of pydantic, which lists each wrong key (``data.TR_s``).
 
     Args:
