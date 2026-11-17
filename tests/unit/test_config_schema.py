@@ -1,4 +1,4 @@
-"""The config schema (types.py): the config in config/ passes, bad values fail."""
+"""The config schema (config_schema.py): the config in config/ passes, bad values fail."""
 
 import math
 from pathlib import Path
@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 from neuralbloch.config import load_config
-from neuralbloch.types import Config
+from neuralbloch.config_schema import Config
 
 
 CONFIG_DIR = Path(__file__).parents[2] / "config"
@@ -160,6 +160,14 @@ def test_missing_keys_are_refused(config_dict: dict[str, Any], key_path: str) ->
         ("data.parameter_ranges.B1", {"lower": 1.0, "upper": 1.0}, "must be below"),
         # T1 and T2 are sampled with log
         ("data.parameter_ranges.T2_s.lower", 0.0, "greater than 0"),
+        ("data.rf_angle_file", "", "path must not be empty"),
+        ("experiment.log_dir", "  ", "path must not be empty"),
+        ("export.bundle_dir", "", "path must not be empty"),
+        (
+            "export.targets.signal.onnx_file_path",
+            "",
+            "path must not be empty",
+        ),
         # model.yaml
         ("model.activation", "sigmoid", "relu"),
         ("model.signal.num_layers", 1, "greater than or equal to 2"),
