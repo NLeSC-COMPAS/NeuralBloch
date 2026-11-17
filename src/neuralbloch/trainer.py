@@ -171,7 +171,11 @@ class Trainer:
             if needs_regeneration:
                 print(f"Generating training data for epoch {epoch} ...", flush=True)
                 started = time.perf_counter()
-                train_loader = generate_train_loader(self.config)
+                train_loader = generate_train_loader(
+                    self.config,
+                    self.config["training"]["train_batch_size"],
+                    self.device,
+                )
                 generation_time = time.perf_counter() - started
                 print(
                     f"Generated {train_loader.n_samples:,} samples in "

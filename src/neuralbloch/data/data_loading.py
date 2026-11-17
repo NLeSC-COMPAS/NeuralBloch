@@ -1,11 +1,11 @@
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Any
 import h5py
 import numpy as np
 import numpy.typing as npt
 import torch
 from neuralbloch.utils import complex_to_real_imag
-from neuralbloch.utils import get_device
 
 
 class TensorBatchLoader:
@@ -123,20 +123,21 @@ def _describe_bad_samples(
 
 
 def generate_val_loader(
-    config: dict[str, Any],
+    path: str | Path,
+    batch_size: int,
+    device: str,
 ) -> tuple[TensorBatchLoader, int]:
     """Build the validation batch loader from the stored HDF5 dataset.
 
     Args:
-        config: Full configuration dictionary.
+        path: The validation dataset (``experiment.dataset_for_validation_path``).
+        batch_size: The batch size (``training.validation_batch_size``).
+        device: The device of the batches (see ``get_device``).
 
     Returns:
         A tuple of the validation loader and ``NTR``, the number of
         readout time points in the signal.
     """
-    device = get_device(config["experiment"]["device"])
-
-    path = config["experiment"]["dataset_for_validation_path"]
     params, signal, dT1, dT2, _, NTR = load_data_from_h5_file(path)
 
     # Stack complex-valued data into paired real and imaginary channels
@@ -151,17 +152,17 @@ def generate_val_loader(
         {"signal": sig_split, "deriv_T1": dT1_split, "deriv_T2": dT2_split},
     )
 
-    batchsize = config["training"]["validation_batch_size"]
-
     val_loader = make_loader(
-        params, sig_split, dT1_split, dT2_split, batchsize, device, shuffle=False
+        params, sig_split, dT1_split, dT2_split, batch_size, device, shuffle=False
     )
 
     return val_loader, NTR
 
 
 def generate_train_loader(
-    config: dict[str, Any],
+    julia_config: dict[str, Any],
+    batch_size: int,
+    device: str,
 ) -> TensorBatchLoader:
     """Generate a fresh batch of training data with Julia Bloch simulations.
 
@@ -169,7 +170,10 @@ def generate_train_loader(
     rather than reading from a stored dataset.
 
     Args:
-        config: Full configuration dictionary.
+        julia_config: The full configuration as a dict with string paths. The
+            Julia code reads the keys by name.
+        batch_size: The batch size (``training.train_batch_size``).
+        device: The device of the batches (see ``get_device``).
 
     Returns:
         A batch loader over the freshly simulated data.
@@ -178,10 +182,8 @@ def generate_train_loader(
     # functions of this module do not use Julia.
     from juliacall import Main as jl
 
-    device = get_device(config["experiment"]["device"])
-
     # Generate a fresh batch of Bloch simulations in Julia
-    batch = jl.generate_data(config, for_training=True)
+    batch = jl.generate_data(julia_config, for_training=True)
 
     # Convert Julia arrays to NumPy
     T1 = np.array(batch.T1, dtype=np.float32)
@@ -207,8 +209,6 @@ def generate_train_loader(
         {"signal": sig_split, "dM_dT1": dT1_split, "dM_dT2": dT2_split},
     )
 
-    batch_size = config["training"]["train_batch_size"]
-
     train_loader = make_loader(
         params, sig_split, dT1_split, dT2_split, batch_size, device, shuffle=True
     )
@@ -217,7 +217,7 @@ def generate_train_loader(
 
 
 def load_data_from_h5_file(
-    filename: str,
+    filename: str | Path,
 ) -> tuple[
     npt.NDArray[np.float32],
     npt.NDArray[np.complex64],

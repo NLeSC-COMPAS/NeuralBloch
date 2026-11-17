@@ -9,6 +9,7 @@ from neuralbloch.data.data_loading import generate_train_loader
 from neuralbloch.data.data_loading import generate_val_loader
 from neuralbloch.model import FCModel
 from neuralbloch.trainer import Trainer
+from neuralbloch.utils import get_device
 
 
 def initialize_joint_pca_basis(
@@ -53,7 +54,12 @@ def train(config: dict[str, Any]) -> None:
         config: Full configuration dictionary.
     """
     # Create validation DataLoader and determine the number of time points
-    val_loader, NTR = generate_val_loader(config)
+    device = get_device(config["experiment"]["device"])
+    val_loader, NTR = generate_val_loader(
+        config["experiment"]["dataset_for_validation_path"],
+        config["training"]["validation_batch_size"],
+        device,
+    )
 
     # Initialize the model
     model = FCModel(
@@ -72,7 +78,9 @@ def train(config: dict[str, Any]) -> None:
     basis_initialization_seconds = 0.0
     if model.basis_initialization == "joint_pca":
         started = time.perf_counter()
-        initial_train_loader = generate_train_loader(config)
+        initial_train_loader = generate_train_loader(
+            config, config["training"]["train_batch_size"], device
+        )
         initialize_joint_pca_basis(model, initial_train_loader)
         basis_initialization_seconds = time.perf_counter() - started
         print(
