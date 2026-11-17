@@ -4,6 +4,7 @@ from typing import Any
 from cyclopts import App
 from cyclopts import Parameter
 from neuralbloch.config import load_config
+from neuralbloch.config_schema import Config
 from neuralbloch.data import DATA_GENERATION_JL
 
 
@@ -19,7 +20,7 @@ def main() -> None:
 ConfigDir = Annotated[Path, Parameter(help="Directory of the YAML config files.")]
 
 
-def _start(config_dir: Path, *, seed_python: bool = True) -> tuple[Any, dict[str, Any]]:
+def _start(config_dir: Path, *, seed_python: bool = True) -> tuple[Any, Config]:
     """Start Julia, load the config and seed the RNGs.
 
     Args:
@@ -27,7 +28,7 @@ def _start(config_dir: Path, *, seed_python: bool = True) -> tuple[Any, dict[str
         seed_python: Also seed Python's RNGs with ``experiment.seed``.
 
     Returns:
-        The Julia ``Main`` module and the loaded configuration.
+        The Julia ``Main`` module and the validated ``Config``.
     """
     # Before Julia starts, so that a bad config fails fast
     config = load_config(config_dir)
@@ -38,13 +39,13 @@ def _start(config_dir: Path, *, seed_python: bool = True) -> tuple[Any, dict[str
 
     # Online samples are drawn by Julia, so Python's RNG seed alone does not
     # make training runs reproducible.
-    julia_seed = int(config["experiment"]["seed"])
+    julia_seed = config.experiment.seed
     jl.seval(f"begin using Random; Random.seed!({julia_seed}); true end")
 
     if seed_python:
         from neuralbloch.utils import set_seed
 
-        set_seed(config["experiment"]["seed"])
+        set_seed(config.experiment.seed)
 
     return jl, config
 
@@ -54,11 +55,13 @@ def generate(*, config_dir: ConfigDir = Path("config")) -> None:
     """Generate validation and test datasets using Bloch simulations."""
     jl, config = _start(config_dir, seed_python=False)
     jl.include(DATA_GENERATION_JL)
-    jl.save_dataset(config)
+    # Julia reads a plain dict with string paths
+    config_dict = config.model_dump(mode="json")
+    jl.save_dataset(config_dict)
 
     from neuralbloch.data.split_dataset import split_dataset
 
-    split_dataset(config["experiment"])
+    split_dataset(config_dict["experiment"])
 
 
 @app.command
@@ -70,7 +73,7 @@ def train(*, config_dir: ConfigDir = Path("config")) -> None:
 
     from neuralbloch.scripts.train import train
 
-    train(config)
+    train(config.model_dump(mode="json"))
 
 
 @app.command
@@ -80,7 +83,7 @@ def test_accuracy(*, config_dir: ConfigDir = Path("config")) -> None:
 
     from neuralbloch.scripts.test_accuracy import test_accuracy
 
-    test_accuracy(config)
+    test_accuracy(config.model_dump(mode="json"))
 
 
 @app.command
@@ -90,7 +93,7 @@ def test_inference(*, config_dir: ConfigDir = Path("config")) -> None:
 
     from neuralbloch.scripts.test_inference import test_inference
 
-    test_inference(config)
+    test_inference(config.model_dump(mode="json"))
 
 
 @app.command
@@ -100,7 +103,7 @@ def export_onnx(*, config_dir: ConfigDir = Path("config")) -> None:
 
     from neuralbloch.scripts.export_onnx import export_onnx
 
-    export_onnx(config)
+    export_onnx(config.model_dump(mode="json"))
 
 
 @app.command
@@ -110,4 +113,4 @@ def export_bundle(*, config_dir: ConfigDir = Path("config")) -> None:
 
     from neuralbloch.scripts.export_bundle import export_bundle
 
-    export_bundle(config)
+    export_bundle(config.model_dump(mode="json"))
