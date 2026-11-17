@@ -55,9 +55,17 @@ def test_the_bundle_describes_the_checkpoint_of_the_training(
     config = pipeline_config
 
     # The tasks of neuralbloch.cli: train, export_onnx and export_bundle
-    train(make_config(config))
-    export_onnx(config)
-    export_bundle(config)
+    full = make_config(config)
+    train(full)
+    export = full.export
+    export_onnx(
+        export.targets,
+        export.fp16,
+        export.opset_version,
+        export.n_verify_samples,
+        full.experiment.pt_file_path,
+    )
+    export_bundle(export, full.experiment.pt_file_path)
 
     card = check_bundle(config["export"]["bundle_dir"])
     model = card["model"]
