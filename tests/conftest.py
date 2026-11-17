@@ -29,6 +29,7 @@ import numpy as np
 import numpy.typing as npt
 import pytest
 import torch
+from neuralbloch.config_schema import ModelConfig
 from neuralbloch.config_schema import ParameterRanges
 from neuralbloch.data.data_loading import TensorBatchLoader
 from neuralbloch.model import FCModel
@@ -292,7 +293,12 @@ def make_model() -> Callable[..., FCModel]:
         config: dict[str, Any],
         data_config: dict[str, Any] | None = None,
     ) -> FCModel:
-        return FCModel(NTR, config, data_config)
+        ranges = (
+            ParameterRanges.model_validate(data_config["parameter_ranges"])
+            if data_config is not None
+            else None
+        )
+        return FCModel(NTR, ModelConfig.model_validate(config), ranges)
 
     return make
 
