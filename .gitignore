@@ -21,6 +21,7 @@ outputs
 
 # Coverage data
 .coverage
+coverage.xml
 
 # MkDocs build output
 site/
