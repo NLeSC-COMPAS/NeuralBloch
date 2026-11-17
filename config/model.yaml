@@ -3,10 +3,6 @@
 # the copy in the checkpoint. A change in this file has no effect on a trained
 # model. To use the change, train again.
 
-# Hidden-layer activation: "relu", "silu", "gelu", "tanh", or "softplus".
-# "relu" is only valid when derivative.mode is "direct".
-activation: "relu"
-
 # Scale the network inputs [log(T1), log(T2), B1] to [-1, 1] with the parameter
 # ranges in data.yaml (parameter_ranges). If false, the sub-networks get
 # [log(T1), log(T2), B1] without scaling.
@@ -41,3 +37,7 @@ derivative:
   mode: "direct"
   dT1: {rank: 32, hidden_size: 128, num_layers: 6}
   dT2: {rank: 32, hidden_size: 128, num_layers: 6}
+
+# Hidden-layer activation: "relu", "silu", "gelu", "tanh", or "softplus".
+# "relu" is only valid when derivative.mode is "direct".
+activation: "relu"
