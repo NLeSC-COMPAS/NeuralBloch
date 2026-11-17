@@ -2,7 +2,7 @@ import contextlib
 import copy
 import os
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Generator
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -128,7 +128,7 @@ def export_onnx(config: dict[str, Any]) -> None:
 
 
 @contextlib.contextmanager
-def staged(path: Path) -> Iterator[Path]:
+def staged(path: Path) -> Generator[Path]:
     """Give a temporary file that replaces ``path`` only if the block succeeds.
 
     The temporary file is in the directory of ``path`` and has its suffix. Write

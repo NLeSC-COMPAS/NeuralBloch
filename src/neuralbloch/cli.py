@@ -29,11 +29,13 @@ def _start(config_dir: Path, *, seed_python: bool = True) -> tuple[Any, dict[str
     Returns:
         The Julia ``Main`` module and the loaded configuration.
     """
+    # Before Julia starts, so that a bad config fails fast
+    config = load_config(config_dir)
+
     # juliacall must be imported before torch, and the import starts Julia.
     # So keep this import and the task imports inside the commands.
     from juliacall import Main as jl  # ruff: noqa: PLC0415
 
-    config = load_config(config_dir)
     # Online samples are drawn by Julia, so Python's RNG seed alone does not
     # make training runs reproducible.
     julia_seed = int(config["experiment"]["seed"])
