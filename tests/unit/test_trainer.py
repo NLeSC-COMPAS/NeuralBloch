@@ -115,8 +115,9 @@ def record_mocked_training(
         def epoch() -> int:
             return len(events.trained_on)
 
-        def generate_train_loader(config: dict[str, Any]) -> TensorBatchLoader:
-            batch_size = config["training"]["train_batch_size"]
+        def generate_train_loader(
+            julia_config: dict[str, Any], batch_size: int, device: str
+        ) -> TensorBatchLoader:
             loader = synthetic_loader(10, batch_size, shuffle=True)
             events.generated[epoch() + 1] = loader
             return loader
