@@ -1,6 +1,8 @@
 import time
 from typing import Any
 import torch
+from neuralbloch.config_schema import ModelConfig
+from neuralbloch.config_schema import ParameterRanges
 from neuralbloch.data import DATA_GENERATION_JL
 from neuralbloch.data.data_loading import TensorBatchLoader
 from neuralbloch.data.data_loading import generate_train_loader
@@ -54,7 +56,11 @@ def train(config: dict[str, Any]) -> None:
     val_loader, NTR = generate_val_loader(config)
 
     # Initialize the model
-    model = FCModel(NTR, config["model"], config["data"])
+    model = FCModel(
+        NTR,
+        ModelConfig.model_validate(config["model"]),
+        ParameterRanges.model_validate(config["data"]["parameter_ranges"]),
+    )
 
     # Load Julia data generation functions (used for online training data).
     # Import juliacall only here, because the import starts Julia.

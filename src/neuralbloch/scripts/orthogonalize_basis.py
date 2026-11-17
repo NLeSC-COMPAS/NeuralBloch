@@ -13,6 +13,8 @@ from neuralbloch.basis import orthogonalize_shared_basis
 from neuralbloch.basis import truncate_shared_basis
 from neuralbloch.basis import with_signal_rank
 from neuralbloch.basis import worst_relative_output_difference
+from neuralbloch.config_schema import DataConfig
+from neuralbloch.config_schema import ModelConfig
 from neuralbloch.model import FCModel
 from neuralbloch.utils import get_device
 from neuralbloch.utils import model_from_checkpoint
@@ -67,14 +69,16 @@ def postprocess_basis(
     print(f"Saved ordered checkpoint to {output_path}")
     written = [output_path]
 
+    model_config = ModelConfig.model_validate(checkpoint["model_config"])
+    parameter_ranges = DataConfig.model_validate(
+        checkpoint["data_config"]
+    ).parameter_ranges
     for rank, rank_path in zip(ranks, rank_paths, strict=True):
-        smaller = truncate_shared_basis(
-            model, checkpoint["model_config"], checkpoint["data_config"], rank
-        )
+        smaller = truncate_shared_basis(model, model_config, parameter_ranges, rank)
         rank_checkpoint = dict(checkpoint)
         rank_checkpoint["model_config"] = with_signal_rank(
-            checkpoint["model_config"], rank
-        )
+            model_config, rank
+        ).model_dump(mode="json")
         rank_checkpoint["model_state"] = smaller.state_dict()
         torch.save(rank_checkpoint, rank_path)
         written.append(rank_path)

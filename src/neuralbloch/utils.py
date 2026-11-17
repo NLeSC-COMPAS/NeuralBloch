@@ -7,6 +7,8 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 import torch
+from neuralbloch.config_schema import DataConfig
+from neuralbloch.config_schema import ModelConfig
 from neuralbloch.config_schema import ParameterRanges
 
 
@@ -113,7 +115,11 @@ def model_from_checkpoint(checkpoint: dict[str, Any], device: str) -> "FCModel":
 
     NTR = checkpoint["NTR"]
 
-    model = FCModel(NTR, checkpoint["model_config"], checkpoint["data_config"])
+    model = FCModel(
+        NTR,
+        ModelConfig.model_validate(model_config),
+        DataConfig.model_validate(checkpoint["data_config"]).parameter_ranges,
+    )
     model.load_state_dict(checkpoint["model_state"])
     model.to(device)
     model.eval()
