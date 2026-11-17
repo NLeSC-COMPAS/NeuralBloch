@@ -6,6 +6,7 @@ import pytest
 import yaml
 from pydantic import ValidationError
 from neuralbloch.config import load_config
+from neuralbloch.config_schema import Config
 
 
 CONFIG_DIR = Path(__file__).parents[2] / "config"
@@ -21,17 +22,12 @@ def config_dir(tmp_path: Path) -> Path:
     return Path(shutil.copytree(CONFIG_DIR, tmp_path / "config"))
 
 
-def test_load_config_returns_the_yaml_files_as_dicts() -> None:
+def test_load_config_returns_a_validated_config() -> None:
     config = load_config(CONFIG_DIR)
-    assert config["data"] == yaml.safe_load((CONFIG_DIR / "data.yaml").read_text())
-    assert list(config) == [
-        "data",
-        "experiment",
-        "model",
-        "training",
-        "testing",
-        "export",
-    ]
+    assert isinstance(config, Config)
+    assert config.data.model_dump(mode="json") == yaml.safe_load(
+        (CONFIG_DIR / "data.yaml").read_text()
+    )
 
 
 def test_load_config_refuses_a_bad_value(config_dir: Path) -> None:

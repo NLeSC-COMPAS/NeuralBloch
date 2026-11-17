@@ -54,7 +54,7 @@ def attribute_at(config: Config, key_path: str) -> object:
 # =====================================================================================#
 @pytest.fixture
 def config_dict() -> dict[str, Any]:
-    return load_config(CONFIG_DIR)
+    return load_config(CONFIG_DIR).model_dump(mode="json")
 
 
 @pytest.fixture
