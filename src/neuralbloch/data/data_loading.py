@@ -174,8 +174,8 @@ def generate_train_loader(
     Returns:
         A batch loader over the freshly simulated data.
     """
-    # Import juliacall only here: the import starts Julia, and the other
-    # functions of this module do not need it. run.py imports it first.
+    # Import juliacall only here, because the import starts Julia. The other
+    # functions of this module do not use Julia.
     from juliacall import Main as jl
 
     device = get_device(config)
