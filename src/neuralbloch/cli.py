@@ -83,7 +83,11 @@ def test_accuracy(*, config_dir: ConfigDir = Path("config")) -> None:
 
     from neuralbloch.scripts.test_accuracy import test_accuracy
 
-    test_accuracy(config.model_dump(mode="json"))
+    test_accuracy(
+        pt_file_path=config.experiment.pt_file_path,
+        dataset_for_testing_path=config.experiment.dataset_for_testing_path,
+        device=config.experiment.device,
+    )
 
 
 @app.command
@@ -93,7 +97,13 @@ def test_inference(*, config_dir: ConfigDir = Path("config")) -> None:
 
     from neuralbloch.scripts.test_inference import test_inference
 
-    test_inference(config.model_dump(mode="json"))
+    test_inference(
+        pt_file_path=config.experiment.pt_file_path,
+        device=config.experiment.device,
+        n_runs=config.testing.n_runs,
+        infer_batch_size=config.testing.infer_batch_size,
+        batch_size=config.testing.batch_size,
+    )
 
 
 @app.command

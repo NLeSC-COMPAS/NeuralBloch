@@ -1,4 +1,4 @@
-from typing import Any
+from pathlib import Path
 import torch
 from neuralbloch.data.data_loading import load_data_from_h5_file
 from neuralbloch.metrics import nrmse
@@ -7,17 +7,23 @@ from neuralbloch.utils import get_device
 from neuralbloch.utils import load_model
 
 
-def test_accuracy(config: dict[str, Any]) -> None:
+def test_accuracy(
+    pt_file_path: Path,
+    dataset_for_testing_path: Path,
+    device: str,
+) -> None:
     """Evaluate the trained model on the test dataset and print NRMSE scores.
 
     Args:
-        config: Full configuration dictionary.
+        pt_file_path: The checkpoint file (``experiment.pt_file_path``).
+        dataset_for_testing_path: The test dataset
+            (``experiment.dataset_for_testing_path``).
+        device: The wanted device (``experiment.device``). The CPU is used
+            if CUDA is not available.
     """
-    device = get_device(config["experiment"]["device"])
-    model, _ = load_model(config["experiment"]["pt_file_path"], device)
-    params, signal, dT1, dT2, N, _ = load_data_from_h5_file(
-        config["experiment"]["dataset_for_testing_path"]
-    )
+    device = get_device(device)
+    model, _ = load_model(pt_file_path, device)
+    params, signal, dT1, dT2, N, _ = load_data_from_h5_file(dataset_for_testing_path)
 
     x = torch.tensor(params, dtype=torch.float32, device=device)
 
