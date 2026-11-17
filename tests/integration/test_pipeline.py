@@ -12,6 +12,7 @@ from typing import Any
 import numpy as np
 import pytest
 import torch
+from neuralbloch.config_schema import Config
 from neuralbloch.scripts.export_bundle import check_bundle
 from neuralbloch.scripts.export_bundle import export_bundle
 from neuralbloch.scripts.export_onnx import export_onnx
@@ -48,12 +49,13 @@ def pipeline_config(
 @pytest.mark.usefixtures("julia_batch_mock", "git_and_julia_in_export_mock")
 def test_the_bundle_describes_the_checkpoint_of_the_training(
     pipeline_config: dict[str, Any],
+    make_config: Callable[[dict[str, Any]], Config],
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     config = pipeline_config
 
     # The tasks of neuralbloch.cli: train, export_onnx and export_bundle
-    train(config)
+    train(make_config(config))
     export_onnx(config)
     export_bundle(config)
 

@@ -10,6 +10,7 @@ from typing import Any
 import pytest
 import torch
 from torch import optim
+from neuralbloch.config_schema import Config
 from neuralbloch.data.data_loading import TensorBatchLoader
 from neuralbloch.loss import Loss
 from neuralbloch.model import FCModel
@@ -36,6 +37,7 @@ def same_weights(a: Weights, b: Weights) -> bool:
 @pytest.fixture
 def make_trainer(
     config: dict[str, Any],
+    make_config: Callable[[dict[str, Any]], Config],
     make_model: Callable[..., FCModel],
     synthetic_loader: Callable[..., TensorBatchLoader],
 ) -> Iterator[Callable[..., Trainer]]:
@@ -56,7 +58,16 @@ def make_trainer(
         if val_loader is None:
             batch_size = config["training"]["validation_batch_size"]
             val_loader = synthetic_loader(8, batch_size)
-        trainer = Trainer(model, val_loader, config)
+        full = make_config(config)
+        trainer = Trainer(
+            model,
+            val_loader,
+            full.training,
+            full.experiment,
+            full.data,
+            full.model,
+            full.model_dump(mode="json"),
+        )
         trainers.append(trainer)
         return trainer
 
@@ -263,7 +274,9 @@ def test_the_checkpoint_describes_and_restores_the_trained_model(
     assert checkpoint["NTR"] == 5
     assert checkpoint["model_config"] == config["model"]
     assert checkpoint["data_config"] == config["data"]
-    assert checkpoint["rf_sha256"] == rf_sha256(config["data"])
+    assert checkpoint["rf_sha256"] == rf_sha256(
+        config["data"]["rf_angle_file"], config["data"]["rf_phase_file"]
+    )
     x = synthetic_loader(6, 6).tensors[0]
     with torch.no_grad():
         for output, expected in zip(restored(x), trainer.model(x), strict=True):
@@ -318,22 +331,6 @@ def test_the_plateau_scheduler_gets_its_settings_from_the_config(
     assert scheduler.min_lrs == [1.0e-5]
 
 
-def test_the_plateau_scheduler_needs_its_keys(
-    make_trainer: Callable[..., Trainer],
-) -> None:
-    with pytest.raises(ValueError, match=r"needs the keys \['factor', 'min_lr'\]"):
-        make_trainer(lr_scheduler={"name": "plateau", "patience_epochs": 100})
-
-
-def test_the_plateau_scheduler_reads_floats_in_exponent_form(
-    make_trainer: Callable[..., Trainer],
-) -> None:
-    # PyYAML reads 1e-5 as the string "1e-5"
-    trainer = make_trainer(lr_scheduler={**PLATEAU, "min_lr": "1e-5"})
-
-    assert trainer.scheduler.min_lrs == [1.0e-5]
-
-
 def test_the_plateau_scheduler_steps_after_each_validation_with_its_loss(
     make_trainer: Callable[..., Trainer],
     record_mocked_training: Callable[..., TrainingEvents],
@@ -368,10 +365,11 @@ def test_the_epoch_loss_is_the_mean_over_the_samples(
     make_trainer: Callable[..., Trainer],
     synthetic_loader: Callable[..., TensorBatchLoader],
 ) -> None:
-    # Without steps, the epoch gives the loss of one model on all batches
+    # With a learning rate this small, the weights stay the same, so the epoch
+    # gives the loss of one model on all batches
     train_loader = synthetic_loader(10, 4)  # batches of 4, 4 and 2 samples
     val_loader = TensorBatchLoader(train_loader.tensors, 10, shuffle=False)
-    trainer = make_trainer(val_loader, learning_rate=0.0)
+    trainer = make_trainer(val_loader, learning_rate=1e-12)
 
     total, signal, dT1, dT2 = trainer.train_epoch(train_loader)
 
@@ -597,7 +595,9 @@ def test_a_checkpoint_of_an_earlier_run_is_not_loaded_without_epochs(
     make_trainer: Callable[..., Trainer],
     synthetic_loader: Callable[..., TensorBatchLoader],
 ) -> None:
-    trainer = make_trainer(n_epochs=0)
+    trainer = make_trainer()
+    # The schema refuses 0 epochs, and model_copy does not check the value
+    trainer.training = trainer.training.model_copy(update={"n_epochs": 0})
 
     with pytest.raises(RuntimeError, match="saved no checkpoint"):
         trainer.train(synthetic_loader(10, 4))

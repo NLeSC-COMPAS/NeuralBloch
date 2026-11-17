@@ -653,7 +653,7 @@ def test_the_rf_tables_must_be_the_tables_of_the_training(tmp_path: Path) -> Non
     for key in RF_TABLE_KEYS:
         data[key] = tmp_path / f"{key}.txt"
         data[key].write_text("1.0\n2.0\n")
-    checkpoint = {"rf_sha256": rf_sha256(data)}
+    checkpoint = {"rf_sha256": rf_sha256(data["rf_angle_file"], data["rf_phase_file"])}
     assert check_rf_provenance(checkpoint, data) is None
     data["rf_phase_file"].write_text("1.0\n3.0\n")
     with pytest.raises(
