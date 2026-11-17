@@ -3,6 +3,7 @@ from typing import Any
 import numpy as np
 import pytest
 import torch
+from neuralbloch.config_schema import ParameterRanges
 from neuralbloch.utils import complex_to_real_imag
 from neuralbloch.utils import model_from_checkpoint
 from neuralbloch.utils import sample_parameters
@@ -28,7 +29,9 @@ def test_parameter_sampling_is_physical_and_log_uniform(
     data_config: dict[str, Any],
 ) -> None:
     torch.manual_seed(42)
-    samples = sample_parameters({"data": data_config}, 20_000)
+    samples = sample_parameters(
+        ParameterRanges.model_validate(data_config["parameter_ranges"]), 20_000
+    )
 
     assert samples.shape == (20_000, 3)
     ranges = data_config["parameter_ranges"]

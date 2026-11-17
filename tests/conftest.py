@@ -29,6 +29,7 @@ import numpy as np
 import numpy.typing as npt
 import pytest
 import torch
+from neuralbloch.config_schema import ParameterRanges
 from neuralbloch.data.data_loading import TensorBatchLoader
 from neuralbloch.model import FCModel
 from neuralbloch.scripts import export_bundle
@@ -124,7 +125,9 @@ def synthetic_loader(data_config: dict[str, Any]) -> Callable[..., TensorBatchLo
         *,
         shuffle: bool = False,
     ) -> TensorBatchLoader:
-        params = sample_parameters({"data": data_config}, n_samples)
+        params = sample_parameters(
+            ParameterRanges.model_validate(data_config["parameter_ranges"]), n_samples
+        )
         targets = (torch.randn(n_samples, 5, 2) for _ in range(3))
         return TensorBatchLoader((params, *targets), batch_size, shuffle=shuffle)
 

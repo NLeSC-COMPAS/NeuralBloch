@@ -258,7 +258,7 @@ def test_the_checkpoint_describes_and_restores_the_trained_model(
 
     trainer.train(synthetic_loader(10, 4))
 
-    restored, checkpoint = load_model(config, "cpu")
+    restored, checkpoint = load_model(config["experiment"]["pt_file_path"], "cpu")
     assert checkpoint["NTR"] == 5
     assert checkpoint["model_config"] == config["model"]
     assert checkpoint["data_config"] == config["data"]
@@ -284,7 +284,10 @@ def test_write_checkpoint_writes_the_keys_of_the_trainer(
 
     write_checkpoint(path, trainer.model, config["model"], config["data"])
 
-    assert torch.load(path).keys() == load_checkpoint(config, "cpu").keys()
+    assert (
+        torch.load(path).keys()
+        == load_checkpoint(config["experiment"]["pt_file_path"], "cpu").keys()
+    )
 
 
 def test_the_trained_model_has_the_weights_of_the_best_epoch(
@@ -464,7 +467,7 @@ def test_a_nan_after_a_finite_validation_loss_keeps_the_checkpoint(
         trainer.train()
 
     assert len(events.trained_on) == 2
-    checkpoint = load_checkpoint(config, "cpu")
+    checkpoint = load_checkpoint(config["experiment"]["pt_file_path"], "cpu")
     assert checkpoint["epoch"] == 1
     assert same_weights(checkpoint["model_state"], events.weights[1])
 
@@ -526,7 +529,7 @@ def test_a_training_loss_that_is_not_finite_stops_the_training_in_its_epoch(
 
     assert len(events.trained_on) == bad_epoch
     assert list(events.weights) == [1]
-    assert load_checkpoint(config, "cpu")["epoch"] == 1
+    assert load_checkpoint(config["experiment"]["pt_file_path"], "cpu")["epoch"] == 1
 
 
 # With train_losses, the optimizer makes no step before the scheduler steps
@@ -566,7 +569,7 @@ def test_weights_that_are_not_finite_after_an_epoch_stop_the_training(
         trainer.train()
 
     assert list(events.weights) == [1]
-    assert load_checkpoint(config, "cpu")["epoch"] == 1
+    assert load_checkpoint(config["experiment"]["pt_file_path"], "cpu")["epoch"] == 1
 
 
 def test_a_checkpoint_of_an_earlier_run_is_not_loaded_after_a_nan(
