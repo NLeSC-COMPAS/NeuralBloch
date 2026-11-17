@@ -56,12 +56,16 @@ def generate(*, config_dir: ConfigDir = Path("config")) -> None:
     jl, config = _start(config_dir, seed_python=False)
     jl.include(DATA_GENERATION_JL)
     # Julia reads a plain dict with string paths
-    config_dict = config.model_dump(mode="json")
-    jl.save_dataset(config_dict)
+    jl.save_dataset(config.model_dump(mode="json"))
 
     from neuralbloch.data.split_dataset import split_dataset
 
-    split_dataset(config_dict["experiment"])
+    split_dataset(
+        dataset_unsplit_path=config.experiment.dataset_unsplit_path,
+        dataset_for_validation_path=config.experiment.dataset_for_validation_path,
+        dataset_for_testing_path=config.experiment.dataset_for_testing_path,
+        seed=config.experiment.seed,
+    )
 
 
 @app.command
