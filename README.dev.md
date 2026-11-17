@@ -43,18 +43,19 @@ uv run ty check
 
 The tests use [pytest](https://docs.pytest.org/). The pytest configuration is in the `[tool.pytest]` table of `pyproject.toml`.
 
-The tests are in three directories:
+The tests are in two directories:
 
 - `tests/unit/`: each test checks one function or one class, with small inputs that the test makes. These tests take a few seconds.
 - `tests/integration/`: each test checks modules together through their real interfaces (a checkpoint, an ONNX file, an HDF5 file), a full task, or a real external component: `torch.onnx.export`, ONNX Runtime, git or the files of the repository.
-- `tests/julia/`: the tests that run the Julia data generation (`src/neuralbloch/data/data_generation.jl`) with BlochSimulators on a CUDA GPU. They have the marker `julia`.
+
+`tests/integration/test_julia_data_generation.py` runs the Julia data generation. It needs a CUDA GPU, and pytest skips it without one.
 
 The fixtures in `tests/conftest.py` make the configurations, the models, the checkpoints and the datasets of the tests. Use them in new tests, so that a change of the configuration or of the checkpoint format changes only `conftest.py`.
 
 To run the tests, use these commands:
 
 ```bash
-uv run pytest                             # run all the tests without the markers julia and gpu
+uv run pytest                             # run all the tests
 uv run pytest tests/unit                  # run only the unit tests, during development
 uv run pytest tests/unit/test_bundle.py   # run the tests in one file
 uv run pytest -k rf_table                 # run the tests that have "rf_table" in their names
@@ -62,17 +63,9 @@ uv run pytest -x                          # stop after the first test that fails
 uv run pytest --lf                        # run only the tests that failed the last time
 ```
 
-A test that needs Julia or a CUDA GPU has the marker `julia` or `gpu` (`@pytest.mark.julia`). `uv run pytest` does not run these tests. Run them on a machine with Julia and a GPU:
+A test that needs a CUDA GPU has the decorator `@has_gpu` (from `tests/helpers.py`). To skip it on a machine with a GPU, set `CUDA_VISIBLE_DEVICES=""`.
 
-```bash
-uv run pytest -m julia            # only the tests that need Julia and BlochSimulators
-uv run pytest -m gpu              # only the tests that need a CUDA GPU
-uv run pytest -m "julia or gpu"   # the tests of both markers
-```
-
-A `-m` on the command line replaces the `-m "not julia and not gpu"` in `addopts`. pytest refuses a marker that `pyproject.toml` does not register.
-
-The Julia code reads the configuration keys by name, and only the tests of the marker `julia` run it. Run them after a change of the configuration keys. Each test runs Julia in a new Python process that imports `juliacall` before `torch`, as `run.py` does. A test that simulates takes about a minute: the first simulation in each process compiles the CUDA kernels. The first run in a new virtual environment also installs the Julia packages.
+The Julia code reads the configuration keys by name, and only the tests in `test_julia_data_generation.py` run it. Run them after a change of the configuration keys. A test that simulates takes about a minute. The first run in a new virtual environment also installs the Julia packages.
 
 To see which lines the tests run, add `--cov`:
 
@@ -82,7 +75,7 @@ uv run pytest --cov   # the coverage of each file, and the lines that no test ru
 
 The coverage settings are in the `[tool.coverage]` tables of `pyproject.toml`. The coverage includes the branches, and the report also shows the files that no test imports.
 
-The tests without the marker `julia` do not start Julia. The import of `juliacall` starts Julia, so only `run.py` imports it at module level; the other modules import it in the functions that run Julia. A test checks this. In a test without the marker `julia`, an import of `juliacall` raises `ImportError`, so that the test cannot start Julia by mistake. Such a test can replace `juliacall` with a mock (`julia_batch_mock`).
+The tests that do not use `@has_gpu` do not start Julia. The import of `juliacall` starts Julia, so only `run.py` imports it at module level; the other modules import it in the functions that run Julia. A test checks this. In a test that does not use `@has_gpu`, an import of `juliacall` raises `ImportError`, so that the test cannot start Julia by mistake. Such a test can replace `juliacall` with a mock (`julia_batch_mock`).
 
 CI runs the tests (see [Continuous integration](#continuous-integration)). The git hooks do not run them.
 
@@ -119,6 +112,7 @@ uv run prek run --all-files --stage pre-push
 
 ## Continuous integration
 
-`.github/workflows/lint.yml` runs the same hooks on every push to `main` and on every pull request, via the [`j178/prek-action`](https://github.com/j178/prek-action) action. Because CI and local commits share `prek.toml`, the two cannot drift.
+`.github/workflows/ci.yml` has two jobs:
 
-`.github/workflows/test.yml` runs `uv run pytest --cov` on every push to `main` and on every pull request: the unit and integration tests, but not the tests with the markers `julia` and `gpu`. The job fails when a test fails or when the coverage is below the floor (`--cov-fail-under` in `test.yml`). Raise the floor when new tests raise the coverage.
+- `lint` runs the hooks of `prek.toml`, via the [`j178/prek-action`](https://github.com/j178/prek-action) action.
+- `test` runs the unit and integration tests with coverage, on Python 3.12, 3.13, and 3.14. The runners have no GPU, so the Julia tests are skipped.
