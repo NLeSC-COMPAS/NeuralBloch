@@ -78,9 +78,7 @@ def test_the_julia_training_data_have_the_layout_of_the_model(
     data = config["data"]
     NTR = len(np.loadtxt(pytestconfig.rootpath / data["rf_angle_file"]))
     training = config["training"]
-    n_sampled = (
-        training["online_samples_per_epoch"] * training["regen_every_n_epochs"]
-    )
+    n_sampled = training["online_samples_per_epoch"] * training["regen_every_n_epochs"]
     # generate_data keeps the samples with T1 > T2. NTR is not a possible
     # number of samples, so a target with the axes of the Julia arrays,
     # (NTR, N), fails
