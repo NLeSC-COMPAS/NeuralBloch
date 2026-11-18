@@ -282,13 +282,18 @@ def test_checkpoint_must_store_its_configuration() -> None:
 
 
 def test_config_hash_depends_on_the_values_of_the_configurations() -> None:
-    a = config_sha256(MODEL, DATA)
+    model = MODEL.model_dump(mode="json")
+    a = config_sha256(model, DATA_CONFIG)
     assert len(a) == 64
-    assert a == config_sha256(MODEL.model_copy(), DATA.model_copy())
-    other_model = MODEL.model_copy(update={"activation": "silu"})
-    other_data = DATA.model_copy(update={"n_samples": 1})
-    assert a != config_sha256(other_model, DATA)
-    assert a != config_sha256(MODEL, other_data)
+    assert a == config_sha256(dict(reversed(model.items())), DATA_CONFIG)
+    assert a != config_sha256({**model, "activation": "silu"}, DATA_CONFIG)
+    assert a != config_sha256(model, {**DATA_CONFIG, "n_samples": 1})
+
+
+def test_config_hash_uses_the_stored_values() -> None:
+    # Validation changes 0 to 0.0, but the hash must match the stored dict
+    stored = {**DATA_CONFIG, "TW_s": 0}
+    assert config_sha256({}, stored) != config_sha256({}, DATA_CONFIG)
 
 
 @pytest.fixture

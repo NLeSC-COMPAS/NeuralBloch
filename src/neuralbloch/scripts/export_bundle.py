@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import Any
 from neuralbloch.config_schema import DataConfig
 from neuralbloch.config_schema import ExportConfig
-from neuralbloch.config_schema import ModelConfig
 from neuralbloch.config_schema import check_family
 from neuralbloch.config_schema import check_version
 from neuralbloch.scripts.export_onnx import TARGETS
@@ -233,13 +232,17 @@ def check_undersampling(data_config: DataConfig) -> None:
         )
 
 
-def config_sha256(model_config: ModelConfig, data_config: DataConfig) -> str:
-    """Return the sha256 of the checkpoint configurations. Key order has no effect."""
+def config_sha256(
+    model_config: Mapping[str, Any],
+    data_config: Mapping[str, Any],
+) -> str:
+    """Return the sha256 of the checkpoint configurations. Key order has no effect.
+
+    Hash the stored dicts, not the validated models: validation changes values
+    such as ``1`` to ``1.0``, which would change the hash of old checkpoints.
+    """
     canonical = json.dumps(
-        {
-            "model_config": model_config.model_dump(mode="json"),
-            "data_config": data_config.model_dump(mode="json"),
-        },
+        {"model_config": model_config, "data_config": data_config},
         sort_keys=True,
         separators=(",", ":"),
     )
@@ -700,8 +703,6 @@ def export_bundle(export: ExportConfig, pt_file_path: Path) -> None:
 
     warn(require_unreleased(release_tag(family, version), export.offline))
 
-    # The model is made, so the configurations of the checkpoint are valid
-    model_config = ModelConfig.model_validate(checkpoint["model_config"])
     data_config = DataConfig.model_validate(checkpoint["data_config"])
     method = derivative_method(data_config)
     check_undersampling(data_config)
@@ -741,7 +742,9 @@ def export_bundle(export: ExportConfig, pt_file_path: Path) -> None:
             finite_difference_steps=steps,
             upstream=upstream,
             checkpoint_epoch=checkpoint["epoch"],
-            config_sha256=config_sha256(model_config, data_config),
+            config_sha256=config_sha256(
+                checkpoint["model_config"], checkpoint["data_config"]
+            ),
             blochsimulators=blochsimulators,
             precision=precision,
         )

@@ -267,6 +267,13 @@ def test_two_targets_cannot_write_one_file(
         Config.model_validate(config_dict)
 
 
+def test_config_is_frozen(config_dict: dict[str, Any]) -> None:
+    # A change to a target does not run the Targets validator again
+    targets = Config.model_validate(config_dict).export.targets
+    with pytest.raises(ValidationError, match="frozen"):
+        targets.coeffs.onnx_file_path = targets.signal.onnx_file_path
+
+
 @pytest.mark.parametrize(
     "family", ["fisp600", "fisp600-rank16-rank8", "FISP600-rank16", "fisp600_rank16"]
 )
