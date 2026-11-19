@@ -8,6 +8,7 @@ import pytest
 import torch
 from onnx import helper
 from onnx import numpy_helper
+from neuralbloch.config_schema import Targets
 from neuralbloch.model import FCModel
 from neuralbloch.scripts.export_onnx import TARGETS
 from neuralbloch.scripts.export_onnx import TargetModel
@@ -104,29 +105,13 @@ def test_fp16_runs_in_half_behind_an_fp32_interface(
         torch.testing.assert_close(output, reference, rtol=2e-2, atol=2e-2)
 
 
-def test_every_target_needs_its_paths() -> None:
-    targets = {name: {"onnx_file_path": f"{name}.onnx"} for name in TARGETS}
-    paths = target_paths({"targets": targets})
+def test_every_target_has_its_path() -> None:
+    targets = Targets.model_validate(
+        {name: {"onnx_file_path": f"{name}.onnx"} for name in TARGETS}
+    )
+    paths = target_paths(targets)
     assert list(paths) == list(TARGETS)
     assert paths["signal"] == Path("signal.onnx")
-
-    del targets["coeffs"]
-    with pytest.raises(ValueError, match="it names signal_and_derivs"):
-        target_paths({"targets": targets})
-    with pytest.raises(ValueError, match="it names none"):
-        target_paths({"onnx_file_path": "outputs/model.onnx"})
-
-
-def test_each_path_is_a_different_file() -> None:
-    targets = {name: {"onnx_file_path": f"{name}.onnx"} for name in TARGETS}
-    # For example, a copied entry that keeps the ONNX file of another target
-    targets["coeffs"]["onnx_file_path"] = "./signal_and_derivs.onnx"
-    with pytest.raises(
-        ValueError,
-        match="coeffs.onnx_file_path and signal_and_derivs.onnx_file_path "
-        "are the same file",
-    ):
-        target_paths({"targets": targets})
 
 
 def test_outputs_need_the_pytorch_shape_and_finite_values(

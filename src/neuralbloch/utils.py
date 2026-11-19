@@ -1,12 +1,13 @@
 import hashlib
 import random
-from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import Any
 import numpy as np
 import numpy.typing as npt
 import torch
+from neuralbloch.config_schema import ModelConfig
+from neuralbloch.config_schema import ParameterRanges
 
 
 if TYPE_CHECKING:
@@ -35,54 +36,60 @@ def set_seed(seed: int) -> None:
         torch.cuda.manual_seed_all(seed)
 
 
-def get_device(config: dict[str, Any]) -> str:
-    """Select computation device."""
-    device: str = config["experiment"]["device"]
+def get_device(device: str) -> str:
+    """Select computation device.
+
+    Args:
+        device: The wanted device (``experiment.device``).
+
+    Returns:
+        ``device`` if CUDA is available, and ``"cpu"`` if not.
+    """
     return device if torch.cuda.is_available() else "cpu"
 
 
-def sample_parameters(config: dict[str, Any], n_samples: int) -> torch.Tensor:
+def sample_parameters(ranges: ParameterRanges, n_samples: int) -> torch.Tensor:
     """Sample tissue parameters uniformly over the training ranges.
 
     T1 and T2 are sampled log-uniformly and returned in physical units. B1 is
     sampled uniformly, matching the public model input format ``[T1, T2, B1]``.
 
     Args:
-        config: Full configuration dictionary.
+        ranges: The training domain (``data.parameter_ranges``).
         n_samples: Number of parameter samples to draw.
 
     Returns:
         A float32 tensor of shape ``(n_samples, 3)``.
     """
-    ranges = config["data"]["parameter_ranges"]
-    T1, T2, B1_range = ranges["T1_s"], ranges["T2_s"], ranges["B1"]
+    T1, T2, B1_range = ranges.T1_s, ranges.T2_s, ranges.B1
 
-    log_T1 = torch.empty(n_samples).uniform_(np.log(T1["lower"]), np.log(T1["upper"]))
-    log_T2 = torch.empty(n_samples).uniform_(np.log(T2["lower"]), np.log(T2["upper"]))
-    B1 = torch.empty(n_samples).uniform_(B1_range["lower"], B1_range["upper"])
+    log_T1 = torch.empty(n_samples).uniform_(np.log(T1.lower), np.log(T1.upper))
+    log_T2 = torch.empty(n_samples).uniform_(np.log(T2.lower), np.log(T2.upper))
+    B1 = torch.empty(n_samples).uniform_(B1_range.lower, B1_range.upper)
 
     return torch.stack([log_T1.exp(), log_T2.exp(), B1], dim=1)
 
 
 def load_model(
-    config: dict[str, Any],
+    pt_file_path: str | Path,
     device: str,
 ) -> tuple["FCModel", dict[str, Any]]:
     """Load a trained surrogate model from a checkpoint.
 
+    Args:
+        pt_file_path: The checkpoint file (``experiment.pt_file_path``).
+        device: The device of the model.
+
     Returns:
         The model (``model_from_checkpoint``) and the checkpoint.
     """
-    checkpoint = load_checkpoint(config, device)
+    checkpoint = load_checkpoint(pt_file_path, device)
     return model_from_checkpoint(checkpoint, device), checkpoint
 
 
-def load_checkpoint(config: dict[str, Any], device: str) -> dict[str, Any]:
-    """Load the checkpoint file that ``experiment.pt_file_path`` gives."""
-    checkpoint: dict[str, Any] = torch.load(
-        config["experiment"]["pt_file_path"],
-        map_location=device,
-    )
+def load_checkpoint(pt_file_path: str | Path, device: str) -> dict[str, Any]:
+    """Load a checkpoint file (``experiment.pt_file_path``) onto a device."""
+    checkpoint: dict[str, Any] = torch.load(pt_file_path, map_location=device)
     return checkpoint
 
 
@@ -106,7 +113,11 @@ def model_from_checkpoint(checkpoint: dict[str, Any], device: str) -> "FCModel":
 
     NTR = checkpoint["NTR"]
 
-    model = FCModel(NTR, checkpoint["model_config"], checkpoint["data_config"])
+    model = FCModel(
+        NTR,
+        ModelConfig.model_validate(model_config),
+        ParameterRanges.model_validate(checkpoint["data_config"]["parameter_ranges"]),
+    )
     model.load_state_dict(checkpoint["model_state"])
     model.to(device)
     model.eval()
@@ -125,10 +136,17 @@ def file_sha256(path: str | Path) -> str:
 RF_TABLE_KEYS = ("rf_angle_file", "rf_phase_file")
 
 
-def rf_sha256(data_config: Mapping[str, Any]) -> dict[str, str]:
-    """Return the sha256 of each RF table that a data configuration gives.
+def rf_sha256(rf_angle_file: str | Path, rf_phase_file: str | Path) -> dict[str, str]:
+    """Return the sha256 of the two RF tables of a sequence.
+
+    Args:
+        rf_angle_file: The RF angle table (``data.rf_angle_file``).
+        rf_phase_file: The RF phase table (``data.rf_phase_file``).
 
     Returns:
         The sha256 by key of the data configuration (``RF_TABLE_KEYS``).
     """
-    return {key: file_sha256(data_config[key]) for key in RF_TABLE_KEYS}
+    return {
+        "rf_angle_file": file_sha256(rf_angle_file),
+        "rf_phase_file": file_sha256(rf_phase_file),
+    }

@@ -54,7 +54,7 @@ def attribute_at(config: Config, key_path: str) -> object:
 # =====================================================================================#
 @pytest.fixture
 def config_dict() -> dict[str, Any]:
-    return load_config(CONFIG_DIR)
+    return load_config(CONFIG_DIR).model_dump(mode="json")
 
 
 @pytest.fixture
@@ -265,6 +265,13 @@ def test_two_targets_cannot_write_one_file(
     set_at(config_dict, "export.targets.coeffs.onnx_file_path", path)
     with pytest.raises(ValidationError, match="coeffs and signal_and_derivs are the"):
         Config.model_validate(config_dict)
+
+
+def test_config_is_frozen(config_dict: dict[str, Any]) -> None:
+    # A change to a target does not run the Targets validator again
+    targets = Config.model_validate(config_dict).export.targets
+    with pytest.raises(ValidationError, match="frozen"):
+        targets.coeffs.onnx_file_path = targets.signal.onnx_file_path
 
 
 @pytest.mark.parametrize(

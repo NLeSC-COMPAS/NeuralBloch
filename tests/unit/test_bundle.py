@@ -7,6 +7,8 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import Mock
 import pytest
+from neuralbloch.config_schema import DataConfig
+from neuralbloch.config_schema import ModelConfig
 from neuralbloch.config_schema import check_family
 from neuralbloch.config_schema import check_version
 from neuralbloch.config_schema import family_rank
@@ -58,13 +60,28 @@ DATA_CONFIG = {
     "parameter_ranges": RANGES,
 }
 
+DATA = DataConfig.model_validate(DATA_CONFIG)
+
+MODEL = ModelConfig.model_validate(
+    {
+        "activation": "relu",
+        "normalize_inputs": False,
+        "signal": {"rank": 3, "hidden_size": 4, "num_layers": 2},
+        "derivative": {
+            "mode": "direct",
+            "dT1": {"rank": 2, "hidden_size": 4, "num_layers": 2},
+            "dT2": {"rank": 2, "hidden_size": 4, "num_layers": 2},
+        },
+    }
+)
+
 INPUTS = CardInputs(
     family="fisp600-rank16",
     version="0.1.0-beta.1",
     ntr=600,
     rank=16,
     onnx_sha256={target: f"{i}" * 64 for i, target in enumerate(TARGETS)},
-    data_config=DATA_CONFIG,
+    data_config=DATA,
     finite_difference_steps=None,
     upstream="NeuralBloch@" + "a" * 40,
     checkpoint_epoch=4970,
@@ -138,7 +155,7 @@ def test_every_field_names_its_source() -> None:
 def test_finite_differences_state_their_steps() -> None:
     inputs = replace(
         INPUTS,
-        data_config={**DATA_CONFIG, "derivative_method": "finite_difference"},
+        data_config=DATA.model_copy(update={"derivative_method": "finite_difference"}),
         finite_difference_steps=(0.02, 0.0025),
     )
     card = tomllib.loads(card_text(inputs))
@@ -152,7 +169,7 @@ def test_finite_differences_state_their_steps() -> None:
 def test_steps_belong_to_finite_differences_only() -> None:
     with pytest.raises(ValueError, match="Finite-difference steps"):
         card_text(replace(INPUTS, finite_difference_steps=(0.02, 0.0025)))
-    fd = {**DATA_CONFIG, "derivative_method": "finite_difference"}
+    fd = DATA.model_copy(update={"derivative_method": "finite_difference"})
     with pytest.raises(ValueError, match="Finite-difference steps"):
         card_text(replace(INPUTS, data_config=fd))
 
@@ -172,51 +189,22 @@ def test_card_inputs_agree(change: dict[str, object], words: str) -> None:
         replace(INPUTS, **change)
 
 
-def test_the_derivative_method_is_required() -> None:
-    config = {k: v for k, v in DATA_CONFIG.items() if k != "derivative_method"}
-    with pytest.raises(ValueError, match="does not give derivative_method"):
-        derivative_method(config)
-    with pytest.raises(ValueError, match="Unknown derivative_method 'adjoint'"):
-        derivative_method({"derivative_method": "adjoint"})
+def test_the_derivative_method_is_named_as_the_card_names_it() -> None:
+    assert derivative_method(DATA) == "forward sensitivity"
+    finite = DATA.model_copy(update={"derivative_method": "finite_difference"})
+    assert derivative_method(finite) == "forward difference"
 
 
 def test_a_sequence_without_undersampling_is_bundled() -> None:
-    check_undersampling(DATA_CONFIG)
+    check_undersampling(DATA)
 
 
-@pytest.mark.parametrize(
-    ("factor", "message"),
-    [(2, "requires 1"), (0, "requires 1"), (True, "integer")],
-    ids=["2", "0", "True"],
-)
-def test_undersampling_factors_other_than_1_are_refused(
-    factor: object, message: str
-) -> None:
-    data = {**DATA_CONFIG, "py_undersampling_factor": factor}
-    with pytest.raises(ValueError, match=message):
+@pytest.mark.parametrize("factor", [2, 0], ids=["2", "0"])
+def test_undersampling_factors_other_than_1_are_refused(factor: int) -> None:
+    # The schema refuses 0, and model_copy does not check the value
+    data = DATA.model_copy(update={"py_undersampling_factor": factor})
+    with pytest.raises(ValueError, match="requires 1"):
         check_undersampling(data)
-
-
-@pytest.mark.parametrize(
-    ("change", "words"),
-    [
-        ({"max_state": 64.0}, "max_state must be an integer"),
-        ({"wait_spoiling": "yes"}, "wait_spoiling must be true or false"),
-        ({"TR_s": "5.58 ms"}, "TR_s must be a number"),
-        (
-            {"parameter_ranges": {**RANGES, "T1_s": {"lower": 6.0, "upper": 6}}},
-            "parameter_ranges.T1_s.lower = 6.0 must be below upper",
-        ),
-        ({"TE_s": float("nan")}, "must be finite"),
-    ],
-    ids=["max_state", "wait_spoiling", "TR_s", "T1_s", "TE_s"],
-)
-def test_malformed_configuration_is_refused(
-    change: dict[str, object], words: str
-) -> None:
-    inputs = replace(INPUTS, data_config={**DATA_CONFIG, **change})
-    with pytest.raises(ValueError, match=words):
-        card_text(inputs)
 
 
 def test_family_names_state_their_rank() -> None:
@@ -293,12 +281,19 @@ def test_checkpoint_must_store_its_configuration() -> None:
         require_configs({"NTR": 600, "epoch": 4190}, "model.pt")
 
 
-def test_config_hash_ignores_key_order() -> None:
-    a = config_sha256({"x": 1, "y": 2}, {"T1_lower": 0.1, "T1_upper": 6.0})
-    b = config_sha256({"y": 2, "x": 1}, {"T1_upper": 6.0, "T1_lower": 0.1})
-    assert a == b
+def test_config_hash_depends_on_the_values_of_the_configurations() -> None:
+    model = MODEL.model_dump(mode="json")
+    a = config_sha256(model, DATA_CONFIG)
     assert len(a) == 64
-    assert a != config_sha256({"x": 1, "y": 3}, {})
+    assert a == config_sha256(dict(reversed(model.items())), DATA_CONFIG)
+    assert a != config_sha256({**model, "activation": "silu"}, DATA_CONFIG)
+    assert a != config_sha256(model, {**DATA_CONFIG, "n_samples": 1})
+
+
+def test_config_hash_uses_the_stored_values() -> None:
+    # Validation changes 0 to 0.0, but the hash must match the stored dict
+    stored = {**DATA_CONFIG, "TW_s": 0}
+    assert config_sha256({}, stored) != config_sha256({}, DATA_CONFIG)
 
 
 @pytest.fixture
@@ -649,13 +644,15 @@ def test_rf_files_are_the_rf_tables_of_the_training() -> None:
 
 
 def test_the_rf_tables_must_be_the_tables_of_the_training(tmp_path: Path) -> None:
-    data = dict(DATA_CONFIG)
-    for key in RF_TABLE_KEYS:
-        data[key] = tmp_path / f"{key}.txt"
-        data[key].write_text("1.0\n2.0\n")
-    checkpoint = {"rf_sha256": rf_sha256(data)}
+    tables = {key: tmp_path / f"{key}.txt" for key in RF_TABLE_KEYS}
+    for path in tables.values():
+        path.write_text("1.0\n2.0\n")
+    data = DataConfig.model_validate(
+        {**DATA_CONFIG, **{key: str(path) for key, path in tables.items()}}
+    )
+    checkpoint = {"rf_sha256": rf_sha256(data.rf_angle_file, data.rf_phase_file)}
     assert check_rf_provenance(checkpoint, data) is None
-    data["rf_phase_file"].write_text("1.0\n3.0\n")
+    tables["rf_phase_file"].write_text("1.0\n3.0\n")
     with pytest.raises(
         ValueError, match="rf_phase_file.txt \\(rf_phase_file\\) is not the RF table"
     ):

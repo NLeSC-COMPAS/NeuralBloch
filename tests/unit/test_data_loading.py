@@ -117,7 +117,11 @@ def test_a_finite_validation_dataset_is_loaded(
     write_dataset(path, **validation_arrays)
     config["experiment"]["dataset_for_validation_path"] = str(path)
 
-    loader, NTR = generate_val_loader(config)
+    loader, NTR = generate_val_loader(
+        config["experiment"]["dataset_for_validation_path"],
+        config["training"]["validation_batch_size"],
+        "cpu",
+    )
 
     assert loader.n_samples == 6
     assert NTR == 5
@@ -133,7 +137,11 @@ def test_the_validation_loader_has_the_samples_of_the_file_in_order(
     write_dataset(path, **validation_arrays)
     config["experiment"]["dataset_for_validation_path"] = str(path)
 
-    loader, _ = generate_val_loader(config)
+    loader, _ = generate_val_loader(
+        config["experiment"]["dataset_for_validation_path"],
+        config["training"]["validation_batch_size"],
+        "cpu",
+    )
 
     params, *targets = (tensor.numpy() for tensor in loader.tensors)
     np.testing.assert_array_equal(
@@ -167,7 +175,11 @@ def test_a_validation_dataset_without_samples_is_refused(
             "(experiment.dataset_for_validation_path) has no samples"
         ),
     ):
-        generate_val_loader(config)
+        generate_val_loader(
+            config["experiment"]["dataset_for_validation_path"],
+            config["training"]["validation_batch_size"],
+            "cpu",
+        )
 
 
 @pytest.mark.parametrize(
@@ -203,7 +215,11 @@ def test_a_validation_dataset_with_values_that_are_not_finite_is_refused(
             f"finite in {name}: 1 of 6 samples, the first is sample 2 (T1, T2, B1"
         ),
     ):
-        generate_val_loader(config)
+        generate_val_loader(
+            config["experiment"]["dataset_for_validation_path"],
+            config["training"]["validation_batch_size"],
+            "cpu",
+        )
 
 
 @pytest.mark.parametrize(("column", "value"), [(0, 0.0), (1, -0.1)])
@@ -230,14 +246,20 @@ def test_a_validation_dataset_with_t1_or_t2_that_are_not_positive_is_refused(
             "that are not positive: 1 of 6 samples, the first is sample 4"
         ),
     ):
-        generate_val_loader(config)
+        generate_val_loader(
+            config["experiment"]["dataset_for_validation_path"],
+            config["training"]["validation_batch_size"],
+            "cpu",
+        )
 
 
 def test_finite_julia_data_are_loaded(
     config: dict[str, Any],
     julia_batch_mock: SimpleNamespace,
 ) -> None:
-    loader = generate_train_loader(config)
+    loader = generate_train_loader(
+        config, config["training"]["train_batch_size"], "cpu"
+    )
 
     assert loader.n_samples == 6
 
@@ -246,7 +268,9 @@ def test_the_julia_arrays_become_the_samples_of_the_training_loader(
     config: dict[str, Any],
     julia_batch_mock: SimpleNamespace,
 ) -> None:
-    loader = generate_train_loader(config)
+    loader = generate_train_loader(
+        config, config["training"]["train_batch_size"], "cpu"
+    )
 
     # New samples of the online training, not the grid of a dataset
     jl = sys.modules["juliacall"].Main
@@ -282,7 +306,7 @@ def test_julia_data_without_samples_are_refused(
 
     error = "The training data of the Julia simulation has no samples."
     with pytest.raises(ValueError, match=f"^{re.escape(error)}$"):
-        generate_train_loader(config)
+        generate_train_loader(config, config["training"]["train_batch_size"], "cpu")
 
 
 @pytest.mark.parametrize(
@@ -310,4 +334,4 @@ def test_julia_data_with_values_that_are_not_finite_are_refused(
             f"finite in {name}: 1 of 6 samples, the first is sample 3 (T1, T2, B1"
         ),
     ):
-        generate_train_loader(config)
+        generate_train_loader(config, config["training"]["train_batch_size"], "cpu")

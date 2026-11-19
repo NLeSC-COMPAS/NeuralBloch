@@ -4,6 +4,7 @@ from typing import Any
 from cyclopts import App
 from cyclopts import Parameter
 from neuralbloch.config import load_config
+from neuralbloch.config_schema import Config
 from neuralbloch.data import DATA_GENERATION_JL
 
 
@@ -24,7 +25,7 @@ def _start(
     *,
     seed_python: bool = True,
     output_keys: tuple[str, ...] = (),
-) -> tuple[Any, dict[str, Any]]:
+) -> tuple[Any, Config]:
     """Start Julia, load the config and seed the RNGs.
 
     Args:
@@ -34,7 +35,7 @@ def _start(
             makes the directories of these files.
 
     Returns:
-        The Julia ``Main`` module and the loaded configuration.
+        The Julia ``Main`` module and the validated ``Config``.
     """
     # Before Julia starts, so that a bad config fails fast
     config = load_config(config_dir)
@@ -42,7 +43,7 @@ def _start(
     # Make the output directories before Julia starts. Thus, a missing
     # directory does not stop the command after the slow work.
     for key in output_keys:
-        Path(config["experiment"][key]).parent.mkdir(parents=True, exist_ok=True)
+        getattr(config.experiment, key).parent.mkdir(parents=True, exist_ok=True)
 
     # juliacall must be imported before torch, and the import starts Julia.
     # So keep this import and the task imports inside the commands.
@@ -50,13 +51,13 @@ def _start(
 
     # Online samples are drawn by Julia, so Python's RNG seed alone does not
     # make training runs reproducible.
-    julia_seed = int(config["experiment"]["seed"])
+    julia_seed = config.experiment.seed
     jl.seval(f"begin using Random; Random.seed!({julia_seed}); true end")
 
     if seed_python:
         from neuralbloch.utils import set_seed
 
-        set_seed(config["experiment"]["seed"])
+        set_seed(config.experiment.seed)
 
     return jl, config
 
@@ -74,11 +75,17 @@ def generate(*, config_dir: ConfigDir = Path("config")) -> None:
         ),
     )
     jl.include(DATA_GENERATION_JL)
-    jl.save_dataset(config)
+    # Julia reads a plain dict with string paths
+    jl.save_dataset(config.model_dump(mode="json"))
 
     from neuralbloch.data.split_dataset import split_dataset
 
-    split_dataset(config["experiment"])
+    split_dataset(
+        dataset_unsplit_path=config.experiment.dataset_unsplit_path,
+        dataset_for_validation_path=config.experiment.dataset_for_validation_path,
+        dataset_for_testing_path=config.experiment.dataset_for_testing_path,
+        seed=config.experiment.seed,
+    )
 
 
 @app.command
@@ -100,7 +107,11 @@ def test_accuracy(*, config_dir: ConfigDir = Path("config")) -> None:
 
     from neuralbloch.scripts.test_accuracy import test_accuracy
 
-    test_accuracy(config)
+    test_accuracy(
+        pt_file_path=config.experiment.pt_file_path,
+        dataset_for_testing_path=config.experiment.dataset_for_testing_path,
+        device=config.experiment.device,
+    )
 
 
 @app.command
@@ -110,7 +121,13 @@ def test_inference(*, config_dir: ConfigDir = Path("config")) -> None:
 
     from neuralbloch.scripts.test_inference import test_inference
 
-    test_inference(config)
+    test_inference(
+        pt_file_path=config.experiment.pt_file_path,
+        device=config.experiment.device,
+        n_runs=config.testing.n_runs,
+        infer_batch_size=config.testing.infer_batch_size,
+        batch_size=config.testing.batch_size,
+    )
 
 
 @app.command
@@ -120,7 +137,14 @@ def export_onnx(*, config_dir: ConfigDir = Path("config")) -> None:
 
     from neuralbloch.scripts.export_onnx import export_onnx
 
-    export_onnx(config)
+    export = config.export
+    export_onnx(
+        targets=export.targets,
+        fp16=export.fp16,
+        opset_version=export.opset_version,
+        n_verify_samples=export.n_verify_samples,
+        pt_file_path=config.experiment.pt_file_path,
+    )
 
 
 @app.command
@@ -130,4 +154,4 @@ def export_bundle(*, config_dir: ConfigDir = Path("config")) -> None:
 
     from neuralbloch.scripts.export_bundle import export_bundle
 
-    export_bundle(config)
+    export_bundle(config.export, config.experiment.pt_file_path)

@@ -18,6 +18,7 @@ from neuralbloch.data import DATA_GENERATION_JL
 from neuralbloch.data.data_loading import generate_train_loader
 from neuralbloch.data.data_loading import generate_val_loader
 from neuralbloch.data.data_loading import load_data_from_h5_file
+from neuralbloch.utils import get_device
 
 
 @pytest.fixture(scope="session")
@@ -43,7 +44,7 @@ def julia_config_dir(
     """
     # The RF table paths are relative, so pytest can run from any folder
     monkeypatch.chdir(pytestconfig.rootpath)
-    config = load_config(pytestconfig.rootpath / "config")
+    config = load_config(pytestconfig.rootpath / "config").model_dump(mode="json")
     config["experiment"].update(
         dataset_unsplit_path=str(tmp_path / "dataset_unsplit.h5"),
         dataset_for_validation_path=str(tmp_path / "dataset_for_validation.h5"),
@@ -69,9 +70,13 @@ def test_the_julia_training_data_have_the_layout_of_the_model(
     julia_config_dir: Path,
     pytestconfig: pytest.Config,
 ) -> None:
-    config = load_config(julia_config_dir)
+    config = load_config(julia_config_dir).model_dump(mode="json")
 
-    loader = generate_train_loader(config)
+    loader = generate_train_loader(
+        config,
+        config["training"]["train_batch_size"],
+        get_device(config["experiment"]["device"]),
+    )
 
     params, *targets = (tensor.cpu() for tensor in loader.tensors)
     data = config["data"]
@@ -104,13 +109,17 @@ def test_ranges_without_a_sample_with_t1_above_t2_give_an_error_that_names_them(
     # generate_data keeps only the samples with T1 > T2. Without a sample, the
     # simulation on the GPU fails with a CUDA error that does not give the
     # cause, so generate_data must raise an error before it
-    config = load_config(julia_config_dir)
+    config = load_config(julia_config_dir).model_dump(mode="json")
     config["data"]["parameter_ranges"].update(
         T1_s={"lower": 0.1, "upper": 0.2}, T2_s={"lower": 0.3, "upper": 2.0}
     )
 
     with pytest.raises(JuliaError) as error:
-        generate_train_loader(config)
+        generate_train_loader(
+            config,
+            config["training"]["train_batch_size"],
+            get_device(config["experiment"]["device"]),
+        )
 
     assert (
         "None of the 100 samples has T1 > T2: check the ranges "
@@ -124,7 +133,7 @@ def test_the_generate_task_writes_the_validation_and_test_datasets(
     julia_config_dir: Path,
     pytestconfig: pytest.Config,
 ) -> None:
-    config = load_config(julia_config_dir)
+    config = load_config(julia_config_dir).model_dump(mode="json")
 
     # By default, cyclopts calls sys.exit after the command, also on success
     app(
@@ -165,6 +174,10 @@ def test_the_generate_task_writes_the_validation_and_test_datasets(
         assert file.attrs["derivative_method"].decode() == data["derivative_method"]
 
     # The validation loader gives the targets in the layout of the training data
-    loader, _ = generate_val_loader(config)
+    loader, _ = generate_val_loader(
+        experiment["dataset_for_validation_path"],
+        config["training"]["validation_batch_size"],
+        get_device(experiment["device"]),
+    )
     for target in loader.tensors[1:]:
         assert target.shape == (validation[4], NTR, 2)

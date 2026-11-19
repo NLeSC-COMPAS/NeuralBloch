@@ -1,8 +1,11 @@
 import math
+from collections.abc import Callable
 from typing import Any
 import numpy as np
 import pytest
 import torch
+from neuralbloch.config_schema import ParameterRanges
+from neuralbloch.model import FCModel
 from neuralbloch.utils import complex_to_real_imag
 from neuralbloch.utils import model_from_checkpoint
 from neuralbloch.utils import sample_parameters
@@ -28,7 +31,9 @@ def test_parameter_sampling_is_physical_and_log_uniform(
     data_config: dict[str, Any],
 ) -> None:
     torch.manual_seed(42)
-    samples = sample_parameters({"data": data_config}, 20_000)
+    samples = sample_parameters(
+        ParameterRanges.model_validate(data_config["parameter_ranges"]), 20_000
+    )
 
     assert samples.shape == (20_000, 3)
     ranges = data_config["parameter_ranges"]
@@ -70,3 +75,19 @@ def test_a_checkpoint_with_the_old_config_keys_is_refused(
     }
     with pytest.raises(ValueError, match="Train the model again"):
         model_from_checkpoint(checkpoint, "cpu")
+
+
+def test_a_checkpoint_needs_only_the_parameter_ranges_of_the_data_config(
+    data_config: dict[str, Any],
+    direct_config: dict[str, Any],
+    make_model: Callable[..., FCModel],
+) -> None:
+    model = make_model(5, direct_config, data_config)
+    checkpoint = {
+        "NTR": 5,
+        "model_config": direct_config,
+        "data_config": {"parameter_ranges": data_config["parameter_ranges"]},
+        "model_state": model.state_dict(),
+    }
+    loaded = model_from_checkpoint(checkpoint, "cpu")
+    assert loaded.NTR == 5

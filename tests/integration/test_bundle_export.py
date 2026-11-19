@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 import pytest
 import torch
+from neuralbloch.config_schema import ExportConfig
 from neuralbloch.model import FCModel
 from neuralbloch.scripts.export_bundle import REPO_ROOT
 from neuralbloch.scripts.export_bundle import check_bundle
@@ -30,6 +31,14 @@ class ExportSetup:
     bundle: Path
     config: dict[str, Any]
     tarball: Path
+
+
+def run_export(setup: ExportSetup) -> None:
+    """Run export_bundle with the export section and the checkpoint of setup."""
+    export_bundle(
+        ExportConfig.model_validate(setup.config["export"]),
+        Path(setup.config["experiment"]["pt_file_path"]),
+    )
 
 
 @pytest.fixture
@@ -90,7 +99,7 @@ def drop_from_checkpoint(setup: ExportSetup, key: str) -> None:
 def test_the_bundle_and_its_release_file_describe_the_checkpoint(
     export: ExportSetup, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    export_bundle(export.config)
+    run_export(export)
     card = check_bundle(export.bundle)
     model = card["model"]
     assert (model["family"], model["version"], model["ntr"], model["rank"]) == (
@@ -122,7 +131,7 @@ def test_the_warnings_come_again_after_the_release_command(
 ) -> None:
     # A checkpoint from before the checkpoints recorded the RF tables
     drop_from_checkpoint(export, "rf_sha256")
-    export_bundle(export.config)
+    run_export(export)
     printed = capsys.readouterr().out
     command = printed.index("gh release create")
     assert "WARNING: the checkpoint does not record" in printed[:command]
@@ -132,7 +141,7 @@ def test_the_warnings_come_again_after_the_release_command(
 def assert_refused(setup: ExportSetup, error: str) -> None:
     """Check that export_bundle raises ``error`` and writes nothing."""
     with pytest.raises(ValueError, match=error):
-        export_bundle(setup.config)
+        run_export(setup)
     assert not setup.bundle.parent.exists()
 
 

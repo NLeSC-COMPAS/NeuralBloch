@@ -105,7 +105,8 @@ class Section(BaseModel):
         extra="forbid",
         strict=True,
         allow_inf_nan=False,
-        validate_assignment=True,
+        # Frozen, because a parent validator does not run again when a child changes
+        frozen=True,
     )
 
 
