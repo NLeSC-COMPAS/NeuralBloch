@@ -6,14 +6,13 @@ simulates takes about a minute, because the first simulation compiles the CUDA
 kernels.
 """
 
-import sys
 from pathlib import Path
 import h5py
 import numpy as np
 import pytest
 import yaml
 from helpers import has_gpu
-from neuralbloch.cli import main
+from neuralbloch.cli import app
 from neuralbloch.config import load_config
 from neuralbloch.data import DATA_GENERATION_JL
 from neuralbloch.data.data_loading import generate_train_loader
@@ -124,14 +123,14 @@ def test_ranges_without_a_sample_with_t1_above_t2_give_an_error_that_names_them(
 def test_the_generate_task_writes_the_validation_and_test_datasets(
     julia_config_dir: Path,
     pytestconfig: pytest.Config,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     config = load_config(julia_config_dir)
-    monkeypatch.setattr(
-        sys, "argv", ["neuralbloch", "generate", "--config-dir", str(julia_config_dir)]
-    )
 
-    main()
+    # By default, cyclopts calls sys.exit after the command, also on success
+    app(
+        ["generate", "--config-dir", str(julia_config_dir)],
+        result_action="return_value",
+    )
 
     experiment, data = config["experiment"], config["data"]
     params, signal, dT1, dT2, N, NTR = load_data_from_h5_file(
