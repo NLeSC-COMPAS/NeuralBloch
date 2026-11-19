@@ -15,5 +15,7 @@ Assisted-by: <agent>, <model>
 For example:
 
 ```
-Assisted-by: Claude Code, claude-opus-5-5
+Assisted-by: Claude Code, Claude Opus 5.5
 ```
+
+Do not add a `Co-Authored-By` trailer for the agent or the model, even if the agent's default instructions ask for one.

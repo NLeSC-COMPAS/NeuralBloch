@@ -7,6 +7,7 @@ the checkpoint format changes only this file of the tests.
 """
 
 import copy
+import shutil
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -41,6 +42,14 @@ from neuralbloch.scripts.export_onnx import export_target
 from neuralbloch.utils import RF_TABLE_KEYS
 from neuralbloch.utils import rf_sha256
 from neuralbloch.utils import sample_parameters
+
+
+@pytest.fixture
+def config_dir(tmp_path: Path, pytestconfig: pytest.Config) -> Path:
+    """A copy of config/ in tmp_path, which a test can change."""
+    copy_dir = tmp_path / "config"
+    shutil.copytree(pytestconfig.rootpath / "config", copy_dir)
+    return copy_dir
 
 
 @pytest.fixture

@@ -20,18 +20,30 @@ def main() -> None:
 ConfigDir = Annotated[Path, Parameter(help="Directory of the YAML config files.")]
 
 
-def _start(config_dir: Path, *, seed_python: bool = True) -> tuple[Any, Config]:
+def _start(
+    config_dir: Path,
+    *,
+    seed_python: bool = True,
+    output_keys: tuple[str, ...] = (),
+) -> tuple[Any, Config]:
     """Start Julia, load the config and seed the RNGs.
 
     Args:
         config_dir: Directory containing the YAML configuration files.
         seed_python: Also seed Python's RNGs with ``experiment.seed``.
+        output_keys: The ``experiment`` keys of the output files. The function
+            makes the directories of these files.
 
     Returns:
         The Julia ``Main`` module and the validated ``Config``.
     """
     # Before Julia starts, so that a bad config fails fast
     config = load_config(config_dir)
+
+    # Make the output directories before Julia starts. Thus, a missing
+    # directory does not stop the command after the slow work.
+    for key in output_keys:
+        getattr(config.experiment, key).parent.mkdir(parents=True, exist_ok=True)
 
     # juliacall must be imported before torch, and the import starts Julia.
     # So keep this import and the task imports inside the commands.
@@ -53,7 +65,15 @@ def _start(config_dir: Path, *, seed_python: bool = True) -> tuple[Any, Config]:
 @app.command
 def generate(*, config_dir: ConfigDir = Path("config")) -> None:
     """Generate validation and test datasets using Bloch simulations."""
-    jl, config = _start(config_dir, seed_python=False)
+    jl, config = _start(
+        config_dir,
+        seed_python=False,
+        output_keys=(
+            "dataset_unsplit_path",
+            "dataset_for_validation_path",
+            "dataset_for_testing_path",
+        ),
+    )
     jl.include(DATA_GENERATION_JL)
     # Julia reads a plain dict with string paths
     jl.save_dataset(config.model_dump(mode="json"))
@@ -71,7 +91,7 @@ def generate(*, config_dir: ConfigDir = Path("config")) -> None:
 @app.command
 def train(*, config_dir: ConfigDir = Path("config")) -> None:
     """Train the surrogate model."""
-    jl, config = _start(config_dir)
+    jl, config = _start(config_dir, output_keys=("pt_file_path",))
     jl.include(DATA_GENERATION_JL)
     jl.seval("begin using BlochSimulators; CUDALibs(); true end")
 
