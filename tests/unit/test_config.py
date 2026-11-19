@@ -1,6 +1,5 @@
 """load_config: it reads the YAML files of a config dir and validates them."""
 
-import shutil
 from pathlib import Path
 import pytest
 import yaml
@@ -9,16 +8,6 @@ from neuralbloch.config import load_config
 
 
 CONFIG_DIR = Path(__file__).parents[2] / "config"
-
-
-@pytest.fixture
-def config_dir(tmp_path: Path) -> Path:
-    """Copy config/ to tmp_path, so that a test can change it.
-
-    Returns:
-        The path of the copy.
-    """
-    return Path(shutil.copytree(CONFIG_DIR, tmp_path / "config"))
 
 
 def test_load_config_returns_the_yaml_files_as_dicts() -> None:
