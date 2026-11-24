@@ -597,7 +597,7 @@ def test_a_checkpoint_of_an_earlier_run_is_not_loaded_without_epochs(
 ) -> None:
     trainer = make_trainer()
     # The schema refuses 0 epochs, and model_copy does not check the value
-    trainer.training = trainer.training.model_copy(update={"n_epochs": 0})
+    trainer.training_config = trainer.training_config.model_copy(update={"n_epochs": 0})
 
     with pytest.raises(RuntimeError, match="saved no checkpoint"):
         trainer.train(synthetic_loader(10, 4))

@@ -1,3 +1,4 @@
+import copy
 import math
 from collections.abc import Callable
 from typing import Any
@@ -91,3 +92,39 @@ def test_a_checkpoint_needs_only_the_parameter_ranges_of_the_data_config(
     }
     loaded = model_from_checkpoint(checkpoint, "cpu")
     assert loaded.NTR == 5
+
+
+@pytest.mark.parametrize(
+    ("key_path", "value", "location"),
+    [
+        (("model_config", "activation"), "sigmoid", "model_config"),
+        (
+            ("data_config", "parameter_ranges", "B1", "lower"),
+            2.0,
+            "data_config.parameter_ranges",
+        ),
+    ],
+    ids=["model", "ranges"],
+)
+def test_a_checkpoint_with_a_bad_config_names_the_checkpoint(
+    data_config: dict[str, Any],
+    direct_config: dict[str, Any],
+    key_path: tuple[str, ...],
+    value: object,
+    location: str,
+) -> None:
+    checkpoint: dict[str, Any] = copy.deepcopy(
+        {
+            "NTR": 5,
+            "model_config": direct_config,
+            "data_config": {"parameter_ranges": data_config["parameter_ranges"]},
+            "model_state": {},
+        }
+    )
+    parent = checkpoint
+    for key in key_path[:-1]:
+        parent = parent[key]
+    parent[key_path[-1]] = value
+
+    with pytest.raises(ValueError, match=f"stores a {location} that is not valid"):
+        model_from_checkpoint(checkpoint, "cpu")
