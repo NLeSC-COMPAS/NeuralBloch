@@ -1,6 +1,6 @@
 import copy
 import time
-from typing import Any
+from pathlib import Path
 from typing import cast
 import numpy as np
 import torch
@@ -74,19 +74,26 @@ def benchmark(
     print(f"  Min  : {np.min(times):.2f} ms")
 
 
-def test_inference(config: dict[str, Any]) -> None:
+def test_inference(
+    pt_file_path: Path,
+    device: str,
+    n_runs: int,
+    infer_batch_size: int,
+    batch_size: int,
+) -> None:
     """Benchmark surrogate inference speed under several execution settings.
 
     Args:
-        config: Full configuration dictionary.
+        pt_file_path: The checkpoint file (``experiment.pt_file_path``).
+        device: The wanted device (``experiment.device``). The CPU is used
+            if CUDA is not available.
+        n_runs: The number of timed runs (``testing.n_runs``).
+        infer_batch_size: The sub-batch size (``testing.infer_batch_size``).
+        batch_size: The samples of one run (``testing.batch_size``).
     """
-    n_runs = config["testing"]["n_runs"]
-    infer_batch_size = config["testing"]["infer_batch_size"]
-    batch_size = config["testing"]["batch_size"]
+    device = get_device(device)
 
-    device = get_device(config)
-
-    model, _ = load_model(config, device)
+    model, _ = load_model(pt_file_path, device)
     model.eval()
 
     T1 = 0.8

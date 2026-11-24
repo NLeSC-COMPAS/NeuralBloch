@@ -5,6 +5,8 @@ from neuralbloch.basis import orthogonalize_shared_basis
 from neuralbloch.basis import representative_coeffs
 from neuralbloch.basis import truncate_shared_basis
 from neuralbloch.basis import worst_relative_output_difference
+from neuralbloch.config_schema import ModelConfig
+from neuralbloch.config_schema import ParameterRanges
 from neuralbloch.model import FCModel
 
 
@@ -24,7 +26,12 @@ def test_ordering_preserves_full_rank_and_truncation_uses_first_columns(
     basis = ordered.U_signal[0].weight.detach()
     torch.testing.assert_close(basis.T @ basis, torch.eye(4), rtol=1e-5, atol=1e-5)
 
-    smaller = truncate_shared_basis(ordered, rank4_config, data_config, 2)
+    smaller = truncate_shared_basis(
+        ordered,
+        ModelConfig.model_validate(rank4_config),
+        ParameterRanges.model_validate(data_config["parameter_ranges"]),
+        2,
+    )
     assert smaller.U_signal[0].weight.shape == (10, 2)
     with torch.no_grad():
         coefficients = representative_coeffs(ordered, HELD_OUT)

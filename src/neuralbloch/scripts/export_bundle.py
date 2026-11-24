@@ -13,6 +13,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from neuralbloch.config_schema import DataConfig
+from neuralbloch.config_schema import ExportConfig
 from neuralbloch.config_schema import check_family
 from neuralbloch.config_schema import check_version
 from neuralbloch.scripts.export_onnx import TARGETS
@@ -23,6 +25,7 @@ from neuralbloch.scripts.export_onnx import target_paths
 from neuralbloch.scripts.export_onnx import training_domain
 from neuralbloch.scripts.export_onnx import verify_onnx
 from neuralbloch.utils import RF_TABLE_KEYS
+from neuralbloch.utils import checkpoint_config
 from neuralbloch.utils import file_sha256
 from neuralbloch.utils import load_checkpoint
 from neuralbloch.utils import model_from_checkpoint
@@ -100,7 +103,7 @@ class CardInputs:
     ntr: int
     rank: int
     onnx_sha256: Mapping[str, str]
-    data_config: Mapping[str, Any]
+    data_config: DataConfig
     finite_difference_steps: tuple[float, float] | None
     upstream: str
     checkpoint_epoch: int
@@ -165,31 +168,13 @@ def require_configs(checkpoint: Mapping[str, Any], path: str | Path) -> None:
         )
 
 
-def derivative_method(data_config: Mapping[str, Any]) -> str:
-    """Return the method that calculated the training derivatives, as the card names it.
-
-    The data configuration must give the method, because the card states it.
-
-    Raises:
-        ValueError: If the data configuration does not give the method, or
-            names an unknown method.
-    """
-    if "derivative_method" not in data_config:
-        raise ValueError(
-            "The checkpoint's data_config does not give derivative_method, so the "
-            "card cannot state the derivative method"
-        )
-    method = data_config["derivative_method"]
-    if method not in DERIVATIVE_METHODS:
-        raise ValueError(
-            f"Unknown derivative_method {method!r}; "
-            f"known: {', '.join(DERIVATIVE_METHODS)}"
-        )
-    return DERIVATIVE_METHODS[method]
+def derivative_method(data_config: DataConfig) -> str:
+    """Return the method that calculated the training derivatives, as the card names it."""
+    return DERIVATIVE_METHODS[data_config.derivative_method]
 
 
 def check_rf_provenance(
-    checkpoint: Mapping[str, Any], data_config: Mapping[str, Any]
+    checkpoint: Mapping[str, Any], data_config: DataConfig
 ) -> str | None:
     """Raise an error if the RF tables changed after the training.
 
@@ -214,19 +199,21 @@ def check_rf_provenance(
         return (
             "the checkpoint does not record the sha256 of its RF tables, so the "
             "export cannot check that the RF tables are the tables of the "
-            "training: " + ", ".join(str(data_config[k]) for k in RF_TABLE_KEYS)
+            "training: "
+            + ", ".join(str(getattr(data_config, k)) for k in RF_TABLE_KEYS)
         )
-    current = rf_sha256(data_config)
+    current = rf_sha256(data_config.rf_angle_file, data_config.rf_phase_file)
     for key in RF_TABLE_KEYS:
         if recorded.get(key) != current[key]:
             raise ValueError(
-                f"{data_config[key]} ({key}) is not the RF table of the training: "
+                f"{getattr(data_config, key)} ({key}) is not the RF table of the "
+                "training: "
                 "its sha256 is not the sha256 that the checkpoint records"
             )
     return None
 
 
-def check_undersampling(data_config: Mapping[str, Any]) -> None:
+def check_undersampling(data_config: DataConfig) -> None:
     """Raise an error if the training sequence is undersampled.
 
     With py_undersampling_factor R, BlochSimulators gives R readouts for each RF
@@ -236,7 +223,7 @@ def check_undersampling(data_config: Mapping[str, Any]) -> None:
     Raises:
         ValueError: If py_undersampling_factor is not the integer 1.
     """
-    factor = integer(data_config["py_undersampling_factor"], "py_undersampling_factor")
+    factor = data_config.py_undersampling_factor
     if factor != 1:
         raise ValueError(
             f"py_undersampling_factor is {factor!r}. A bundle requires 1, because "
@@ -250,7 +237,11 @@ def config_sha256(
     model_config: Mapping[str, Any],
     data_config: Mapping[str, Any],
 ) -> str:
-    """Return the sha256 of the checkpoint configurations. Key order has no effect."""
+    """Return the sha256 of the checkpoint configurations. Key order has no effect.
+
+    Hash the stored dicts, not the validated models: validation changes values
+    such as ``1`` to ``1.0``, which would change the hash of old checkpoints.
+    """
     canonical = json.dumps(
         {"model_config": model_config, "data_config": data_config},
         sort_keys=True,
@@ -303,53 +294,20 @@ def toml_value(value: object) -> str:
     raise TypeError(f"No TOML literal for {value!r}")
 
 
-def number(value: object, name: str) -> float:
-    """Return a card number: a float, or an integer as a float.
-
-    Raises:
-        ValueError: If ``value`` is not a number.
-    """
-    if isinstance(value, int | float) and not isinstance(value, bool):
-        return float(value)
-    raise ValueError(f"{name} must be a number, not {value!r}")
-
-
-def integer(value: object, name: str) -> int:
-    """Return a card integer.
-
-    Raises:
-        ValueError: If ``value`` is not an integer.
-    """
-    if isinstance(value, int) and not isinstance(value, bool):
-        return value
-    raise ValueError(f"{name} must be an integer, not {value!r}")
-
-
-def boolean(value: object, name: str) -> bool:
-    """Return a card boolean.
-
-    Raises:
-        ValueError: If ``value`` is not true or false.
-    """
-    if isinstance(value, bool):
-        return value
-    raise ValueError(f"{name} must be true or false, not {value!r}")
-
-
 # The sequence that data_generation.jl simulates. It is FISP3D(...), made
-# from these fields of the data configuration: (card key, data key, type, unit).
+# from these fields of the data configuration: (card key, data key, unit).
 SEQUENCE_KIND = "FISP3D"
 SEQUENCE_FIELDS = (
-    ("TR", "TR_s", number, "seconds"),
-    ("TE", "TE_s", number, "seconds"),
-    ("TI", "TI_s", number, "seconds"),
-    ("TW", "TW_s", number, "seconds"),
-    ("max_state", "max_state", integer, ""),
-    ("repetitions", "repetitions", integer, ""),
-    ("inversion_prepulse", "inversion_prepulse", boolean, ""),
-    ("wait_spoiling", "wait_spoiling", boolean, ""),
-    ("undersampling_factor", "py_undersampling_factor", integer, ""),
-    ("delta_k_spoil", "delta_k_spoil_rad_per_m", number, "rad/m"),
+    ("TR", "TR_s", "seconds"),
+    ("TE", "TE_s", "seconds"),
+    ("TI", "TI_s", "seconds"),
+    ("TW", "TW_s", "seconds"),
+    ("max_state", "max_state", ""),
+    ("repetitions", "repetitions", ""),
+    ("inversion_prepulse", "inversion_prepulse", ""),
+    ("wait_spoiling", "wait_spoiling", ""),
+    ("undersampling_factor", "py_undersampling_factor", ""),
+    ("delta_k_spoil", "delta_k_spoil_rad_per_m", "rad/m"),
 )
 
 
@@ -358,11 +316,8 @@ def card_text(inputs: CardInputs) -> str:
 
     The card uses schema ``SCHEMA_VERSION``.
 
-    ``CardInputs`` checks that its fields agree. This function checks the
-    values of the data configuration while it writes them.
-
-    Raises:
-        ValueError: If a value has the wrong type, or a domain range is empty.
+    ``CardInputs`` checks that its fields agree. The schema checks the values
+    of the data configuration.
     """
     data = inputs.data_config
     method = derivative_method(data)
@@ -403,13 +358,8 @@ def card_text(inputs: CardInputs) -> str:
 
     table("domain", "where the network was trained: data_config")
     for key, name, comment in DOMAIN_FIELDS:
-        bounds = data["parameter_ranges"][name]
-        where = f"parameter_ranges.{name}"
-        low = number(bounds["lower"], f"{where}.lower")
-        high = number(bounds["upper"], f"{where}.upper")
-        if not low < high:
-            raise ValueError(f"{where}.lower = {low} must be below upper = {high}")
-        field(key, [low, high], f"{where}: {comment}")
+        bounds = getattr(data.parameter_ranges, name)
+        field(key, [bounds.lower, bounds.upper], f"parameter_ranges.{name}: {comment}")
     field("constraint", CONSTRAINT, "data_generation.jl keeps only T1 > T2")
 
     table("derivatives", "how the training targets were computed")
@@ -421,10 +371,10 @@ def card_text(inputs: CardInputs) -> str:
 
     table("sequence", "FISP3D(...) in data_generation.jl, from data_config")
     field("kind", SEQUENCE_KIND)
-    for key, data_key, convert, unit in SEQUENCE_FIELDS:
+    for key, data_key, unit in SEQUENCE_FIELDS:
         field(
             key,
-            convert(data[data_key], data_key),
+            getattr(data, data_key),
             ", ".join(filter(None, (data_key, unit))),
         )
     for key, (name, data_key, holds) in RF_FILES.items():
@@ -706,7 +656,7 @@ def release_command(card: Mapping[str, Any], tarball: Path, sha256: str) -> list
     ]
 
 
-def export_bundle(config: dict[str, Any]) -> None:
+def export_bundle(export_config: ExportConfig, pt_file_path: Path) -> None:
     """Write the model bundle that NeuralBloch.jl reads, from the exported targets.
 
     The bundle (``export.bundle_dir``) contains the ONNX model of each target,
@@ -727,17 +677,17 @@ def export_bundle(config: dict[str, Any]) -> None:
     release of the family version exists (``require_unreleased``).
 
     Args:
-        config: Full configuration dictionary.
+        export_config: The ``export`` configuration.
+        pt_file_path: The checkpoint file (``experiment.pt_file_path``).
     """
-    export_config = config["export"]
-    checkpoint_path = Path(config["experiment"]["pt_file_path"])
+    checkpoint_path = pt_file_path
     # Check the configurations before the model is made from them
-    checkpoint = load_checkpoint(config, "cpu")
+    checkpoint = load_checkpoint(checkpoint_path, "cpu")
     require_configs(checkpoint, checkpoint_path)
     model = model_from_checkpoint(checkpoint, "cpu")
 
-    family = export_config["model_family"]
-    version = check_version(export_config["model_version"])
+    family = export_config.model_family
+    version = export_config.model_version
     check_family(family, model.rank)
 
     commit = clean_commit()
@@ -752,32 +702,33 @@ def export_bundle(config: dict[str, Any]) -> None:
             print(f"\nWARNING: {warning}")
             warnings.append(warning)
 
-    warn(require_unreleased(release_tag(family, version), export_config["offline"]))
+    warn(require_unreleased(release_tag(family, version), export_config.offline))
 
-    data_config = checkpoint["data_config"]
+    data_config = checkpoint_config(
+        DataConfig, checkpoint["data_config"], "data_config"
+    )
     method = derivative_method(data_config)
     check_undersampling(data_config)
     # check_bundle checks this again, but only after the slow steps below
     for key, (_, data_key, _) in RF_FILES.items():
-        values = rf_table_length(data_config[data_key])
+        rf_table = getattr(data_config, data_key)
+        values = rf_table_length(rf_table)
         if values != model.NTR:
             raise ValueError(
-                f"{data_config[data_key]} ({key}) has {values} values; "
+                f"{rf_table} ({key}) has {values} values; "
                 f"the checkpoint has NTR = {model.NTR}"
             )
     warn(check_rf_provenance(checkpoint, data_config))
 
     # The ONNX models must come from this checkpoint. Check the checkpoint that
     # export_onnx recorded in each model, then compare each model with it.
-    onnx_paths = target_paths(export_config)
+    onnx_paths = target_paths(export_config.targets)
     require_exported(onnx_paths)
     checkpoint_sha256 = file_sha256(checkpoint_path)
     for onnx_path in onnx_paths.values():
         require_checkpoint(onnx_path, checkpoint_sha256, checkpoint_path)
     precision = onnx_precision(list(onnx_paths.values()))
-    x = sample_parameters(
-        training_domain(checkpoint), export_config["n_verify_samples"]
-    )
+    x = sample_parameters(training_domain(checkpoint), export_config.n_verify_samples)
     for target, onnx_path in onnx_paths.items():
         verify_onnx(model, target, onnx_path, x, precision)
 
@@ -794,7 +745,9 @@ def export_bundle(config: dict[str, Any]) -> None:
             finite_difference_steps=steps,
             upstream=upstream,
             checkpoint_epoch=checkpoint["epoch"],
-            config_sha256=config_sha256(checkpoint["model_config"], data_config),
+            config_sha256=config_sha256(
+                checkpoint["model_config"], checkpoint["data_config"]
+            ),
             blochsimulators=blochsimulators,
             precision=precision,
         )
@@ -803,9 +756,11 @@ def export_bundle(config: dict[str, Any]) -> None:
     files: dict[str, str | Path] = {
         TARGETS[target].bundle_file: path for target, path in onnx_paths.items()
     }
-    files |= {name: data_config[data_key] for name, data_key, _ in RF_FILES.values()}
+    files |= {
+        name: getattr(data_config, data_key) for name, data_key, _ in RF_FILES.values()
+    }
 
-    bundle_dir = Path(export_config["bundle_dir"])
+    bundle_dir = export_config.bundle_dir
     parsed = write_bundle(bundle_dir, card, files)
 
     # Write the release file next to the bundle

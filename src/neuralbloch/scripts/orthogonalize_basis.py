@@ -13,7 +13,10 @@ from neuralbloch.basis import orthogonalize_shared_basis
 from neuralbloch.basis import truncate_shared_basis
 from neuralbloch.basis import with_signal_rank
 from neuralbloch.basis import worst_relative_output_difference
+from neuralbloch.config_schema import ModelConfig
+from neuralbloch.config_schema import ParameterRanges
 from neuralbloch.model import FCModel
+from neuralbloch.utils import checkpoint_config
 from neuralbloch.utils import get_device
 from neuralbloch.utils import model_from_checkpoint
 
@@ -67,14 +70,20 @@ def postprocess_basis(
     print(f"Saved ordered checkpoint to {output_path}")
     written = [output_path]
 
+    model_config = checkpoint_config(
+        ModelConfig, checkpoint["model_config"], "model_config"
+    )
+    parameter_ranges = checkpoint_config(
+        ParameterRanges,
+        checkpoint["data_config"]["parameter_ranges"],
+        "data_config.parameter_ranges",
+    )
     for rank, rank_path in zip(ranks, rank_paths, strict=True):
-        smaller = truncate_shared_basis(
-            model, checkpoint["model_config"], checkpoint["data_config"], rank
-        )
+        smaller = truncate_shared_basis(model, model_config, parameter_ranges, rank)
         rank_checkpoint = dict(checkpoint)
         rank_checkpoint["model_config"] = with_signal_rank(
-            checkpoint["model_config"], rank
-        )
+            model_config, rank
+        ).model_dump(mode="json")
         rank_checkpoint["model_state"] = smaller.state_dict()
         torch.save(rank_checkpoint, rank_path)
         written.append(rank_path)
@@ -107,7 +116,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     """Run basis postprocessing from the command line."""
     args = parse_args()
-    device = get_device({"experiment": {"device": "cuda"}})
+    device = get_device("cuda")
     postprocess_basis(
         args.checkpoint, args.fit_dataset, args.output, args.truncate, device
     )

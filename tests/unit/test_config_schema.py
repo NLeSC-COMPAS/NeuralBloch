@@ -54,7 +54,7 @@ def attribute_at(config: Config, key_path: str) -> object:
 # =====================================================================================#
 @pytest.fixture
 def config_dict() -> dict[str, Any]:
-    return load_config(CONFIG_DIR)
+    return load_config(CONFIG_DIR).model_dump(mode="json")
 
 
 @pytest.fixture
@@ -126,6 +126,24 @@ def test_int_is_accepted_for_a_float(
 
 
 @pytest.mark.parametrize(
+    ("key_path", "value", "expected"),
+    [
+        ("training.n_epochs", "5000", 5000),
+        ("export.fp16", "false", False),
+        # PyYAML reads 1e-3 without a dot as a string
+        ("training.learning_rate", "1e-3", 1e-3),
+    ],
+)
+def test_values_are_converted(
+    config_dict: dict[str, Any], key_path: str, value: object, expected: object
+) -> None:
+    set_at(config_dict, key_path, value)
+    validated = attribute_at(Config.model_validate(config_dict), key_path)
+    assert validated == expected
+    assert type(validated) is type(expected)
+
+
+@pytest.mark.parametrize(
     "key_path",
     [
         "training.n_epochs",
@@ -145,10 +163,9 @@ def test_missing_keys_are_refused(config_dict: dict[str, Any], key_path: str) ->
     [
         # The rules of Section, which all sections follow
         ("training.unknown_key", 1, "Extra inputs are not permitted"),
-        # No conversion of strings and bools
-        ("training.n_epochs", "5000", "Input should be a valid integer"),
-        ("training.n_epochs", True, "Input should be a valid integer"),
-        ("export.fp16", "false", "Input should be a valid boolean"),
+        ("training.n_epochs", "many", "Input should be a valid integer"),
+        ("training.n_epochs", 1.5, "Input should be a valid integer"),
+        ("export.fp16", "maybe", "Input should be a valid boolean"),
         ("training.learning_rate", math.inf, "finite number"),
         ("training.learning_rate", math.nan, "finite number"),
         # data.yaml
@@ -265,6 +282,13 @@ def test_two_targets_cannot_write_one_file(
     set_at(config_dict, "export.targets.coeffs.onnx_file_path", path)
     with pytest.raises(ValidationError, match="coeffs and signal_and_derivs are the"):
         Config.model_validate(config_dict)
+
+
+def test_config_is_frozen(config_dict: dict[str, Any]) -> None:
+    # A change to a target does not run the Targets validator again
+    targets = Config.model_validate(config_dict).export.targets
+    with pytest.raises(ValidationError, match="frozen"):
+        targets.coeffs.onnx_file_path = targets.signal.onnx_file_path
 
 
 @pytest.mark.parametrize(

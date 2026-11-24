@@ -10,6 +10,7 @@ from typing import Any
 import pytest
 import torch
 from torch import optim
+from neuralbloch.config_schema import Config
 from neuralbloch.data.data_loading import TensorBatchLoader
 from neuralbloch.loss import Loss
 from neuralbloch.model import FCModel
@@ -36,6 +37,7 @@ def same_weights(a: Weights, b: Weights) -> bool:
 @pytest.fixture
 def make_trainer(
     config: dict[str, Any],
+    make_config: Callable[[dict[str, Any]], Config],
     make_model: Callable[..., FCModel],
     synthetic_loader: Callable[..., TensorBatchLoader],
 ) -> Iterator[Callable[..., Trainer]]:
@@ -56,7 +58,16 @@ def make_trainer(
         if val_loader is None:
             batch_size = config["training"]["validation_batch_size"]
             val_loader = synthetic_loader(8, batch_size)
-        trainer = Trainer(model, val_loader, config)
+        full = make_config(config)
+        trainer = Trainer(
+            model,
+            val_loader,
+            full.training,
+            full.experiment,
+            full.data,
+            full.model,
+            full.model_dump(mode="json"),
+        )
         trainers.append(trainer)
         return trainer
 
@@ -115,8 +126,9 @@ def record_mocked_training(
         def epoch() -> int:
             return len(events.trained_on)
 
-        def generate_train_loader(config: dict[str, Any]) -> TensorBatchLoader:
-            batch_size = config["training"]["train_batch_size"]
+        def generate_train_loader(
+            julia_config: dict[str, Any], batch_size: int, device: str
+        ) -> TensorBatchLoader:
             loader = synthetic_loader(10, batch_size, shuffle=True)
             events.generated[epoch() + 1] = loader
             return loader
@@ -258,11 +270,13 @@ def test_the_checkpoint_describes_and_restores_the_trained_model(
 
     trainer.train(synthetic_loader(10, 4))
 
-    restored, checkpoint = load_model(config, "cpu")
+    restored, checkpoint = load_model(config["experiment"]["pt_file_path"], "cpu")
     assert checkpoint["NTR"] == 5
     assert checkpoint["model_config"] == config["model"]
     assert checkpoint["data_config"] == config["data"]
-    assert checkpoint["rf_sha256"] == rf_sha256(config["data"])
+    assert checkpoint["rf_sha256"] == rf_sha256(
+        config["data"]["rf_angle_file"], config["data"]["rf_phase_file"]
+    )
     x = synthetic_loader(6, 6).tensors[0]
     with torch.no_grad():
         for output, expected in zip(restored(x), trainer.model(x), strict=True):
@@ -284,7 +298,10 @@ def test_write_checkpoint_writes_the_keys_of_the_trainer(
 
     write_checkpoint(path, trainer.model, config["model"], config["data"])
 
-    assert torch.load(path).keys() == load_checkpoint(config, "cpu").keys()
+    assert (
+        torch.load(path).keys()
+        == load_checkpoint(config["experiment"]["pt_file_path"], "cpu").keys()
+    )
 
 
 def test_the_trained_model_has_the_weights_of_the_best_epoch(
@@ -312,22 +329,6 @@ def test_the_plateau_scheduler_gets_its_settings_from_the_config(
     assert scheduler.patience == 4
     assert scheduler.factor == 0.5
     assert scheduler.min_lrs == [1.0e-5]
-
-
-def test_the_plateau_scheduler_needs_its_keys(
-    make_trainer: Callable[..., Trainer],
-) -> None:
-    with pytest.raises(ValueError, match=r"needs the keys \['factor', 'min_lr'\]"):
-        make_trainer(lr_scheduler={"name": "plateau", "patience_epochs": 100})
-
-
-def test_the_plateau_scheduler_reads_floats_in_exponent_form(
-    make_trainer: Callable[..., Trainer],
-) -> None:
-    # PyYAML reads 1e-5 as the string "1e-5"
-    trainer = make_trainer(lr_scheduler={**PLATEAU, "min_lr": "1e-5"})
-
-    assert trainer.scheduler.min_lrs == [1.0e-5]
 
 
 def test_the_plateau_scheduler_steps_after_each_validation_with_its_loss(
@@ -364,10 +365,11 @@ def test_the_epoch_loss_is_the_mean_over_the_samples(
     make_trainer: Callable[..., Trainer],
     synthetic_loader: Callable[..., TensorBatchLoader],
 ) -> None:
-    # Without steps, the epoch gives the loss of one model on all batches
+    # With a learning rate this small, the weights stay the same, so the epoch
+    # gives the loss of one model on all batches
     train_loader = synthetic_loader(10, 4)  # batches of 4, 4 and 2 samples
     val_loader = TensorBatchLoader(train_loader.tensors, 10, shuffle=False)
-    trainer = make_trainer(val_loader, learning_rate=0.0)
+    trainer = make_trainer(val_loader, learning_rate=1e-12)
 
     total, signal, dT1, dT2 = trainer.train_epoch(train_loader)
 
@@ -464,7 +466,7 @@ def test_a_nan_after_a_finite_validation_loss_keeps_the_checkpoint(
         trainer.train()
 
     assert len(events.trained_on) == 2
-    checkpoint = load_checkpoint(config, "cpu")
+    checkpoint = load_checkpoint(config["experiment"]["pt_file_path"], "cpu")
     assert checkpoint["epoch"] == 1
     assert same_weights(checkpoint["model_state"], events.weights[1])
 
@@ -526,7 +528,7 @@ def test_a_training_loss_that_is_not_finite_stops_the_training_in_its_epoch(
 
     assert len(events.trained_on) == bad_epoch
     assert list(events.weights) == [1]
-    assert load_checkpoint(config, "cpu")["epoch"] == 1
+    assert load_checkpoint(config["experiment"]["pt_file_path"], "cpu")["epoch"] == 1
 
 
 # With train_losses, the optimizer makes no step before the scheduler steps
@@ -566,7 +568,7 @@ def test_weights_that_are_not_finite_after_an_epoch_stop_the_training(
         trainer.train()
 
     assert list(events.weights) == [1]
-    assert load_checkpoint(config, "cpu")["epoch"] == 1
+    assert load_checkpoint(config["experiment"]["pt_file_path"], "cpu")["epoch"] == 1
 
 
 def test_a_checkpoint_of_an_earlier_run_is_not_loaded_after_a_nan(
@@ -593,7 +595,9 @@ def test_a_checkpoint_of_an_earlier_run_is_not_loaded_without_epochs(
     make_trainer: Callable[..., Trainer],
     synthetic_loader: Callable[..., TensorBatchLoader],
 ) -> None:
-    trainer = make_trainer(n_epochs=0)
+    trainer = make_trainer()
+    # The schema refuses 0 epochs, and model_copy does not check the value
+    trainer.training_config = trainer.training_config.model_copy(update={"n_epochs": 0})
 
     with pytest.raises(RuntimeError, match="saved no checkpoint"):
         trainer.train(synthetic_loader(10, 4))

@@ -13,8 +13,11 @@ import onnx
 import onnxruntime as ort
 import torch
 import torch.nn as nn
+from neuralbloch.config_schema import ParameterRanges
+from neuralbloch.config_schema import Targets
 from neuralbloch.metrics import nrmse
 from neuralbloch.model import FCModel
+from neuralbloch.utils import checkpoint_config
 from neuralbloch.utils import file_sha256
 from neuralbloch.utils import load_model
 from neuralbloch.utils import sample_parameters
@@ -80,7 +83,13 @@ class TargetModel(nn.Module):
         return tuple(output.float() for output in outputs) if self.fp16 else outputs
 
 
-def export_onnx(config: dict[str, Any]) -> None:
+def export_onnx(
+    targets: Targets,
+    fp16: bool,
+    opset_version: int,
+    n_verify_samples: int,
+    pt_file_path: Path,
+) -> None:
     """Export the trained surrogate model to ONNX, one model per target.
 
     The function loads the trained checkpoint. It exports each target
@@ -91,22 +100,23 @@ def export_onnx(config: dict[str, Any]) -> None:
     passes this check (``staged``).
 
     Args:
-        config: Full configuration dictionary.
+        targets: The ONNX path of each target (``export.targets``).
+        fp16: Export the models in half precision (``export.fp16``).
+        opset_version: The ONNX opset (``export.opset_version``).
+        n_verify_samples: The samples that compare each ONNX model with the
+            PyTorch model (``export.n_verify_samples``).
+        pt_file_path: The checkpoint file (``experiment.pt_file_path``).
     """
-    export_config = config["export"]
-    paths = target_paths(export_config)
+    paths = target_paths(targets)
 
     # The exported ONNX model is device independent, so export on CPU
-    model, checkpoint = load_model(config, "cpu")
+    model, checkpoint = load_model(pt_file_path, "cpu")
 
-    fp16 = export_config["fp16"]
     precision = "FP16" if fp16 else "FP32"
 
-    x = sample_parameters(
-        training_domain(checkpoint), export_config["n_verify_samples"]
-    )
+    x = sample_parameters(training_domain(checkpoint), n_verify_samples)
 
-    checkpoint_sha256 = file_sha256(config["experiment"]["pt_file_path"])
+    checkpoint_sha256 = file_sha256(pt_file_path)
 
     for target, onnx_path in paths.items():
         with staged(onnx_path) as staged_path:
@@ -116,7 +126,7 @@ def export_onnx(config: dict[str, Any]) -> None:
                 target,
                 staged_path,
                 example=x[:2],
-                opset=export_config["opset_version"],
+                opset=opset_version,
                 fp16=fp16,
             )
             stamp_checkpoint(staged_path, checkpoint_sha256)
@@ -205,35 +215,19 @@ def require_checkpoint(
         )
 
 
-def target_paths(export_config: dict[str, Any]) -> dict[str, Path]:
+def target_paths(targets: Targets) -> dict[str, Path]:
     """Return the ONNX path of each target from ``export.targets``.
 
+    The schema checks that ``export.targets`` names all targets and only them,
+    and that no two paths are the same file.
+
     Args:
-        export_config: The ``export`` configuration.
+        targets: The ``export.targets`` configuration.
 
     Returns:
         The ONNX path of each target, in ``TARGETS`` order.
-
-    Raises:
-        ValueError: If ``export.targets`` does not name all targets and only
-            them, or two of the paths are the same file.
     """
-    configured = export_config.get("targets") or {}
-    if set(configured) != set(TARGETS):
-        raise ValueError(
-            f"export.targets must name the targets {', '.join(TARGETS)}; "
-            f"it names {', '.join(configured) or 'none'}"
-        )
-    paths = {target: Path(configured[target]["onnx_file_path"]) for target in TARGETS}
-    # Each export writes its file, so two exports to one file keep only the last
-    seen: dict[Path, str] = {}
-    for target, path in paths.items():
-        name = f"{target}.onnx_file_path"
-        if (other := seen.setdefault(path.resolve(), name)) != name:
-            raise ValueError(
-                f"export.targets {name} and {other} are the same file, {path}"
-            )
-    return paths
+    return {target: getattr(targets, target).onnx_file_path for target in TARGETS}
 
 
 def require_exported(paths: dict[str, Path]) -> None:
@@ -252,8 +246,8 @@ def require_exported(paths: dict[str, Path]) -> None:
             )
 
 
-def training_domain(checkpoint: dict[str, Any]) -> dict[str, Any]:
-    """Return the configuration from which to sample the verification parameters.
+def training_domain(checkpoint: dict[str, Any]) -> ParameterRanges:
+    """Return the ranges from which to sample the verification parameters.
 
     Checkpoints contain the data configuration of their training. Thus, the
     verification samples the training domain of the model.
@@ -262,9 +256,13 @@ def training_domain(checkpoint: dict[str, Any]) -> dict[str, Any]:
         checkpoint: The checkpoint the model was loaded from.
 
     Returns:
-        A configuration ``sample_parameters`` accepts.
+        The ``data.parameter_ranges`` of the training.
     """
-    return {"data": checkpoint["data_config"]}
+    return checkpoint_config(
+        ParameterRanges,
+        checkpoint["data_config"]["parameter_ranges"],
+        "data_config.parameter_ranges",
+    )
 
 
 def export_target(

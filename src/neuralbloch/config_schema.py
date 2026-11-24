@@ -99,13 +99,13 @@ def check_version(version: object) -> str:
 
 
 class Section(BaseModel):
-    """The rules of all sections: all keys required, no unknown keys, no conversion."""
+    """The rules of all sections: all keys required, no unknown keys."""
 
     model_config = ConfigDict(
         extra="forbid",
-        strict=True,
         allow_inf_nan=False,
-        validate_assignment=True,
+        # Frozen, because a parent validator does not run again when a child changes
+        frozen=True,
     )
 
 
@@ -124,7 +124,7 @@ def refuse_empty_path(value: object) -> object:
 
 
 # A path that may not exist yet. YAML gives paths as strings.
-ConfigPath = Annotated[Path, BeforeValidator(refuse_empty_path), Field(strict=False)]
+ConfigPath = Annotated[Path, BeforeValidator(refuse_empty_path)]
 
 
 # =============================================================================

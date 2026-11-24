@@ -30,6 +30,10 @@ import numpy as np
 import numpy.typing as npt
 import pytest
 import torch
+from neuralbloch.config import load_config
+from neuralbloch.config_schema import Config
+from neuralbloch.config_schema import ModelConfig
+from neuralbloch.config_schema import ParameterRanges
 from neuralbloch.data.data_loading import TensorBatchLoader
 from neuralbloch.model import FCModel
 from neuralbloch.scripts import export_bundle
@@ -119,6 +123,31 @@ def config(
 
 
 @pytest.fixture
+def make_config(export_config: dict[str, Any]) -> Callable[[dict[str, Any]], Config]:
+    """Return a function that makes a validated Config from the dict of ``config``.
+
+    The sections that the dict does not have, and the keys of the Julia data
+    generation, come from config/. Export is ``config["export"]`` if the dict
+    has it, and ``export_config`` if not.
+    """
+
+    def make(config: dict[str, Any]) -> Config:
+        base = load_config(Path(__file__).parents[1] / "config").model_dump(mode="json")
+        return Config.model_validate(
+            {
+                "data": config["data"],
+                "model": config["model"],
+                "training": {**base["training"], **config["training"]},
+                "experiment": {**base["experiment"], **config["experiment"]},
+                "testing": base["testing"],
+                "export": config.get("export", export_config),
+            }
+        )
+
+    return make
+
+
+@pytest.fixture
 def synthetic_loader(data_config: dict[str, Any]) -> Callable[..., TensorBatchLoader]:
     """Return a function that makes a TensorBatchLoader of random data.
 
@@ -133,7 +162,9 @@ def synthetic_loader(data_config: dict[str, Any]) -> Callable[..., TensorBatchLo
         *,
         shuffle: bool = False,
     ) -> TensorBatchLoader:
-        params = sample_parameters({"data": data_config}, n_samples)
+        params = sample_parameters(
+            ParameterRanges.model_validate(data_config["parameter_ranges"]), n_samples
+        )
         targets = (torch.randn(n_samples, 5, 2) for _ in range(3))
         return TensorBatchLoader((params, *targets), batch_size, shuffle=shuffle)
 
@@ -157,7 +188,9 @@ def write_checkpoint() -> Callable[..., None]:
             "NTR": model.NTR,
             "model_config": model_config,
             "data_config": data_config,
-            "rf_sha256": rf_sha256(data_config),
+            "rf_sha256": rf_sha256(
+                data_config["rf_angle_file"], data_config["rf_phase_file"]
+            ),
         }
         torch.save(checkpoint, path)
 
@@ -298,7 +331,12 @@ def make_model() -> Callable[..., FCModel]:
         config: dict[str, Any],
         data_config: dict[str, Any] | None = None,
     ) -> FCModel:
-        return FCModel(NTR, config, data_config)
+        ranges = (
+            ParameterRanges.model_validate(data_config["parameter_ranges"])
+            if data_config is not None
+            else None
+        )
+        return FCModel(NTR, ModelConfig.model_validate(config), ranges)
 
     return make
 

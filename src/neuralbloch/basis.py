@@ -1,7 +1,8 @@
 """Post-training changes of basis for shared-basis surrogate models."""
 
-from typing import Any
 import torch
+from neuralbloch.config_schema import ModelConfig
+from neuralbloch.config_schema import ParameterRanges
 from neuralbloch.model import FCModel
 
 
@@ -66,15 +67,16 @@ def orthogonalize_shared_basis(model: FCModel, params: torch.Tensor) -> None:
         decoder.weight.copy_(orthonormal_raw @ rotation)
 
 
-def with_signal_rank(model_config: dict[str, Any], rank: int) -> dict[str, Any]:
+def with_signal_rank(model_config: ModelConfig, rank: int) -> ModelConfig:
     """Return a copy of a model configuration with another signal rank."""
-    return {**model_config, "signal": {**model_config["signal"], "rank": rank}}
+    signal = model_config.signal.model_copy(update={"rank": rank})
+    return model_config.model_copy(update={"signal": signal})
 
 
 def truncate_shared_basis(
     model: FCModel,
-    model_config: dict[str, Any],
-    data_config: dict[str, Any],
+    model_config: ModelConfig,
+    parameter_ranges: ParameterRanges,
     rank: int,
 ) -> FCModel:
     """Build a smaller model from the first columns of an ordered decoder.
@@ -88,7 +90,7 @@ def truncate_shared_basis(
     if not 0 < rank <= full_rank:
         raise ValueError(f"rank must be in (0, {full_rank}], got {rank}")
 
-    smaller = FCModel(model.NTR, with_signal_rank(model_config, rank), data_config)
+    smaller = FCModel(model.NTR, with_signal_rank(model_config, rank), parameter_ranges)
     state = {key: value.clone() for key, value in model.state_dict().items()}
     state["U_signal.0.weight"] = state["U_signal.0.weight"][:, :rank]
     last_layer_key = f"subnet_signal.net.{len(model.subnet_signal.net) - 1}"
