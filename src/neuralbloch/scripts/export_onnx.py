@@ -17,6 +17,7 @@ from neuralbloch.config_schema import ParameterRanges
 from neuralbloch.config_schema import Targets
 from neuralbloch.metrics import nrmse
 from neuralbloch.model import FCModel
+from neuralbloch.utils import checkpoint_config
 from neuralbloch.utils import file_sha256
 from neuralbloch.utils import load_model
 from neuralbloch.utils import sample_parameters
@@ -257,7 +258,11 @@ def training_domain(checkpoint: dict[str, Any]) -> ParameterRanges:
     Returns:
         The ``data.parameter_ranges`` of the training.
     """
-    return ParameterRanges.model_validate(checkpoint["data_config"]["parameter_ranges"])
+    return checkpoint_config(
+        ParameterRanges,
+        checkpoint["data_config"]["parameter_ranges"],
+        "data_config.parameter_ranges",
+    )
 
 
 def export_target(

@@ -16,6 +16,7 @@ from neuralbloch.basis import worst_relative_output_difference
 from neuralbloch.config_schema import ModelConfig
 from neuralbloch.config_schema import ParameterRanges
 from neuralbloch.model import FCModel
+from neuralbloch.utils import checkpoint_config
 from neuralbloch.utils import get_device
 from neuralbloch.utils import model_from_checkpoint
 
@@ -69,9 +70,13 @@ def postprocess_basis(
     print(f"Saved ordered checkpoint to {output_path}")
     written = [output_path]
 
-    model_config = ModelConfig.model_validate(checkpoint["model_config"])
-    parameter_ranges = ParameterRanges.model_validate(
-        checkpoint["data_config"]["parameter_ranges"]
+    model_config = checkpoint_config(
+        ModelConfig, checkpoint["model_config"], "model_config"
+    )
+    parameter_ranges = checkpoint_config(
+        ParameterRanges,
+        checkpoint["data_config"]["parameter_ranges"],
+        "data_config.parameter_ranges",
     )
     for rank, rank_path in zip(ranks, rank_paths, strict=True):
         smaller = truncate_shared_basis(model, model_config, parameter_ranges, rank)
