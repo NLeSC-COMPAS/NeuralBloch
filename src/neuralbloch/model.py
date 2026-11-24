@@ -190,14 +190,14 @@ class FCModel(nn.Module):
     def __init__(
         self,
         NTR: int,
-        model: ModelConfig,
+        model_config: ModelConfig,
         parameter_ranges: ParameterRanges | None = None,
     ) -> None:
         super().__init__()
 
-        activation = model.activation
-        signal = model.signal
-        derivative = model.derivative
+        activation = model_config.activation
+        signal = model_config.signal
+        derivative = model_config.derivative
         self.derivative_mode: str = derivative.mode
 
         # A "direct" model has no choice: its decoders are always learned
@@ -214,7 +214,7 @@ class FCModel(nn.Module):
 
         # Physical [T1, T2, B1] -> internal [log(T1), log(T2), B1] coordinates
         self.input_transform = InputTransform(
-            model.normalize_inputs,
+            model_config.normalize_inputs,
             parameter_ranges,
         )
 
