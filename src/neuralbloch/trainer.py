@@ -49,9 +49,9 @@ class Trainer:
         self,
         model: FCModel,
         val_loader: TensorBatchLoader,
-        training: TrainingConfig,
-        experiment: ExperimentConfig,
-        data: DataConfig,
+        training_config: TrainingConfig,
+        experiment_config: ExperimentConfig,
+        data_config: DataConfig,
         model_config: ModelConfig,
         julia_config: dict[str, Any],
     ) -> None:
@@ -60,28 +60,28 @@ class Trainer:
         Args:
             model: The model to train.
             val_loader: The fixed validation data.
-            training: The training loop and optimizer settings.
-            experiment: The device and the output paths.
-            data: The data configuration, saved in each checkpoint.
+            training_config: The training loop and optimizer settings.
+            experiment_config: The device and the output paths.
+            data_config: The data configuration, saved in each checkpoint.
             model_config: The model configuration, saved in each checkpoint.
             julia_config: The full configuration as a dict with string paths.
                 The Julia code that makes the training data reads it.
         """
-        self.training = training
-        self.experiment = experiment
-        self.data = data
+        self.training_config = training_config
+        self.experiment_config = experiment_config
+        self.data_config = data_config
         self.model_config = model_config
         self.julia_config = julia_config
 
         # Set device and move model to GPU/CPU
-        self.device = get_device(experiment.device)
+        self.device = get_device(experiment_config.device)
         self.model = model.to(self.device)
 
         # Optimizer
-        compile_train_step = training.compile_train_step and self.device.startswith(
-            "cuda"
+        compile_train_step = (
+            training_config.compile_train_step and self.device.startswith("cuda")
         )
-        initial_learning_rate = training.learning_rate
+        initial_learning_rate = training_config.learning_rate
         if compile_train_step:
             # A device-resident learning rate prevents torch.compile from
             # specializing and recompiling the Adam step after every scheduler
@@ -104,24 +104,25 @@ class Trainer:
         # Learning rate scheduler
         self.scheduler: LRScheduler
 
-        lr_scheduler = training.lr_scheduler
+        lr_scheduler = training_config.lr_scheduler
         if isinstance(lr_scheduler, PlateauScheduler):
             # ReduceLROnPlateau counts validations, not epochs
             self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
                 self.optimizer,
                 patience=math.ceil(
-                    lr_scheduler.patience_epochs / training.validate_every_n_epochs
+                    lr_scheduler.patience_epochs
+                    / training_config.validate_every_n_epochs
                 ),
                 factor=lr_scheduler.factor,
                 min_lr=lr_scheduler.min_lr,
             )
         else:
             self.scheduler = optim.lr_scheduler.CosineAnnealingLR(
-                self.optimizer, T_max=training.n_epochs
+                self.optimizer, T_max=training_config.n_epochs
             )
 
         # Loss function
-        self.criterion = Loss(training.loss_function)
+        self.criterion = Loss(training_config.loss_function)
 
         # Validation data remains fixed during training
         self.val_loader = val_loader
@@ -139,7 +140,7 @@ class Trainer:
             )
 
         # TensorBoard logger
-        self.writer = SummaryWriter(log_dir=str(experiment.log_dir))
+        self.writer = SummaryWriter(log_dir=str(experiment_config.log_dir))
 
     def train(
         self,
@@ -160,12 +161,14 @@ class Trainer:
         best_val_loss = float("inf")
         best_epoch: int | None = None
 
-        pt_file_path = self.experiment.pt_file_path
+        pt_file_path = self.experiment_config.pt_file_path
         # The training data come from the RF tables. Record their sha256 in the
         # checkpoint, so that export_bundle can check the tables of a bundle
-        rf_tables = rf_sha256(self.data.rf_angle_file, self.data.rf_phase_file)
-        n_epochs = self.training.n_epochs
-        validate_every = self.training.validate_every_n_epochs
+        rf_tables = rf_sha256(
+            self.data_config.rf_angle_file, self.data_config.rf_phase_file
+        )
+        n_epochs = self.training_config.n_epochs
+        validate_every = self.training_config.validate_every_n_epochs
         training_started = time.perf_counter()
         train_loader = initial_train_loader
 
@@ -173,14 +176,15 @@ class Trainer:
             generation_time = 0.0
             # Generate new Bloch simulation data periodically
             needs_regeneration = (epoch == 1 and train_loader is None) or (
-                epoch > 1 and (epoch - 1) % self.training.regen_every_n_epochs == 0
+                epoch > 1
+                and (epoch - 1) % self.training_config.regen_every_n_epochs == 0
             )
             if needs_regeneration:
                 print(f"Generating training data for epoch {epoch} ...", flush=True)
                 started = time.perf_counter()
                 train_loader = generate_train_loader(
                     self.julia_config,
-                    self.training.train_batch_size,
+                    self.training_config.train_batch_size,
                     self.device,
                 )
                 generation_time = time.perf_counter() - started
@@ -255,7 +259,7 @@ class Trainer:
                         "epoch": epoch,
                         "NTR": self.model.NTR,
                         "model_config": self.model_config.model_dump(mode="json"),
-                        "data_config": self.data.model_dump(mode="json"),
+                        "data_config": self.data_config.model_dump(mode="json"),
                         "rf_sha256": rf_tables,
                     },
                     pt_file_path,
