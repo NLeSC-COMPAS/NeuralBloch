@@ -6,6 +6,8 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 import torch
+from pydantic import BaseModel
+from pydantic import ValidationError
 from neuralbloch.config_schema import ModelConfig
 from neuralbloch.config_schema import ParameterRanges
 
@@ -93,6 +95,31 @@ def load_checkpoint(pt_file_path: str | Path, device: str) -> dict[str, Any]:
     return checkpoint
 
 
+def checkpoint_config[T: BaseModel](schema: type[T], value: object, key: str) -> T:
+    """Validate a configuration that a checkpoint stores.
+
+    Args:
+        schema: The schema of the configuration.
+        value: The stored configuration.
+        key: The location in the checkpoint, for the error message.
+
+    Returns:
+        The validated configuration.
+
+    Raises:
+        ValueError: If the stored configuration is not valid.
+    """
+    try:
+        return schema.model_validate(value)
+    except ValidationError as error:
+        # Without this, users look for the problem in config/
+        raise ValueError(
+            f"The checkpoint stores a {key} that is not valid. The problem is "
+            "in the checkpoint, not in config/. Train the model again.\n"
+            f"{error}"
+        ) from error
+
+
 def model_from_checkpoint(checkpoint: dict[str, Any], device: str) -> "FCModel":
     """Create the model of a checkpoint and load its saved weights.
 
@@ -115,8 +142,12 @@ def model_from_checkpoint(checkpoint: dict[str, Any], device: str) -> "FCModel":
 
     model = FCModel(
         NTR,
-        ModelConfig.model_validate(model_config),
-        ParameterRanges.model_validate(checkpoint["data_config"]["parameter_ranges"]),
+        checkpoint_config(ModelConfig, model_config, "model_config"),
+        checkpoint_config(
+            ParameterRanges,
+            checkpoint["data_config"]["parameter_ranges"],
+            "data_config.parameter_ranges",
+        ),
     )
     model.load_state_dict(checkpoint["model_state"])
     model.to(device)
